@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">Jovlo.ai logo concept 03 - Orbit Compass</title>
+  <desc id="desc">A premium AI compass and orbit mark beside a precise Jovlo.ai wordmark.</desc>
+  <defs>
+    <linearGradient id="needleGradient" x1="124" y1="258" x2="238" y2="86" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#65D6AD"/>
+      <stop offset="1" stop-color="#725DFF"/>
+    </linearGradient>
+    <linearGradient id="orbitGradient" x1="67" y1="93" x2="294" y2="262" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#725DFF"/>
+      <stop offset="0.56" stop-color="#65D6AD"/>
+      <stop offset="1" stop-color="#FFB84D"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0)">
+    <circle cx="180" cy="180" r="122" fill="#FAFAF8" stroke="#E7E3FF" stroke-width="4"/>
+    <ellipse cx="180" cy="180" rx="120" ry="54" fill="none" stroke="url(#orbitGradient)" stroke-width="10" stroke-linecap="round" transform="rotate(-24 180 180)"/>
+    <ellipse cx="180" cy="180" rx="83" ry="83" fill="none" stroke="#EDEBF8" stroke-width="3"/>
+    <path d="M183 74 L223 214 L180 192 L136 262 L159 121 Z" fill="url(#needleGradient)"/>
+    <path d="M183 74 L180 192 L159 121 Z" fill="#FFFFFF" opacity="0.62"/>
+    <circle cx="180" cy="180" r="20" fill="#242124"/>
+    <circle cx="180" cy="180" r="8" fill="#FFFFFF"/>
+    <circle cx="264" cy="129" r="13" fill="#FFB84D" stroke="#FFFFFF" stroke-width="5"/>
+    <circle cx="97" cy="232" r="10" fill="#65D6AD" stroke="#FFFFFF" stroke-width="5"/>
+    <path d="M100 115 H126 M113 102 V128" stroke="#725DFF" stroke-width="7" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(344 128)">
+    <text x="0" y="77" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', sans-serif" font-size="98" font-weight="760" fill="#242124">Jovlo.ai</text>
+    <path d="M8 116 H474" stroke="#E7E3FF" stroke-width="4" stroke-linecap="round"/>
+    <path d="M8 116 H162" stroke="#725DFF" stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">Jovlo.ai minimal logo concept 04 - Single Line</title>
+  <desc id="desc">A minimal abstract line mark with one origin point and a clean Jovlo.ai wordmark.</desc>
+  <defs>
+    <linearGradient id="line" x1="105" y1="94" x2="252" y2="272" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#22C7B8"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(40 0)">
+    <path d="M219 86 C157 91 122 125 132 169 C143 219 222 196 224 246 C226 288 175 302 135 272"
+      fill="none" stroke="url(#line)" stroke-width="31" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="219" cy="86" r="11" fill="#22C7B8"/>
+    <circle cx="135" cy="272" r="11" fill="#111827"/>
+  </g>
+  <g transform="translate(346 122)">
+    <text x="0" y="78" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', sans-serif" font-size="96" font-weight="720" fill="#111827">Jovlo.ai</text>
+  </g>
+</svg>

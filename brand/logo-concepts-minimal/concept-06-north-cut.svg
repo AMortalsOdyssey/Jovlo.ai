@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">Jovlo.ai minimal logo concept 06 - North Cut</title>
+  <desc id="desc">A minimal abstract directional mark with a subtle inner cut and Jovlo.ai wordmark.</desc>
+  <defs>
+    <linearGradient id="north" x1="114" y1="276" x2="246" y2="74" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22C7B8"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(38 0)">
+    <path d="M183 70 L251 278 L181 231 L109 278 Z" fill="url(#north)"/>
+    <path d="M183 121 L200 224 L181 211 L161 224 Z" fill="#FFFFFF" opacity="0.92"/>
+    <circle cx="183" cy="180" r="10" fill="#FFFFFF"/>
+  </g>
+  <g transform="translate(346 122)">
+    <text x="0" y="78" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', sans-serif" font-size="96" font-weight="720" fill="#111827">Jovlo.ai</text>
+  </g>
+</svg>
