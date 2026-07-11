@@ -27,7 +27,7 @@
 .share-options input {
   width: 17px;
   height: 17px;
-  accent-color: var(--brand);
+  accent-color: var(--brand-text);
 }
 
 .share-list {

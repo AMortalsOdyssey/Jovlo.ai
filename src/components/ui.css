@@ -30,7 +30,7 @@
 }
 
 .jovlo-icon-button:hover:not(:disabled) {
-  color: var(--brand);
+  color: var(--brand-text);
   background: var(--brand-tint);
 }
 
@@ -118,7 +118,7 @@
 
 .jovlo-action-menu__trigger:hover,
 .jovlo-action-menu[open] .jovlo-action-menu__trigger {
-  color: var(--brand);
+  color: var(--brand-text);
   background: var(--brand-tint);
 }
 

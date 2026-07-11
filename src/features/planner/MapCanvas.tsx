@@ -3,6 +3,7 @@ import { load as loadAmap } from '@amap/amap-jsapi-loader'
 import { LocateFixed, Minus, Plus } from 'lucide-react'
 
 import { IconButton } from '../../components'
+import { JOVLO_COLORS } from '../../design-system'
 import { configureAmapServiceHost } from '../../lib/amap'
 import type { CandidateMapPoint, FormalMapPoint } from './types'
 import './planner.css'
@@ -185,7 +186,7 @@ export function MapCanvas({
               [point.lng, point.lat],
               [next.lng, next.lat],
             ],
-            strokeColor: selectedLegIndex === index ? '#6857E5' : '#168C78',
+            strokeColor: selectedLegIndex === index ? JOVLO_COLORS.brand : JOVLO_COLORS.sea,
             strokeWeight: selectedLegIndex === index ? 6 : 4,
             strokeOpacity: 0.94,
             lineJoin: 'round',

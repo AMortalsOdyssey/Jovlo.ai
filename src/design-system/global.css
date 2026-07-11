@@ -34,6 +34,12 @@ textarea {
   letter-spacing: 0;
 }
 
+input,
+textarea,
+select {
+  caret-color: var(--brand);
+}
+
 button,
 a {
   -webkit-tap-highlight-color: transparent;
@@ -51,12 +57,12 @@ svg {
 }
 
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--brand-strong);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: var(--brand-tint);
+  background: rgb(217 109 48 / 22%);
   color: var(--ink);
 }
 

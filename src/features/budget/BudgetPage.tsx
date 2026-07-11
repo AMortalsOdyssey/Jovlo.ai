@@ -3,6 +3,7 @@ import { useMemo, useState, type CSSProperties, type FormEvent } from 'react'
 
 import { useTripStore } from '@/store/useTripStore'
 
+import { JOVLO_COLORS } from '@/design-system'
 import {
   Button,
   EmptyState,
@@ -26,13 +27,13 @@ import {
 } from '@/features/trips/model'
 
 const categories = [
-  { value: 'meals', label: '餐饮', icon: Utensils, color: '#E99A2D' },
-  { value: 'fuel_charging_tolls', label: '油电路费', icon: CarFront, color: '#397FBE' },
-  { value: 'lodging', label: '住宿', icon: BedDouble, color: '#168C78' },
-  { value: 'tickets_activities', label: '门票活动', icon: Ticket, color: '#6857E5' },
-  { value: 'parking', label: '停车', icon: ShoppingBag, color: '#C94F45' },
-  { value: 'transport', label: '其他交通', icon: CarFront, color: '#2A639A' },
-  { value: 'other', label: '其他', icon: CircleDollarSign, color: '#6F7278' },
+  { value: 'meals', label: '餐饮', icon: Utensils, color: JOVLO_COLORS.sun },
+  { value: 'fuel_charging_tolls', label: '油电路费', icon: CarFront, color: JOVLO_COLORS.sky },
+  { value: 'lodging', label: '住宿', icon: BedDouble, color: JOVLO_COLORS.sea },
+  { value: 'tickets_activities', label: '门票活动', icon: Ticket, color: JOVLO_COLORS.brand },
+  { value: 'parking', label: '停车', icon: ShoppingBag, color: JOVLO_COLORS.coral },
+  { value: 'transport', label: '其他交通', icon: CarFront, color: JOVLO_COLORS.skyText },
+  { value: 'other', label: '其他', icon: CircleDollarSign, color: JOVLO_COLORS.muted },
 ] as const
 
 function categoryLabel(category: string) {

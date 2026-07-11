@@ -113,7 +113,7 @@
 
 .plan-more-links svg {
   width: 20px;
-  color: var(--brand);
+  color: var(--brand-text);
 }
 
 .plan-dialog-backdrop {
@@ -123,7 +123,7 @@
   display: grid;
   padding: var(--space-4);
   place-items: center;
-  background: rgb(32 32 36 / 32%);
+  background: rgb(46 36 24 / 40%);
 }
 
 .plan-dialog {

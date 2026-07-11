@@ -1,30 +1,46 @@
 :root {
   color-scheme: light;
 
-  /* Core palette */
-  --canvas: #f4f5f0;
-  --surface: #ffffff;
-  --ink: #202024;
-  --muted: #6f7278;
-  --line: #d9dbd2;
-  --brand: #6857e5;
+  /*
+   * 落日海岸 Sunset Coast palette.
+   * Fill colors pair with white foregrounds on large shapes only;
+   * -text variants are the AA-safe (>=4.5:1) forms for body-size text on --surface.
+   */
+  --canvas: #fbf5ea;
+  --surface: #fffdf8;
+  --ink: #2e2418;
+  --muted: #7a6a58;
+  --line: #e7d9c4;
+  --brand: #d96d30;
+  --brand-strong: #c25518;
+  --brand-deep: #a84708;
   --sea: #168c78;
   --sky: #397fbe;
   --sun: #e99a2d;
   --coral: #c94f45;
+  --cocoa: #8a624b;
 
   /* AA-safe semantic text and icon colors on --surface */
-  --sun-text: #9a6210;
+  --brand-text: #b04a12;
+  --sun-text: #96600f;
   --sea-text: #0e6b5c;
   --sky-text: #2a639a;
   --coral-text: #a93a31;
+  --cocoa-text: #6f4c38;
 
   /* Semantic tints */
-  --brand-tint: rgb(104 87 229 / 12%);
-  --sea-tint: rgb(22 140 120 / 12%);
-  --sky-tint: rgb(57 127 190 / 12%);
-  --sun-tint: rgb(233 154 45 / 12%);
-  --coral-tint: rgb(201 79 69 / 12%);
+  --brand-tint: rgb(217 109 48 / 12%);
+  --sea-tint: rgb(22 140 120 / 10%);
+  --sky-tint: rgb(57 127 190 / 10%);
+  --sun-tint: rgb(233 154 45 / 14%);
+  --coral-tint: rgb(201 79 69 / 10%);
+  --cocoa-tint: rgb(138 98 75 / 12%);
+  --neutral-tint: rgb(122 106 88 / 10%);
+
+  /* Warm map ground colors (reference map + AMap fallback) */
+  --map-land: #f2ebda;
+  --map-water: #bfd9e2;
+  --map-road: #fffdf8;
 
   /* 4px spacing scale: no intermediate spacing tokens. */
   --space-1: 4px;
@@ -35,9 +51,12 @@
   --space-8: 32px;
   --space-12: 48px;
 
-  --radius-control: 6px;
-  --radius-card: 8px;
-  --shadow-float: 0 12px 32px rgb(32 32 36 / 12%);
+  --radius-control: 10px;
+  --radius-card: 14px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgb(93 64 28 / 5%), 0 2px 8px rgb(93 64 28 / 6%);
+  --shadow-raised: 0 4px 12px rgb(93 64 28 / 12%);
+  --shadow-float: 0 16px 40px rgb(93 64 28 / 16%);
 
   /* The only supported stacking layers. */
   --z-content: 0;
@@ -48,6 +67,7 @@
 
   --font-ui: "Noto Sans SC", "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-numeric: "IBM Plex Sans", "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-display: "Noto Serif SC", "Songti SC", serif;
   --font-report: "Noto Serif SC", "Songti SC", serif;
 
   --text-page-size: 24px;
@@ -70,13 +90,14 @@
   --motion-press: 120ms;
   --motion-state: 160ms;
   --motion-reorder: 180ms;
-  --motion-sheet: 180ms;
+  --motion-sheet: 200ms;
   --motion-route: 240ms;
-  --ease-out: ease-out;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
 }
 
 .jovlo-text-page-title {
-  font: 700 var(--text-page-size) / var(--text-page-line) var(--font-ui);
+  font: 700 var(--text-page-size) / var(--text-page-line) var(--font-display);
   letter-spacing: 0;
 }
 

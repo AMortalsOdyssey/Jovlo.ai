@@ -3,8 +3,8 @@
   "short_name": "Jovlo",
   "start_url": "/trips",
   "display": "standalone",
-  "background_color": "#f4f5f0",
-  "theme_color": "#f4f5f0",
+  "background_color": "#fbf5ea",
+  "theme_color": "#fbf5ea",
   "icons": [
     {
       "src": "/jovlo-mark.svg",

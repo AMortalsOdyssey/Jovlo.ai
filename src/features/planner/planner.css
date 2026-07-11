@@ -55,24 +55,26 @@
 }
 
 .jovlo-button--primary {
-  color: var(--surface);
-  background: var(--ink);
-  border-color: var(--ink);
+  color: #fff;
+  background: var(--brand-strong);
+  border-color: var(--brand-strong);
+  box-shadow: var(--shadow-card);
 }
 
 .jovlo-button--primary:hover:not(:disabled) {
-  background: var(--brand);
-  border-color: var(--brand);
+  background: var(--brand-deep);
+  border-color: var(--brand-deep);
 }
 
 .jovlo-button--secondary {
   color: var(--ink);
   background: var(--surface);
   border-color: var(--line);
+  box-shadow: var(--shadow-card);
 }
 
 .jovlo-button--secondary:hover:not(:disabled) {
-  color: var(--brand);
+  color: var(--brand-text);
   border-color: var(--brand);
 }
 
@@ -456,10 +458,13 @@ button.jovlo-day-health:hover {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
   container-type: inline-size;
   transition:
     border-color var(--motion-state) var(--ease-out),
-    background-color var(--motion-state) var(--ease-out);
+    background-color var(--motion-state) var(--ease-out),
+    box-shadow var(--motion-state) var(--ease-out),
+    transform var(--motion-state) var(--ease-out);
 }
 
 .jovlo-stop-card:hover,
@@ -467,8 +472,13 @@ button.jovlo-day-health:hover {
   border-color: var(--brand);
 }
 
+.jovlo-stop-card:hover {
+  box-shadow: var(--shadow-raised);
+  transform: translateY(-1px);
+}
+
 .jovlo-stop-card[data-selected] {
-  background: rgb(104 87 229 / 4%);
+  background: rgb(217 109 48 / 5%);
 }
 
 .jovlo-stop-card[data-selected] + * {
@@ -477,6 +487,17 @@ button.jovlo-day-health:hover {
 
 .jovlo-stop-node[data-selected] .jovlo-stop-node__marker {
   background: var(--brand);
+  animation: jovlo-marker-pop var(--motion-reorder) var(--ease-spring);
+}
+
+@keyframes jovlo-marker-pop {
+  from {
+    transform: scale(0.82);
+  }
+
+  to {
+    transform: scale(1);
+  }
 }
 
 .jovlo-stop-card__topline {
@@ -582,7 +603,7 @@ button.jovlo-day-health:hover {
 }
 
 .jovlo-stop-card__actions button:hover {
-  color: var(--brand);
+  color: var(--brand-text);
   background: var(--brand-tint);
 }
 
@@ -636,7 +657,7 @@ button.jovlo-day-health:hover {
 }
 
 .jovlo-leg-row[data-selected] .jovlo-leg-row__marker {
-  color: var(--brand);
+  color: var(--brand-text);
   border-color: var(--brand);
 }
 
@@ -837,12 +858,12 @@ button.jovlo-day-health:hover {
 }
 
 .jovlo-impact-bar__action--apply {
-  color: var(--surface);
-  background: var(--ink);
+  color: #fff;
+  background: var(--brand-strong);
 }
 
 .jovlo-impact-bar__action--apply:hover {
-  background: var(--brand);
+  background: var(--brand-deep);
 }
 
 /* Undo snackbar */
@@ -886,7 +907,7 @@ button.jovlo-day-health:hover {
   min-width: var(--target-min);
   min-height: var(--target-min);
   padding: var(--space-2) var(--space-3);
-  color: #bcb4ff;
+  color: #ffc79e;
   background: transparent;
   border: 0;
   border-radius: var(--radius-control);
@@ -1001,7 +1022,7 @@ button.jovlo-day-health:hover {
 
 .jovlo-mobile-nav__item:hover,
 .jovlo-mobile-nav__item[data-selected] {
-  color: var(--brand);
+  color: var(--brand-text);
   background: var(--brand-tint);
 }
 
@@ -1215,7 +1236,7 @@ button.jovlo-day-health:hover {
   height: 100%;
   min-height: 360px;
   overflow: hidden;
-  background: #eef0e9;
+  background: var(--map-land);
   isolation: isolate;
 }
 
@@ -1240,7 +1261,7 @@ button.jovlo-day-health:hover {
 .jovlo-reference-map {
   z-index: var(--z-content);
   overflow: hidden;
-  background: #eef0e9;
+  background: var(--map-land);
 }
 
 .jovlo-reference-map svg {
@@ -1287,19 +1308,19 @@ button.jovlo-day-health:hover {
 }
 
 .jovlo-reference-map__land {
-  fill: #eef0e9;
+  fill: var(--map-land);
 }
 
 .jovlo-reference-map__coast {
   fill: none;
-  stroke: #b9d7e7;
+  stroke: var(--map-water);
   stroke-width: 48;
   stroke-linecap: round;
 }
 
 .jovlo-reference-map__road {
   fill: none;
-  stroke: #ffffff;
+  stroke: var(--map-road);
   stroke-width: 12;
   stroke-linecap: round;
 }
@@ -1367,7 +1388,7 @@ button.jovlo-day-health:hover {
 }
 
 .jovlo-reference-map__candidate[data-type="coffee"] circle {
-  fill: #8a624b;
+  fill: var(--cocoa);
 }
 
 .jovlo-reference-map__candidate[data-type="culture"] circle {
@@ -1402,7 +1423,7 @@ button.jovlo-day-health:hover {
 .jovlo-map-canvas__controls .jovlo-icon-button {
   background: var(--surface);
   border-color: var(--line);
-  box-shadow: 0 4px 12px rgb(32 32 36 / 12%);
+  box-shadow: 0 4px 12px rgb(93 64 28 / 12%);
 }
 
 .jovlo-amap-formal-marker,
@@ -1414,7 +1435,7 @@ button.jovlo-day-health:hover {
   color: var(--surface);
   border: 3px solid var(--surface);
   border-radius: 50%;
-  box-shadow: 0 4px 12px rgb(32 32 36 / 16%);
+  box-shadow: 0 4px 12px rgb(93 64 28 / 14%);
   font-family: var(--font-numeric);
   font-weight: 750;
 }
@@ -1432,7 +1453,7 @@ button.jovlo-day-health:hover {
 
 .jovlo-amap-formal-marker[data-selected="true"] {
   background: var(--brand);
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--brand-strong);
   outline-offset: 2px;
 }
 
@@ -1457,7 +1478,7 @@ button.jovlo-day-health:hover {
 
 .jovlo-amap-candidate-marker[data-type="coffee"],
 .jovlo-amap-candidate-cluster[data-type="coffee"] {
-  background: #8a624b;
+  background: var(--cocoa);
 }
 
 .jovlo-amap-candidate-marker[data-type="culture"],
@@ -1865,6 +1886,14 @@ button.jovlo-day-health:hover {
 
   .jovlo-skeleton,
   .jovlo-trip-header__status-spinner {
+    animation: none;
+  }
+
+  .jovlo-stop-card:hover {
+    transform: none;
+  }
+
+  .jovlo-stop-node[data-selected] .jovlo-stop-node__marker {
     animation: none;
   }
 
