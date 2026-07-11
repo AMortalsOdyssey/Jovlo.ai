@@ -144,6 +144,7 @@ describe('planner editing components', () => {
   it('presents inspector actions, facts, summary, then evidence', async () => {
     const user = userEvent.setup()
     const onAdd = vi.fn()
+    const onNavigate = vi.fn()
     const onOpenEvidence = vi.fn()
 
     render(
@@ -157,14 +158,17 @@ describe('planner editing components', () => {
         sourceSummary="3 个来源对营业时间说法一致。"
         evidence={[{ id: 'ev-1', source: '园区官网', statement: '周二正常营业', statusLabel: '已核验' }]}
         onAdd={onAdd}
+        onNavigate={onNavigate}
         onOpenEvidence={onOpenEvidence}
         onClose={vi.fn()}
       />,
     )
 
     await user.click(screen.getByRole('button', { name: '加入行程' }))
+    await user.click(screen.getByRole('button', { name: '高德查看' }))
     await user.click(screen.getByRole('button', { name: /园区官网/ }))
     expect(onAdd).toHaveBeenCalledOnce()
+    expect(onNavigate).toHaveBeenCalledOnce()
     expect(onOpenEvidence).toHaveBeenCalledWith('ev-1')
   })
 })

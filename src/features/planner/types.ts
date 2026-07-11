@@ -23,14 +23,27 @@ export interface Coordinate {
   lat: number
 }
 
+export type MapPlaceType =
+  | 'scenic'
+  | 'food'
+  | 'coffee'
+  | 'hotel'
+  | 'beach'
+  | 'culture'
+  | 'transport'
+  | 'shopping'
+  | 'other'
+
 export interface FormalMapPoint extends Coordinate {
   id: string
   order: number
   name: string
+  type?: MapPlaceType
+  sourceType?: string
 }
 
 export interface CandidateMapPoint extends Coordinate {
   id: string
   name: string
-  type: 'beach' | 'food' | 'coffee' | 'culture' | 'hotel' | 'other'
+  type: MapPlaceType
 }

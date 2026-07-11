@@ -1,4 +1,4 @@
-import { ExternalLink, ImageOff, Navigation, Plus, X } from 'lucide-react'
+import { ExternalLink, ImageOff, MapPinned, Plus, X } from 'lucide-react'
 
 import { IconButton } from '../../components'
 import './planner.css'
@@ -79,8 +79,8 @@ export function PlaceInspector({
             {addLabel}
           </button>
           <button type="button" className="jovlo-button jovlo-button--secondary" onClick={onNavigate} disabled={!onNavigate}>
-            <Navigation aria-hidden="true" size={18} />
-            导航
+            <MapPinned aria-hidden="true" size={18} />
+            高德查看
           </button>
         </div>
 

@@ -18,11 +18,12 @@ import { Snackbar } from './Snackbar'
 import { StopCard } from './StopCard'
 import { TripOverview } from './TripOverview'
 import { TripHeader } from './TripHeader'
-import { buildAmapNavigationUrl } from '@/lib/amap'
+import { buildAmapMarkerUrl, buildAmapNavigationUrl } from '@/lib/amap'
 import { apiRequest } from '@/lib/api'
 import { formatCurrency, formatDistance, formatDuration } from '@/lib/format'
 import { currentVersion, selectedDay, useTripStore } from '@/store/useTripStore'
 import { recalculateTrip, stableHash, type RouteEndpoint, type RouteLeg, type TripPlaceSnapshot, type TripStop } from '@domain'
+import { inferMapPlaceType } from './map-place'
 import './plan-page.css'
 
 type RouteProviderNotice = {
@@ -91,6 +92,11 @@ function placeCoordinate(place?: TripPlaceSnapshot) {
 function openNavigation(place?: TripPlaceSnapshot) {
   const target = placeCoordinate(place)
   if (target) window.open(buildAmapNavigationUrl(target), '_blank', 'noopener,noreferrer')
+}
+
+function openMapLocation(place?: TripPlaceSnapshot) {
+  const target = placeCoordinate(place)
+  if (target) window.open(buildAmapMarkerUrl(target), '_blank', 'noopener,noreferrer')
 }
 
 function StopEditor({
@@ -203,11 +209,18 @@ export function PlanPage() {
         ? state.trip.stayAreaRefs[previousStay.areaId]
         : state.trip.placeRefs[state.trip.intent.entryAnchor.placeId]
     if (startPlace) {
-      points.push({ id: `start-${day.id}`, order: 1, name: previousStay?.label ?? state.trip.intent.entryAnchor.label, lng: startPlace.gcj02.lon, lat: startPlace.gcj02.lat })
+      points.push({
+        id: `start-${day.id}`,
+        order: 1,
+        name: previousStay?.label ?? state.trip.intent.entryAnchor.label,
+        sourceType: previousStay ? 'hotel' : 'type' in startPlace ? startPlace.type : undefined,
+        lng: startPlace.gcj02.lon,
+        lat: startPlace.gcj02.lat,
+      })
     }
     day.stops.forEach((stop) => {
       const place = state.trip.placeRefs[stop.placeId]
-      if (place) points.push({ id: stop.id, order: points.length + 1, name: place.name, lng: place.gcj02.lon, lat: place.gcj02.lat })
+      if (place) points.push({ id: stop.id, order: points.length + 1, name: place.name, sourceType: place.type || stop.kind, lng: place.gcj02.lon, lat: place.gcj02.lat })
     })
     const endPlace = day.overnightStay?.kind === 'place'
       ? state.trip.placeRefs[day.overnightStay.placeId]
@@ -215,7 +228,14 @@ export function PlanPage() {
         ? state.trip.stayAreaRefs[day.overnightStay.areaId]
         : state.trip.placeRefs[state.trip.intent.exitAnchor.placeId]
     if (endPlace) {
-      points.push({ id: `end-${day.id}`, order: points.length + 1, name: day.overnightStay?.label ?? state.trip.intent.exitAnchor.label, lng: endPlace.gcj02.lon, lat: endPlace.gcj02.lat })
+      points.push({
+        id: `end-${day.id}`,
+        order: points.length + 1,
+        name: day.overnightStay?.label ?? state.trip.intent.exitAnchor.label,
+        sourceType: day.overnightStay ? 'hotel' : 'type' in endPlace ? endPlace.type : undefined,
+        lng: endPlace.gcj02.lon,
+        lat: endPlace.gcj02.lat,
+      })
     }
     return points
   }, [day, state.trip])
@@ -356,7 +376,8 @@ export function PlanPage() {
     const appendPoint = (
       id: string,
       name: string,
-      place?: { gcj02: { lon: number; lat: number } },
+      place?: { gcj02: { lon: number; lat: number }; type?: string },
+      sourceType?: string,
     ) => {
       if (!place) return
       const previous = points.at(-1)
@@ -365,6 +386,7 @@ export function PlanPage() {
         id,
         order: points.length + 1,
         name,
+        sourceType: sourceType ?? place.type,
         lng: place.gcj02.lon,
         lat: place.gcj02.lat,
       })
@@ -381,9 +403,9 @@ export function PlanPage() {
         appendPoint(stop.id, place?.name ?? '未命名地点', place)
       })
       if (item.overnightStay?.kind === 'place') {
-        appendPoint(`overview-stay-${item.id}`, item.overnightStay.label, state.trip.placeRefs[item.overnightStay.placeId])
+        appendPoint(`overview-stay-${item.id}`, item.overnightStay.label, state.trip.placeRefs[item.overnightStay.placeId], 'hotel')
       } else if (item.overnightStay?.kind === 'area') {
-        appendPoint(`overview-stay-${item.id}`, item.overnightStay.label, state.trip.stayAreaRefs[item.overnightStay.areaId])
+        appendPoint(`overview-stay-${item.id}`, item.overnightStay.label, state.trip.stayAreaRefs[item.overnightStay.areaId], 'hotel')
       }
     })
     appendPoint(
@@ -401,7 +423,7 @@ export function PlanPage() {
     name: place.name,
     lng: place.gcj02.lon,
     lat: place.gcj02.lat,
-    type: place.type === 'meal' ? ('food' as const) : place.type === 'hotel' ? ('hotel' as const) : ('other' as const),
+    type: inferMapPlaceType(place.name, place.type),
   }))
 
   const selectedStop = state.trip.days.flatMap((item) => item.stops).find((stop) => stop.id === state.selectedStopId)
@@ -627,7 +649,7 @@ export function PlanPage() {
         )}
         budget={budgetPanel}
         more={morePanel}
-        inspector={inspectedPlace ? <PlaceInspector open name={inspectedPlace.name} openingHours={inspectedPlace.selectedVariant?.openingHours ? '以来源中的当日公告为准' : undefined} suggestedStay={selectedStop ? formatDuration(selectedStop.stayMinutes) : '建议 90 min'} price={selectedPrice ? `约 ${formatCurrency(selectedPrice)}` : undefined} parking={inspectedPlace.selectedVariant?.parkingNote} sourceSummary={sourceEvidence.map((source) => source.summary).join('；') || undefined} evidence={sourceEvidence.map((source) => ({ id: source.sourceId, source: source.title, statement: source.summary, statusLabel: source.commercialRelationship === 'yes' ? '商业关联' : '来源可追溯' }))} addLabel={selectedCandidate ? `加入 Day ${day.dayIndex}` : '已在行程'} onAdd={selectedCandidate ? () => { state.addCandidateStop(selectedCandidate.placeId, day.id); setCandidateId(null) } : undefined} onNavigate={() => openNavigation(inspectedPlace)} onOpenEvidence={(id) => { const source = state.trip.sourceRefs[id]; if (source) window.open(source.url, '_blank', 'noopener,noreferrer') }} onShowAllEvidence={() => navigate(`/trips/${state.trip.tripId}/sources`)} onClose={() => { state.selectStop(null); setCandidateId(null) }} /> : undefined}
+        inspector={inspectedPlace ? <PlaceInspector open name={inspectedPlace.name} openingHours={inspectedPlace.selectedVariant?.openingHours ? '以来源中的当日公告为准' : undefined} suggestedStay={selectedStop ? formatDuration(selectedStop.stayMinutes) : '建议 90 min'} price={selectedPrice ? `约 ${formatCurrency(selectedPrice)}` : undefined} parking={inspectedPlace.selectedVariant?.parkingNote} sourceSummary={sourceEvidence.map((source) => source.summary).join('；') || undefined} evidence={sourceEvidence.map((source) => ({ id: source.sourceId, source: source.title, statement: source.summary, statusLabel: source.commercialRelationship === 'yes' ? '商业关联' : '来源可追溯' }))} addLabel={selectedCandidate ? `加入 Day ${day.dayIndex}` : '已在行程'} onAdd={selectedCandidate ? () => { state.addCandidateStop(selectedCandidate.placeId, day.id); setCandidateId(null) } : undefined} onNavigate={() => openMapLocation(inspectedPlace)} onOpenEvidence={(id) => { const source = state.trip.sourceRefs[id]; if (source) window.open(source.url, '_blank', 'noopener,noreferrer') }} onShowAllEvidence={() => navigate(`/trips/${state.trip.tripId}/sources`)} onClose={() => { state.selectStop(null); setCandidateId(null) }} /> : undefined}
         mobileNav={<MobileNav activeView={state.mobileView} isTravelingToday={day.date === new Date().toISOString().slice(0, 10)} onSelectView={selectMobileView} />}
       />
 

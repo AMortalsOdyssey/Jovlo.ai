@@ -33,6 +33,16 @@ export function buildAmapNavigationUrl(target: NavTarget, origin?: NavTarget): s
   return url.toString()
 }
 
+export function buildAmapMarkerUrl(target: NavTarget): string {
+  const url = new URL('https://uri.amap.com/marker')
+  url.searchParams.set('position', `${target.lon},${target.lat}`)
+  url.searchParams.set('name', target.name)
+  url.searchParams.set('src', 'Jovlo.ai')
+  url.searchParams.set('coordinate', 'gaode')
+  url.searchParams.set('callnative', '1')
+  return url.toString()
+}
+
 export async function copyNavigationTarget(target: NavTarget): Promise<void> {
   await navigator.clipboard.writeText(`${target.name} ${target.lon},${target.lat}`)
 }

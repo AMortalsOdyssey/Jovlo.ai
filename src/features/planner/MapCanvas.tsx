@@ -1,11 +1,30 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { load as loadAmap } from '@amap/amap-jsapi-loader'
-import { LocateFixed, Minus, Plus } from 'lucide-react'
+import {
+  BedDouble,
+  Coffee,
+  ExternalLink,
+  Landmark,
+  LocateFixed,
+  MapPin,
+  Minus,
+  Mountain,
+  Navigation2,
+  Plane,
+  Plus,
+  ShoppingBag,
+  Utensils,
+  Waves,
+  X,
+  type LucideIcon,
+} from 'lucide-react'
 
 import { IconButton } from '../../components'
 import { JOVLO_COLORS } from '../../design-system'
-import { configureAmapServiceHost } from '../../lib/amap'
-import type { CandidateMapPoint, FormalMapPoint } from './types'
+import { buildAmapMarkerUrl, configureAmapServiceHost } from '../../lib/amap'
+import { inferMapPlaceType, MAP_PLACE_TYPE_LABEL } from './map-place'
+import type { CandidateMapPoint, FormalMapPoint, MapPlaceType } from './types'
 import './planner.css'
 
 export interface MapCanvasProps {
@@ -38,22 +57,82 @@ interface CandidateCluster {
 }
 
 const DEFAULT_REFERENCE_ROUTE: FormalMapPoint[] = [
-  { id: 'reference-hotel', order: 1, name: '石梅湾', lng: 110.274, lat: 18.659 },
-  { id: 'reference-riyue-bay', order: 2, name: '日月湾', lng: 110.195, lat: 18.645 },
-  { id: 'reference-xinglong', order: 3, name: '兴隆咖啡园', lng: 110.213, lat: 18.727 },
-  { id: 'reference-shenzhou', order: 4, name: '神州半岛', lng: 110.327, lat: 18.679 },
+  { id: 'reference-hotel', order: 1, name: '石梅湾', type: 'beach', lng: 110.274, lat: 18.659 },
+  { id: 'reference-riyue-bay', order: 2, name: '日月湾', type: 'beach', lng: 110.195, lat: 18.645 },
+  { id: 'reference-xinglong', order: 3, name: '兴隆咖啡园', type: 'coffee', lng: 110.213, lat: 18.727 },
+  { id: 'reference-shenzhou', order: 4, name: '神州半岛', type: 'beach', lng: 110.327, lat: 18.679 },
 ]
 
 const EMPTY_FORMAL_POINTS: FormalMapPoint[] = []
 const EMPTY_CANDIDATE_POINTS: CandidateMapPoint[] = []
 
-const CANDIDATE_TYPE_LABEL: Record<CandidateMapPoint['type'], string> = {
-  beach: '海滩',
-  food: '美食',
-  coffee: '咖啡',
-  culture: '人文',
-  hotel: '住宿',
-  other: '候选',
+const MAP_PLACE_ICON: Record<MapPlaceType, LucideIcon> = {
+  scenic: Mountain,
+  food: Utensils,
+  coffee: Coffee,
+  hotel: BedDouble,
+  beach: Waves,
+  culture: Landmark,
+  transport: Plane,
+  shopping: ShoppingBag,
+  other: MapPin,
+}
+
+function renderMapPlaceIcon(container: HTMLElement, type: MapPlaceType, roots: Root[], size = 15) {
+  const Icon = MAP_PLACE_ICON[type]
+  const root = createRoot(container)
+  root.render(<Icon aria-hidden="true" size={size} strokeWidth={2.1} />)
+  roots.push(root)
+}
+
+function createAmapPlaceMarker({
+  ariaLabel,
+  kind,
+  name,
+  order,
+  selected,
+  type,
+  roots,
+}: {
+  ariaLabel: string
+  kind: 'formal' | 'candidate' | 'candidate-cluster'
+  name: string
+  order?: number
+  selected: boolean
+  type: MapPlaceType
+  roots: Root[]
+}) {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.className = 'jovlo-amap-place-marker'
+  button.dataset.mapMarkerKind = kind
+  button.dataset.type = type
+  button.dataset.selected = String(selected)
+  button.setAttribute('aria-label', ariaLabel)
+  button.title = ariaLabel
+
+  const pin = document.createElement('span')
+  pin.className = 'jovlo-amap-place-marker__pin'
+  const icon = document.createElement('span')
+  icon.className = 'jovlo-amap-place-marker__icon'
+  renderMapPlaceIcon(icon, type, roots)
+  pin.append(icon)
+  if (order !== undefined) {
+    const badge = document.createElement('span')
+    badge.className = 'jovlo-amap-place-marker__order'
+    badge.textContent = String(order)
+    pin.append(badge)
+  }
+
+  const label = document.createElement('span')
+  label.className = 'jovlo-amap-place-marker__label'
+  const title = document.createElement('strong')
+  title.textContent = name
+  const typeLabel = document.createElement('small')
+  typeLabel.textContent = MAP_PLACE_TYPE_LABEL[type]
+  label.append(title, typeLabel)
+  button.append(pin, label)
+  return button
 }
 
 function projectCoordinates(points: Array<{ id: string; lng: number; lat: number }>): ProjectedPoint[] {
@@ -126,11 +205,18 @@ export function MapCanvas({
   const envKey = import.meta.env.VITE_AMAP_JS_KEY?.trim() ?? ''
   const apiKey = (amapKey ?? envKey).trim()
   const usesBuiltInReference = routePoints.length === 0
-  const visibleRoute = usesBuiltInReference ? DEFAULT_REFERENCE_ROUTE : routePoints
+  const visibleRoute = useMemo(
+    () => (usesBuiltInReference ? DEFAULT_REFERENCE_ROUTE : routePoints).map((point) => ({
+      ...point,
+      type: point.type ?? inferMapPlaceType(point.name, point.sourceType),
+    })),
+    [routePoints, usesBuiltInReference],
+  )
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
   const [loadState, setLoadState] = useState<MapLoadState>(apiKey ? 'loading' : 'fallback')
   const [fallbackScale, setFallbackScale] = useState(1)
+  const [focusedFormalPointId, setFocusedFormalPointId] = useState<string | null>(null)
   const callbacksRef = useRef({
     onSelectFormalPoint,
     onSelectCandidateCluster,
@@ -139,7 +225,7 @@ export function MapCanvas({
   })
   callbacksRef.current = { onSelectFormalPoint, onSelectCandidateCluster, onReady, onLoadError }
   const routeSignature = visibleRoute
-    .map(({ id, order, name, lng, lat }) => `${id}:${order}:${name}:${lng}:${lat}`)
+    .map(({ id, order, name, type, lng, lat }) => `${id}:${order}:${name}:${type}:${lng}:${lat}`)
     .join('|')
   const candidateSignature = candidatePoints
     .map(({ id, name, type, lng, lat }) => `${id}:${name}:${type}:${lng}:${lat}`)
@@ -156,6 +242,7 @@ export function MapCanvas({
   )
 
   useEffect(() => {
+    const markerIconRoots: Root[] = []
     if (!apiKey || !hostRef.current) {
       setLoadState('fallback')
       callbacksRef.current.onReady?.('local-reference')
@@ -166,7 +253,7 @@ export function MapCanvas({
     setLoadState('loading')
     configureAmapServiceHost()
 
-    loadAmap({ key: apiKey, version: '2.0' })
+    loadAmap({ key: apiKey, version: '2.0', plugins: ['AMap.MoveAnimation'] })
       .then((AMap: any) => {
         if (cancelled || !hostRef.current) return
 
@@ -188,26 +275,37 @@ export function MapCanvas({
             strokeColor: selectedLegIndex === index ? JOVLO_COLORS.brand : JOVLO_COLORS.sea,
             strokeWeight: selectedLegIndex === index ? 6 : 4,
             strokeOpacity: 0.94,
+            strokeStyle: 'dashed',
+            strokeDasharray: selectedLegIndex === index ? [14, 10] : [10, 9],
+            showDir: true,
+            dirColor: selectedLegIndex === index ? JOVLO_COLORS.brand : JOVLO_COLORS.sea,
             lineJoin: 'round',
           })
         })
 
         const formalMarkers = visibleRoute.map((point) => {
-          const markerButton = document.createElement('button')
-          markerButton.type = 'button'
-          markerButton.className = 'jovlo-amap-formal-marker'
-          markerButton.dataset.mapMarkerKind = 'formal'
-          markerButton.dataset.digits = String(point.order).length > 1 ? 'multiple' : 'single'
-          markerButton.dataset.selected = String(point.id === selectedPointId)
-          markerButton.setAttribute('aria-label', `第 ${point.order} 站：${point.name}`)
-          markerButton.title = `第 ${point.order} 站：${point.name}`
-          markerButton.textContent = String(point.order)
-          markerButton.addEventListener('click', () => callbacksRef.current.onSelectFormalPoint?.(point.id))
+          const pointType = point.type ?? 'other'
+          const markerButton = createAmapPlaceMarker({
+            ariaLabel: `第 ${point.order} 站：${point.name}，${MAP_PLACE_TYPE_LABEL[pointType]}`,
+            kind: 'formal',
+            name: point.name,
+            order: point.order,
+            selected: point.id === selectedPointId,
+            type: pointType,
+            roots: markerIconRoots,
+          })
+          markerButton.addEventListener('click', () => {
+            hostRef.current?.querySelectorAll<HTMLElement>('[data-map-marker-kind="formal"]').forEach((marker) => {
+              marker.dataset.selected = String(marker === markerButton)
+            })
+            setFocusedFormalPointId(point.id)
+            callbacksRef.current.onSelectFormalPoint?.(point.id)
+          })
 
           return new AMap.Marker({
             position: [point.lng, point.lat],
             content: markerButton,
-            offset: new AMap.Pixel(-16, -16),
+            offset: new AMap.Pixel(-18, -42),
             title: point.name,
             zIndex: 20,
           })
@@ -218,31 +316,64 @@ export function MapCanvas({
           const isCluster = cluster.points.length > 1
           const lng = cluster.points.reduce((sum, point) => sum + point.lng, 0) / cluster.points.length
           const lat = cluster.points.reduce((sum, point) => sum + point.lat, 0) / cluster.points.length
-          const markerButton = document.createElement('button')
-          markerButton.type = 'button'
-          markerButton.className = isCluster ? 'jovlo-amap-candidate-cluster' : 'jovlo-amap-candidate-marker'
-          markerButton.dataset.mapMarkerKind = isCluster ? 'candidate-cluster' : 'candidate'
-          markerButton.dataset.type = cluster.type
-          markerButton.dataset.selected = String(pointIds.includes(selectedPointId ?? ''))
-          markerButton.setAttribute(
-            'aria-label',
-            isCluster ? `${cluster.points.length} 个候选地点` : `候选地点：${cluster.points[0].name}`,
-          )
-          markerButton.title = markerButton.getAttribute('aria-label') ?? ''
-          markerButton.textContent = isCluster
-            ? String(cluster.points.length)
-            : CANDIDATE_TYPE_LABEL[cluster.type].slice(0, 1)
-          markerButton.addEventListener('click', () => callbacksRef.current.onSelectCandidateCluster?.(pointIds))
+          const markerButton = createAmapPlaceMarker({
+            ariaLabel: isCluster
+              ? `${cluster.points.length} 个候选地点，主类型 ${MAP_PLACE_TYPE_LABEL[cluster.type]}`
+              : `候选地点：${cluster.points[0].name}，${MAP_PLACE_TYPE_LABEL[cluster.type]}`,
+            kind: isCluster ? 'candidate-cluster' : 'candidate',
+            name: isCluster ? `${cluster.points.length} 个候选` : cluster.points[0].name,
+            order: isCluster ? cluster.points.length : undefined,
+            selected: pointIds.includes(selectedPointId ?? ''),
+            type: cluster.type,
+            roots: markerIconRoots,
+          })
+          markerButton.addEventListener('click', () => {
+            setFocusedFormalPointId(null)
+            callbacksRef.current.onSelectCandidateCluster?.(pointIds)
+          })
 
           return new AMap.Marker({
             position: [lng, lat],
             content: markerButton,
-            offset: new AMap.Pixel(isCluster ? -18 : -14, isCluster ? -18 : -14),
+            offset: new AMap.Pixel(-18, -42),
             zIndex: 16,
           })
         })
 
-        map.add([...routeOverlays, ...formalMarkers, ...candidateMarkers])
+        const routePath = visibleRoute.map((point) => [point.lng, point.lat])
+        let routeDirectionMarker: any = null
+        if (routePath.length > 1) {
+          const routeArrow = document.createElement('span')
+          routeArrow.className = 'jovlo-amap-route-arrow'
+          routeArrow.dataset.mapMarkerKind = 'route-arrow'
+          const routeArrowRoot = createRoot(routeArrow)
+          routeArrowRoot.render(<Navigation2 aria-hidden="true" size={15} strokeWidth={2.6} />)
+          markerIconRoots.push(routeArrowRoot)
+          routeDirectionMarker = new AMap.Marker({
+            position: routePath[0],
+            content: routeArrow,
+            offset: new AMap.Pixel(-11, -11),
+            zIndex: 18,
+          })
+        }
+
+        map.add([...routeOverlays, ...(routeDirectionMarker ? [routeDirectionMarker] : []), ...formalMarkers, ...candidateMarkers])
+
+        if (
+          routeDirectionMarker?.moveAlong &&
+          !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        ) {
+          const playRouteDirection = () => {
+            if (cancelled) return
+            routeDirectionMarker.setPosition?.(routePath[0])
+            routeDirectionMarker.moveAlong(routePath, {
+              duration: Math.max(7_000, routePath.length * 2_000),
+              autoRotation: true,
+            })
+          }
+          routeDirectionMarker.on?.('movealong', playRouteDirection)
+          playRouteDirection()
+        }
 
         if (routeOverlays.length > 0) map.setFitView(routeOverlays, false, [48, 48, 48, 48], 14)
         setLoadState('ready')
@@ -264,6 +395,7 @@ export function MapCanvas({
       cancelled = true
       mapRef.current?.destroy?.()
       mapRef.current = null
+      queueMicrotask(() => markerIconRoots.forEach((root) => root.unmount()))
     }
   }, [apiKey, candidateSignature, routeSignature, selectedLegIndex, selectedPointId])
 
@@ -288,6 +420,9 @@ export function MapCanvas({
       : loadState === 'loading'
         ? '高德地图加载中 · 显示本地参考路线'
         : '本地参考路线 · 非高德实时数据'
+  const focusedFormalPoint = visibleRoute.find((point) => point.id === focusedFormalPointId)
+  const focusedFormalPointType = focusedFormalPoint?.type ?? 'other'
+  const FocusedPointIcon = MAP_PLACE_ICON[focusedFormalPointType]
 
   return (
     <section
@@ -346,9 +481,12 @@ export function MapCanvas({
             {clusters.map((cluster) => {
               const isCluster = cluster.points.length > 1
               const label = isCluster
-                ? `${cluster.points.length} 个候选地点，主类型 ${CANDIDATE_TYPE_LABEL[cluster.type]}`
+                ? `${cluster.points.length} 个候选地点，主类型 ${MAP_PLACE_TYPE_LABEL[cluster.type]}`
                 : `候选地点：${cluster.points[0].name}`
-              const activate = () => onSelectCandidateCluster?.(cluster.points.map((point) => point.id))
+              const activate = () => {
+                setFocusedFormalPointId(null)
+                onSelectCandidateCluster?.(cluster.points.map((point) => point.id))
+              }
               return (
                 <g
                   key={cluster.key}
@@ -364,7 +502,7 @@ export function MapCanvas({
                 >
                   <circle r={isCluster ? 18 : 14} />
                   <text textAnchor="middle" dominantBaseline="central">
-                    {isCluster ? cluster.points.length : CANDIDATE_TYPE_LABEL[cluster.type].slice(0, 1)}
+                    {isCluster ? cluster.points.length : MAP_PLACE_TYPE_LABEL[cluster.type].slice(0, 1)}
                   </text>
                 </g>
               )
@@ -373,18 +511,24 @@ export function MapCanvas({
             {visibleRoute.map((point) => {
               const position = projected.get(point.id)
               if (!position) return null
-              const selected = point.id === selectedPointId
+              const selected = point.id === selectedPointId || point.id === focusedFormalPointId
+              const pointType = point.type ?? 'other'
+              const activate = () => {
+                setFocusedFormalPointId(point.id)
+                onSelectFormalPoint?.(point.id)
+              }
               return (
                 <g
                   key={point.id}
                   className="jovlo-reference-map__formal"
                   data-map-marker-kind="formal"
+                  data-type={pointType}
                   data-selected={selected || undefined}
-                  role={onSelectFormalPoint ? 'button' : undefined}
-                  tabIndex={onSelectFormalPoint ? 0 : undefined}
-                  aria-label={`第 ${point.order} 站：${point.name}`}
-                  onClick={() => onSelectFormalPoint?.(point.id)}
-                  onKeyDown={(event) => activateOnEnter(event, () => onSelectFormalPoint?.(point.id))}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`第 ${point.order} 站：${point.name}，${MAP_PLACE_TYPE_LABEL[pointType]}`}
+                  onClick={activate}
+                  onKeyDown={(event) => activateOnEnter(event, activate)}
                   transform={`translate(${position.x} ${position.y})`}
                 >
                   <circle r="16" />
@@ -396,8 +540,11 @@ export function MapCanvas({
                   >
                     {point.order}
                   </text>
-                  <text className="jovlo-reference-map__formal-label" x="24" y="5">
+                  <text className="jovlo-reference-map__formal-label" x="24" y="2">
                     {point.name}
+                  </text>
+                  <text className="jovlo-reference-map__formal-type" x="24" y="17">
+                    {MAP_PLACE_TYPE_LABEL[pointType]}
                   </text>
                 </g>
               )
@@ -406,6 +553,31 @@ export function MapCanvas({
           {usesBuiltInReference && <p className="jovlo-reference-map__caption">示意：石梅湾—日月湾—兴隆—神州半岛</p>}
         </div>
       )}
+
+      {focusedFormalPoint ? (
+        <aside className="jovlo-map-point-action" aria-label={`${focusedFormalPoint.name} 地图操作`}>
+          <span className="jovlo-map-point-action__icon" data-type={focusedFormalPointType}>
+            <FocusedPointIcon aria-hidden="true" size={17} />
+          </span>
+          <span className="jovlo-map-point-action__copy">
+            <strong>{focusedFormalPoint.name}</strong>
+            <small>{MAP_PLACE_TYPE_LABEL[focusedFormalPointType]} · 第 {focusedFormalPoint.order} 站</small>
+          </span>
+          <a
+            href={buildAmapMarkerUrl({
+              name: focusedFormalPoint.name,
+              lon: focusedFormalPoint.lng,
+              lat: focusedFormalPoint.lat,
+            })}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <ExternalLink aria-hidden="true" size={16} />
+            高德查看
+          </a>
+          <IconButton icon={X} label="关闭地点操作" size="compact" onClick={() => setFocusedFormalPointId(null)} />
+        </aside>
+      ) : null}
 
       <div className="jovlo-map-canvas__controls" aria-label="地图控制">
         <IconButton icon={Plus} label="放大地图" onClick={zoomIn} />

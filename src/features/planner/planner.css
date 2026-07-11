@@ -1392,6 +1392,8 @@ button.jovlo-day-health:hover {
   stroke: var(--sea);
   stroke-width: 5;
   stroke-linecap: round;
+  stroke-dasharray: 13 10;
+  animation: jovlo-route-dash 1.2s linear infinite;
   transition:
     stroke var(--motion-route) var(--ease-out),
     stroke-width var(--motion-route) var(--ease-out);
@@ -1434,6 +1436,15 @@ button.jovlo-day-health:hover {
   stroke-width: 5;
   stroke-linejoin: round;
   font: 650 14px / 22px var(--font-ui);
+}
+
+.jovlo-reference-map__formal-type {
+  fill: var(--muted);
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4;
+  stroke-linejoin: round;
+  font: 650 10px / 14px var(--font-ui);
 }
 
 .jovlo-reference-map__candidate circle {
@@ -1489,69 +1500,251 @@ button.jovlo-day-health:hover {
   box-shadow: 0 4px 12px rgb(93 64 28 / 12%);
 }
 
-.jovlo-amap-formal-marker,
-.jovlo-amap-candidate-marker,
-.jovlo-amap-candidate-cluster {
-  display: grid;
+.jovlo-amap-place-marker {
+  display: flex;
+  width: max-content;
+  max-width: 180px;
   padding: 0;
+  align-items: center;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  filter: drop-shadow(0 4px 7px rgb(59 43 25 / 18%));
+  font-family: var(--font-ui);
+  text-align: left;
+}
+
+.jovlo-amap-place-marker__pin {
+  position: relative;
+  display: grid;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  place-items: center;
+  color: #fff;
+  background: var(--sea);
+  border: 2px solid var(--surface);
+  border-radius: 50% 50% 50% 0;
+  box-shadow: 0 2px 6px rgb(59 43 25 / 18%);
+  transform: rotate(-45deg);
+  transition: background-color var(--motion-state) var(--ease-out), transform var(--motion-state) var(--ease-spring);
+}
+
+.jovlo-amap-place-marker__icon {
+  display: grid;
+  place-items: center;
+  transform: rotate(45deg);
+}
+
+.jovlo-amap-place-marker__order {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  display: grid;
+  width: 18px;
+  height: 18px;
   place-items: center;
   color: var(--surface);
-  border: 3px solid var(--surface);
-  border-radius: 50%;
-  box-shadow: 0 4px 12px rgb(93 64 28 / 14%);
-  font-family: var(--font-numeric);
-  font-weight: 750;
-}
-
-.jovlo-amap-formal-marker {
-  width: 32px;
-  height: 32px;
   background: var(--ink);
-  font-size: 14px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  font: 750 9px / 1 var(--font-numeric);
+  transform: rotate(45deg);
 }
 
-.jovlo-amap-formal-marker[data-digits="multiple"] {
-  font-size: 12px;
+.jovlo-amap-place-marker__label {
+  display: grid;
+  min-width: 0;
+  max-width: 138px;
+  min-height: 36px;
+  padding: 4px 8px;
+  align-content: center;
+  gap: 1px;
+  margin-left: 5px;
+  background: rgb(255 253 248 / 96%);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgb(59 43 25 / 12%);
 }
 
-.jovlo-amap-formal-marker[data-selected="true"] {
-  background: var(--brand);
-  outline: 2px solid var(--brand-strong);
-  outline-offset: 2px;
-}
-
-.jovlo-amap-candidate-marker {
-  width: 28px;
-  height: 28px;
-  background: var(--sky);
+.jovlo-amap-place-marker__label strong {
+  overflow-wrap: anywhere;
   font-size: 11px;
+  font-weight: 760;
+  line-height: 15px;
 }
 
-.jovlo-amap-candidate-cluster {
-  width: 36px;
-  height: 36px;
-  background: var(--sky);
-  font-size: 12px;
+.jovlo-amap-place-marker__label small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 12px;
 }
 
-.jovlo-amap-candidate-marker[data-type="food"],
-.jovlo-amap-candidate-cluster[data-type="food"] {
-  background: var(--sun);
+.jovlo-amap-place-marker[data-selected="true"] .jovlo-amap-place-marker__pin {
+  background: var(--brand-strong);
+  transform: rotate(-45deg) scale(1.12);
 }
 
-.jovlo-amap-candidate-marker[data-type="coffee"],
-.jovlo-amap-candidate-cluster[data-type="coffee"] {
+.jovlo-amap-place-marker[data-selected="true"] .jovlo-amap-place-marker__label,
+.jovlo-amap-place-marker:focus-visible .jovlo-amap-place-marker__label {
+  border-color: var(--brand);
+  box-shadow: 0 4px 14px rgb(178 74 18 / 20%);
+}
+
+.jovlo-amap-place-marker:focus-visible {
+  outline: none;
+}
+
+.jovlo-amap-place-marker[data-type="food"] .jovlo-amap-place-marker__pin {
+  background: var(--sun-text);
+}
+
+.jovlo-amap-place-marker[data-type="coffee"] .jovlo-amap-place-marker__pin {
   background: var(--cocoa);
 }
 
-.jovlo-amap-candidate-marker[data-type="culture"],
-.jovlo-amap-candidate-cluster[data-type="culture"] {
+.jovlo-amap-place-marker[data-type="beach"] .jovlo-amap-place-marker__pin,
+.jovlo-amap-place-marker[data-type="transport"] .jovlo-amap-place-marker__pin {
+  background: var(--sky);
+}
+
+.jovlo-amap-place-marker[data-type="culture"] .jovlo-amap-place-marker__pin {
   background: var(--brand);
 }
 
-.jovlo-amap-candidate-marker[data-type="hotel"],
-.jovlo-amap-candidate-cluster[data-type="hotel"] {
+.jovlo-amap-place-marker[data-type="shopping"] .jovlo-amap-place-marker__pin {
+  background: var(--coral);
+}
+
+.jovlo-amap-place-marker[data-map-marker-kind^="candidate"] .jovlo-amap-place-marker__label {
+  border-style: dashed;
+}
+
+.jovlo-amap-route-arrow {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  color: #fff;
   background: var(--sea);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  box-shadow: 0 3px 9px rgb(14 107 92 / 32%);
+}
+
+.jovlo-map-point-action {
+  position: absolute;
+  z-index: var(--z-sheet);
+  right: 76px;
+  bottom: var(--space-4);
+  left: var(--space-4);
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto 44px;
+  min-height: 60px;
+  padding: 8px;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink);
+  background: rgb(255 253 248 / 96%);
+  border: 1px solid var(--header-line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(12px);
+  animation: jovlo-map-action-in var(--motion-sheet) var(--ease-out) both;
+}
+
+.jovlo-map-point-action__icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: var(--surface);
+  background: var(--sea);
+  border-radius: 50%;
+}
+
+.jovlo-map-point-action__icon[data-type="food"] { background: var(--sun-text); }
+.jovlo-map-point-action__icon[data-type="coffee"] { background: var(--cocoa); }
+.jovlo-map-point-action__icon[data-type="beach"],
+.jovlo-map-point-action__icon[data-type="transport"] { background: var(--sky); }
+.jovlo-map-point-action__icon[data-type="culture"] { background: var(--brand); }
+.jovlo-map-point-action__icon[data-type="shopping"] { background: var(--coral); }
+
+.jovlo-map-point-action__copy {
+  display: grid;
+  min-width: 0;
+}
+
+.jovlo-map-point-action__copy strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.jovlo-map-point-action__copy small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.jovlo-map-point-action > a {
+  display: inline-flex;
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  align-items: center;
+  gap: var(--space-1);
+  color: #fff;
+  background: var(--brand-strong);
+  border-radius: var(--radius-control);
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.jovlo-map-point-action > .jovlo-tooltip-root .jovlo-icon-button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+}
+
+@keyframes jovlo-route-dash {
+  to { stroke-dashoffset: -23; }
+}
+
+@keyframes jovlo-map-action-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 359px) {
+  .jovlo-map-point-action {
+    right: 60px;
+    left: var(--space-2);
+    grid-template-columns: 34px minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .jovlo-map-point-action > a {
+    grid-column: 1 / -1;
+    min-height: 36px;
+    justify-content: center;
+  }
+
+  .jovlo-map-point-action__copy {
+    padding-right: 32px;
+  }
+
+  .jovlo-map-point-action > .jovlo-tooltip-root {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+  }
+
+  .jovlo-amap-place-marker__label {
+    max-width: 116px;
+  }
 }
 
 /* Responsive planner shell */
