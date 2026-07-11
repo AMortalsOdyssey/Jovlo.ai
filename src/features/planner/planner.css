@@ -1855,7 +1855,10 @@ button.jovlo-day-health:hover {
     display: none;
     width: 100%;
     height: 100%;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-x: none;
+    touch-action: pan-y;
     border: 0;
   }
 
@@ -1892,6 +1895,41 @@ button.jovlo-day-health:hover {
   .jovlo-planner-workspace[data-mobile-view="map"] .jovlo-planner-workspace__map {
     grid-row: 1;
     border-bottom: 0;
+  }
+
+  .jovlo-planner-workspace[data-mobile-view="budget"] .jovlo-planner-workspace__map {
+    display: none;
+  }
+
+  .jovlo-planner-workspace[data-mobile-view="budget"] .jovlo-planner-workspace__budget {
+    grid-row: 1;
+  }
+
+  .jovlo-planner-workspace[data-mobile-map="collapsed"] .jovlo-planner-workspace__body {
+    grid-template-rows: var(--target-min) minmax(0, 1fr);
+  }
+
+  .jovlo-planner-workspace[data-mobile-map="collapsed"] .jovlo-planner-workspace__map {
+    background: var(--header-surface-soft);
+  }
+
+  .jovlo-planner-workspace[data-mobile-map="collapsed"] .jovlo-map-canvas {
+    display: none;
+  }
+
+  .jovlo-planner-workspace[data-mobile-map="collapsed"] .plan-map-toggle {
+    inset: 0;
+    width: 100%;
+    height: var(--target-min);
+    color: var(--brand-text);
+    background: var(--header-surface-soft);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .jovlo-planner-workspace[data-mobile-view="budget"] .jovlo-planner-workspace__body {
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .jovlo-planner-workspace__inspector {

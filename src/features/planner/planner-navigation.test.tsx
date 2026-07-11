@@ -122,10 +122,12 @@ describe('planner navigation components', () => {
         more={<div>more</div>}
         mobileNav={<div>nav</div>}
         activeMobileView="budget"
+        mobileMapCollapsed
       />,
     )
 
     expect(container.firstElementChild).toHaveAttribute('data-mobile-view', 'budget')
+    expect(container.firstElementChild).toHaveAttribute('data-mobile-map', 'collapsed')
     expect(container.querySelector('.jovlo-planner-workspace__map')).toBeInTheDocument()
   })
 

@@ -14,6 +14,7 @@ export interface PlannerWorkspaceProps {
   inspector?: ReactNode
   mobileNav: ReactNode
   activeMobileView: MobilePlannerView
+  mobileMapCollapsed?: boolean
   className?: string
 }
 
@@ -28,12 +29,14 @@ export function PlannerWorkspace({
   inspector,
   mobileNav,
   activeMobileView,
+  mobileMapCollapsed = false,
   className = '',
 }: PlannerWorkspaceProps) {
   return (
     <div
       className={`jovlo-planner-workspace ${className}`.trim()}
       data-mobile-view={activeMobileView}
+      data-mobile-map={mobileMapCollapsed ? 'collapsed' : 'expanded'}
     >
       <div className="jovlo-planner-workspace__header">{header}</div>
       <div className="jovlo-planner-workspace__day-strip">{dayStrip}</div>

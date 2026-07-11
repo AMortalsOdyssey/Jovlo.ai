@@ -1,4 +1,4 @@
-import { BedDouble, BookOpen, FileClock, ReceiptText, Settings, Sparkles } from 'lucide-react'
+import { BedDouble, BookOpen, ChevronDown, ChevronUp, FileClock, Map as MapIcon, ReceiptText, Settings, Sparkles } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
@@ -145,6 +145,7 @@ export function PlanPage() {
   const [editingStopId, setEditingStopId] = useState<string | null>(null)
   const [impactDetailsOpen, setImpactDetailsOpen] = useState(false)
   const [overviewOpen, setOverviewOpen] = useState(false)
+  const [mobileMapCollapsed, setMobileMapCollapsed] = useState(false)
 
   const daySummaries = state.trip.days.map((item) => {
     const itemSchedule = state.derived.daySchedules.find((entry) => entry.dayId === item.id)
@@ -271,6 +272,17 @@ export function PlanPage() {
     state.selectDay(ownerDay.id)
     state.selectStop(id)
     setCandidateId(null)
+  }
+
+  const toggleMobileMap = () => {
+    const nextCollapsed = !mobileMapCollapsed
+    setMobileMapCollapsed(nextCollapsed)
+    if (nextCollapsed && state.mobileView === 'map') state.setMobileView('plan')
+  }
+
+  const selectMobileView = (view: typeof state.mobileView) => {
+    if (view === 'map') setMobileMapCollapsed(false)
+    state.setMobileView(view)
   }
 
   const moveStop = (stop: TripStop, delta: number) => {
@@ -413,15 +425,33 @@ export function PlanPage() {
     <>
       <PlannerWorkspace
         activeMobileView={state.mobileView}
+        mobileMapCollapsed={mobileMapCollapsed}
         header={<TripHeader title={state.trip.title} version={version.versionNo} saveStatus={state.saveStatus === 'failed' ? 'error' : state.saveStatus} onBack={() => navigate('/trips')} onImport={() => navigate(`/trips/${state.trip.tripId}/imports/demo-import`)} onHistory={() => navigate(`/trips/${state.trip.tripId}/versions`)} onShare={() => navigate(`/trips/${state.trip.tripId}/share`)} onSaveVersion={() => state.publishVersion()} onRetrySave={state.retrySave} />}
         dayRail={<DayRail days={daySummaries} selectedDayId={day.id} overviewSelected={overviewOpen} onSelectOverview={openOverview} onSelectDay={updateDay} />}
         dayStrip={<MobileDayStrip days={daySummaries} selectedDayId={day.id} overviewSelected={overviewOpen} onSelectOverview={openOverview} onSelectDay={updateDay} />}
         timeline={overviewOpen ? overview : timeline}
-        map={<MapCanvas routePoints={routePoints} candidatePoints={candidatePoints} selectedPointId={state.selectedStopId ?? candidateId ?? undefined} onSelectFormalPoint={selectMapPoint} onSelectCandidateCluster={(ids) => { setCandidateId(ids[0] ?? null); state.selectStop(null) }} />}
+        map={(
+          <div className="plan-map-shell" id="planner-route-map">
+            <div className="plan-map-content" id="planner-route-map-content">
+              <MapCanvas routePoints={routePoints} candidatePoints={candidatePoints} selectedPointId={state.selectedStopId ?? candidateId ?? undefined} onSelectFormalPoint={selectMapPoint} onSelectCandidateCluster={(ids) => { setCandidateId(ids[0] ?? null); state.selectStop(null) }} />
+            </div>
+            <button
+              type="button"
+              className="plan-map-toggle"
+              aria-expanded={!mobileMapCollapsed}
+              aria-controls="planner-route-map-content"
+              onClick={toggleMobileMap}
+            >
+              {mobileMapCollapsed ? <MapIcon aria-hidden="true" size={17} /> : <ChevronUp aria-hidden="true" size={17} />}
+              <span>{mobileMapCollapsed ? '展开地图' : '收起地图'}</span>
+              {mobileMapCollapsed ? <ChevronDown aria-hidden="true" size={17} /> : null}
+            </button>
+          </div>
+        )}
         budget={budgetPanel}
         more={morePanel}
         inspector={inspectedPlace ? <PlaceInspector open name={inspectedPlace.name} openingHours={inspectedPlace.selectedVariant?.openingHours ? '以来源中的当日公告为准' : undefined} suggestedStay={selectedStop ? formatDuration(selectedStop.stayMinutes) : '建议 90 min'} price={selectedPrice ? `约 ${formatCurrency(selectedPrice)}` : undefined} parking={inspectedPlace.selectedVariant?.parkingNote} sourceSummary={sourceEvidence.map((source) => source.summary).join('；') || undefined} evidence={sourceEvidence.map((source) => ({ id: source.sourceId, source: source.title, statement: source.summary, statusLabel: source.commercialRelationship === 'yes' ? '商业关联' : '来源可追溯' }))} addLabel={selectedCandidate ? `加入 Day ${day.dayIndex}` : '已在行程'} onAdd={selectedCandidate ? () => { state.addCandidateStop(selectedCandidate.placeId, day.id); setCandidateId(null) } : undefined} onNavigate={() => openNavigation(inspectedPlace)} onOpenEvidence={(id) => { const source = state.trip.sourceRefs[id]; if (source) window.open(source.url, '_blank', 'noopener,noreferrer') }} onShowAllEvidence={() => navigate(`/trips/${state.trip.tripId}/sources`)} onClose={() => { state.selectStop(null); setCandidateId(null) }} /> : undefined}
-        mobileNav={<MobileNav activeView={state.mobileView} isTravelingToday={day.date === new Date().toISOString().slice(0, 10)} onSelectView={state.setMobileView} />}
+        mobileNav={<MobileNav activeView={state.mobileView} isTravelingToday={day.date === new Date().toISOString().slice(0, 10)} onSelectView={selectMobileView} />}
       />
 
       {state.pendingAction ? <ImpactBar delayMinutes={state.pendingAction.impact.durationDeltaMinutes ?? 0} affectedPlaces={state.pendingAction.impact.affectedDayIds.length} budgetDelta={state.pendingAction.impact.budgetDelta} onViewDetails={() => setImpactDetailsOpen(true)} onApply={state.applyPending} onDiscard={state.discardPending} /> : null}
