@@ -993,10 +993,12 @@ button.jovlo-day-health:hover {
 
 /* Mobile day strip */
 .jovlo-mobile-day-strip {
+  position: relative;
   width: 100%;
   height: var(--target-min);
   min-height: var(--target-min);
   overflow: hidden;
+  contain: inline-size;
   background: var(--header-surface-soft);
   border-bottom: 1px solid var(--header-line);
 }
@@ -1005,8 +1007,14 @@ button.jovlo-day-health:hover {
   display: flex;
   height: var(--target-min);
   overflow-x: auto;
+  overflow-y: hidden;
   overscroll-behavior-inline: contain;
+  scroll-behavior: smooth;
+  scroll-padding-inline: 76px var(--space-3);
+  scroll-snap-type: inline proximity;
   scrollbar-width: none;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
 }
 
 .jovlo-mobile-day-strip__scroller::-webkit-scrollbar {
@@ -1016,28 +1024,78 @@ button.jovlo-day-health:hover {
 .jovlo-mobile-day-strip__day {
   position: relative;
   display: grid;
+  flex: 0 0 auto;
   grid-template-columns: auto minmax(0, 1fr);
   min-width: 60px;
+  max-width: min(216px, calc(100vw - 96px));
   height: var(--target-min);
   padding: 0 var(--space-2);
   gap: var(--space-1);
   align-items: center;
+  overflow: hidden;
+  scroll-snap-align: center;
   color: var(--cocoa-text);
   background: transparent;
   border: 0;
   border-bottom: 3px solid transparent;
   box-shadow: inset -1px 0 0 rgb(223 195 165 / 55%);
+  transition:
+    min-width 180ms ease,
+    max-width 180ms ease,
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.jovlo-mobile-day-strip__day > strong {
+  flex: none;
+  font-size: 14px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .jovlo-mobile-day-strip__day > span {
-  font-size: var(--text-supporting-size);
+  min-width: 0;
+  max-width: 144px;
+  font-size: 12px;
   font-weight: 550;
-  white-space: nowrap;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-align: left;
 }
 
 .jovlo-mobile-day-strip__day[data-selected] {
   color: var(--ink);
+  background: rgb(200 76 16 / 6%);
   border-bottom-color: var(--brand);
+}
+
+.jovlo-mobile-day-strip[data-layout='full'] .jovlo-mobile-day-strip__day:not(.jovlo-mobile-day-strip__overview) {
+  flex: 1 0 max-content;
+  width: max-content;
+}
+
+.jovlo-mobile-day-strip[data-layout='full'] .jovlo-mobile-day-strip__day > span {
+  white-space: nowrap;
+}
+
+.jovlo-mobile-day-strip[data-layout='focus'] .jovlo-mobile-day-strip__day:not([data-selected]):not(.jovlo-mobile-day-strip__overview) {
+  width: 54px;
+  min-width: 54px;
+  max-width: 54px;
+  padding-inline: var(--space-1);
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+}
+
+.jovlo-mobile-day-strip[data-layout='focus'] .jovlo-mobile-day-strip__day:not([data-selected]):not(.jovlo-mobile-day-strip__overview) > span {
+  display: none;
+}
+
+.jovlo-mobile-day-strip[data-layout='focus'] .jovlo-mobile-day-strip__day[data-expanded] {
+  width: max-content;
+  min-width: 116px;
+  max-width: min(184px, calc(100vw - 104px));
+  padding-inline: 10px;
 }
 
 .jovlo-mobile-day-strip__overview {
@@ -1045,11 +1103,45 @@ button.jovlo-day-health:hover {
   z-index: 1;
   left: 0;
   min-width: 72px;
+  max-width: 72px;
+  flex-basis: 72px;
   grid-template-columns: auto auto;
   justify-content: center;
   color: var(--brand-text);
   background: var(--header-surface-soft);
   box-shadow: 1px 0 0 var(--header-line);
+}
+
+.jovlo-mobile-day-strip__measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: max-content;
+  height: var(--target-min);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.jovlo-mobile-day-strip__measure .jovlo-mobile-day-strip__day {
+  width: max-content;
+  min-width: max-content;
+  max-width: none;
+}
+
+.jovlo-mobile-day-strip__measure .jovlo-mobile-day-strip__day > span {
+  max-width: none;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jovlo-mobile-day-strip__scroller {
+    scroll-behavior: auto;
+  }
+
+  .jovlo-mobile-day-strip__day {
+    transition: none;
+  }
 }
 
 /* Mobile nav */

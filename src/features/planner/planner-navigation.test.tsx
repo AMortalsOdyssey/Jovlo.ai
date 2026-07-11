@@ -69,6 +69,7 @@ describe('planner navigation components', () => {
         onSelectOverview={onSelectOverview}
       />,
     )
+    expect(screen.getByRole('navigation', { name: '选择行程日期' })).toHaveAttribute('data-layout', 'full')
     await user.click(screen.getByRole('button', { name: '全程总览' }))
     expect(onSelectOverview).toHaveBeenCalledOnce()
     expect(screen.getByRole('button', { name: 'Day 2，一个非常长的万宁城市区域名称' })).toHaveAttribute(
@@ -77,6 +78,38 @@ describe('planner navigation components', () => {
     )
     await user.click(screen.getByRole('button', { name: 'Day 1，海口' }))
     expect(onSelectDay).toHaveBeenLastCalledWith('d1')
+  })
+
+  it('uses focus expansion for long itineraries without removing full accessible labels', () => {
+    const manyDays = Array.from({ length: 12 }, (_, index) => ({
+      id: `d${index + 1}`,
+      dayNumber: index + 1,
+      area: index === 8 ? '一个非常长但必须完整展示的住宿区域名称' : `第 ${index + 1} 站`,
+      driveDuration: '1h',
+    }))
+    render(<MobileDayStrip days={manyDays} selectedDayId="d9" onSelectDay={vi.fn()} onSelectOverview={vi.fn()} />)
+
+    const navigation = screen.getByRole('navigation', { name: '选择行程日期' })
+    expect(navigation).toHaveAttribute('data-layout', 'focus')
+    expect(screen.getByRole('button', { name: 'Day 9，一个非常长但必须完整展示的住宿区域名称' })).toHaveAttribute(
+      'data-expanded',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Day 1，第 1 站' })).not.toHaveAttribute('data-expanded')
+  })
+
+  it('keeps a short three-day itinerary in the complete-label layout', () => {
+    const threeDays = [
+      { id: 'd1', dayNumber: 1, area: '海口', driveDuration: '1h' },
+      { id: 'd2', dayNumber: 2, area: '文昌', driveDuration: '1h' },
+      { id: 'd3', dayNumber: 3, area: '博鳌', driveDuration: '1h' },
+    ]
+    render(<MobileDayStrip days={threeDays} selectedDayId="d2" onSelectDay={vi.fn()} onSelectOverview={vi.fn()} />)
+
+    expect(screen.getByRole('navigation', { name: '选择行程日期' })).toHaveAttribute('data-layout', 'full')
+    expect(screen.getByRole('button', { name: 'Day 1，海口' })).toHaveTextContent('D1海口')
+    expect(screen.getByRole('button', { name: 'Day 2，文昌' })).toHaveTextContent('D2文昌')
+    expect(screen.getByRole('button', { name: 'Day 3，博鳌' })).toHaveTextContent('D3博鳌')
   })
 
   it('shows complete trip metrics and opens a selected day from overview', async () => {
