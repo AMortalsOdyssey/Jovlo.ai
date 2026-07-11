@@ -20,7 +20,6 @@ import { TripOverview } from './TripOverview'
 import { TripHeader } from './TripHeader'
 import { buildAmapNavigationUrl } from '@/lib/amap'
 import { apiRequest } from '@/lib/api'
-import { ProductCopyright } from '@/components'
 import { formatCurrency, formatDistance, formatDuration } from '@/lib/format'
 import { currentVersion, selectedDay, useTripStore } from '@/store/useTripStore'
 import { recalculateTrip, stableHash, type RouteEndpoint, type RouteLeg, type TripPlaceSnapshot, type TripStop } from '@domain'
@@ -585,7 +584,6 @@ export function PlanPage() {
           </div>
         ) : null}
       </RouteTimeline>
-      <ProductCopyright className="plan-product-copyright" />
     </div>
   )
 

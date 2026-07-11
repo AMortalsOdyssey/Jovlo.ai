@@ -275,11 +275,6 @@
   transform: rotate(-12deg) scale(0.96);
 }
 
-.plan-product-copyright {
-  margin-top: var(--space-6);
-  border-top: 1px solid var(--line);
-}
-
 .plan-route-fragment {
   display: contents;
 }

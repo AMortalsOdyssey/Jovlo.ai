@@ -220,7 +220,6 @@ export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProp
 
       <footer className="public-footer">
         <a href="/" aria-label="访问 Jovlo.ai"><img src="/jovlo-mark.svg" alt="" />用 Jovlo 制作 <ExternalLink aria-hidden="true" size={13} /></a>
-        <span>© 2026 Jovlo.ai</span>
       </footer>
     </main>
   )

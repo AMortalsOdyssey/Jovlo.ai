@@ -1,7 +1,6 @@
 import { AlertTriangle, BedDouble, CalendarDays, CarFront, ChevronRight, MapPinned, Route, WalletCards } from 'lucide-react'
 
 import type { DaySummary } from './types'
-import { ProductCopyright } from '@/components'
 import './plan-page.css'
 
 export interface TripOverviewDay extends DaySummary {
@@ -69,7 +68,6 @@ export function TripOverview({
           </button>
         ))}
       </div>
-      <ProductCopyright className="plan-product-copyright" />
     </section>
   )
 }

@@ -1,6 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react'
 
-import { ProductCopyright } from '@/components'
 import './auth.css'
 
 type AuthPageLayoutProps = PropsWithChildren<{
@@ -33,7 +32,6 @@ export function AuthPageLayout({
 
         {children}
         {footer ?? <p className="auth-privacy">账户信息仅用于登录与同步你的行程。</p>}
-        <ProductCopyright className="auth-copyright" />
       </section>
 
       <aside className="auth-journey" aria-hidden="true">
@@ -55,4 +53,3 @@ export function AuthPageLayout({
     </main>
   )
 }
-

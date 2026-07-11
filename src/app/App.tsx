@@ -25,6 +25,7 @@ const ForgotPasswordPage = lazy(() => import('@/features/auth/ForgotPasswordPage
 const AuthCallbackPage = lazy(() => import('@/features/auth/AuthCallbackPage').then((module) => ({ default: module.AuthCallbackPage })))
 const SetNewPasswordPage = lazy(() => import('@/features/auth/SetNewPasswordPage').then((module) => ({ default: module.SetNewPasswordPage })))
 const AccountPage = lazy(() => import('@/features/auth/AccountPage').then((module) => ({ default: module.AccountPage })))
+const HomePage = lazy(() => import('@/features/home/HomePage').then((module) => ({ default: module.HomePage })))
 
 function NotFoundPage() {
   return (
@@ -43,6 +44,7 @@ export function App() {
   return (
     <Suspense fallback={<div className="app-route-loading" role="status">正在打开路书…</div>}>
       <Routes>
+        <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -50,7 +52,6 @@ export function App() {
         <Route path="/auth/confirm" element={<AuthCallbackPage />} />
         <Route path="/reset-password" element={<SetNewPasswordPage />} />
         <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<Navigate to="/trips" replace />} />
           <Route path="/trips" element={<TripsPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/trips/new" element={<NewTripPage />} />
