@@ -1,9 +1,10 @@
 import { ArrowRight, LoaderCircle, MailCheck, UserPlus } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
 
 import { AuthPageLayout } from './AuthPageLayout'
 import { EmailField, PasswordField } from './AuthFields'
+import { TurnstileGate, type TurnstileGateHandle } from './TurnstileGate'
 import { useAuth } from './AuthProvider'
 import {
   AUTH_ROUTES,
@@ -21,9 +22,11 @@ export function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmation, setConfirmation] = useState('')
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [registeredEmail, setRegisteredEmail] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileGateHandle>(null)
   const returnTo = safeReturnTo(searchParams.get('returnTo'))
   const loginHref = `${AUTH_ROUTES.login}?returnTo=${encodeURIComponent(returnTo)}`
   const passwordLongEnough = password.length >= MIN_PASSWORD_LENGTH
@@ -53,17 +56,22 @@ export function RegisterPage() {
       setMessage('两次输入的密码不一致。')
       return
     }
+    if (!captchaToken) {
+      setMessage('请先完成人机验证。')
+      return
+    }
 
     setBusy(true)
     setMessage(null)
     try {
       const callbackUrl = new URL(AUTH_ROUTES.callback, window.location.origin)
       callbackUrl.searchParams.set('returnTo', returnTo)
-      await signUp(normalizedEmail, password, callbackUrl.toString())
+      await signUp(normalizedEmail, password, captchaToken, callbackUrl.toString())
       setEmail(normalizedEmail)
       setRegisteredEmail(normalizedEmail)
     } catch (error) {
       setMessage(readableAuthError(error))
+      turnstileRef.current?.reset()
     } finally {
       setBusy(false)
     }
@@ -114,6 +122,8 @@ export function RegisterPage() {
           onChange={setConfirmation}
           autoComplete="new-password"
         />
+
+        <TurnstileGate ref={turnstileRef} action="signup" onTokenChange={setCaptchaToken} />
 
         <button className="auth-primary" type="submit" disabled={busy}>
           {busy ? <LoaderCircle aria-hidden="true" className="auth-spinner" size={18} /> : <UserPlus aria-hidden="true" size={18} />}

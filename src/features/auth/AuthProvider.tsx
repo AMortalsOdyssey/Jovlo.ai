@@ -11,9 +11,9 @@ type AuthContextValue = {
   status: AuthStatus
   session: Session | null
   user: User | null
-  signUp: (email: string, password: string, redirectTo?: string) => Promise<void>
-  signInWithPassword: (email: string, password: string) => Promise<void>
-  requestPasswordReset: (email: string, redirectTo?: string) => Promise<void>
+  signUp: (email: string, password: string, captchaToken: string, redirectTo?: string) => Promise<void>
+  signInWithPassword: (email: string, password: string, captchaToken: string) => Promise<void>
+  requestPasswordReset: (email: string, captchaToken: string, redirectTo?: string) => Promise<void>
   verifyOtp: (tokenHash: string, type: EmailOtpType) => Promise<void>
   verifyEmailToken: (tokenHash: string, type: EmailOtpType) => Promise<void>
   updatePassword: (password: string) => Promise<void>
@@ -96,29 +96,32 @@ export function AuthProvider({ children }: PropsWithChildren) {
       status,
       session,
       user: session?.user ?? null,
-      async signUp(email, password, redirectTo) {
+      async signUp(email, password, captchaToken, redirectTo) {
         // TODO: 接入临时邮箱域名库，在服务端同步拦截一次性邮箱。
         const { error } = await requireSupabase().auth.signUp({
           email: normalizeEmail(email),
           password,
           options: {
+            captchaToken,
             emailRedirectTo: redirectTo,
           },
         })
         if (error) throw error
       },
-      async signInWithPassword(email, password) {
+      async signInWithPassword(email, password, captchaToken) {
         const { data, error } = await requireSupabase().auth.signInWithPassword({
           email: normalizeEmail(email),
           password,
+          options: { captchaToken },
         })
         if (error) throw error
         localStorage.removeItem('jovlo-local-trial')
         setSession(data.session)
         setStatus('authenticated')
       },
-      async requestPasswordReset(email, redirectTo) {
+      async requestPasswordReset(email, captchaToken, redirectTo) {
         const { error } = await requireSupabase().auth.resetPasswordForEmail(normalizeEmail(email), {
+          captchaToken,
           redirectTo,
         })
         if (error) throw error

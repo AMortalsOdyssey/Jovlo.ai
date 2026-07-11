@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { AppError, mapDatabaseError } from '../lib/errors'
 import type { AppContext, AuthenticatedUser } from '../types'
+import { verifyTurnstileChallenge, type TurnstileAction } from './turnstile'
 
 const SupabaseUserSchema = z.object({ id: z.string().uuid() }).passthrough()
 
@@ -24,6 +25,34 @@ const AUTH_PROXY_METHODS: Record<string, readonly string[]> = {
   '/user': ['GET', 'PUT'],
   '/logout': ['POST'],
   '/settings': ['GET'],
+}
+
+function requiredTurnstileAction(
+  authPath: string,
+  method: string,
+  requestUrl: URL,
+): TurnstileAction | null {
+  if (method !== 'POST') return null
+  if (authPath === '/signup') return 'signup'
+  if (authPath === '/recover') return 'password_reset'
+  if (authPath === '/token' && requestUrl.searchParams.get('grant_type') === 'password') {
+    return 'login'
+  }
+  return null
+}
+
+function captchaTokenFromBody(rawBody: string): string | undefined {
+  let body: unknown
+  try {
+    body = JSON.parse(rawBody)
+  } catch {
+    throw new AppError('VALIDATION_FAILED', '认证请求不是有效 JSON', 400)
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return undefined
+  const security = (body as Record<string, unknown>).gotrue_meta_security
+  if (!security || typeof security !== 'object' || Array.isArray(security)) return undefined
+  const token = (security as Record<string, unknown>).captcha_token
+  return typeof token === 'string' ? token : undefined
 }
 
 export async function proxySupabaseAuthRequest(context: AppContext): Promise<Response> {
@@ -61,12 +90,24 @@ export async function proxySupabaseAuthRequest(context: AppContext): Promise<Res
   if (contentType) headers.set('content-type', contentType)
   if (clientInfo) headers.set('x-client-info', clientInfo.slice(0, 200))
 
+  let rawBody: string | undefined
+  if (!['GET', 'HEAD'].includes(context.req.method)) {
+    rawBody = await context.req.raw.text()
+    if (new TextEncoder().encode(rawBody).byteLength > 64 * 1_024) {
+      throw new AppError('VALIDATION_FAILED', '认证请求内容过大', 413)
+    }
+    const turnstileAction = requiredTurnstileAction(authPath, context.req.method, requestUrl)
+    if (turnstileAction) {
+      await verifyTurnstileChallenge(context, captchaTokenFromBody(rawBody), turnstileAction)
+    }
+  }
+
   let response: Response
   try {
     response = await fetch(`${url}/auth/v1${authPath}${requestUrl.search}`, {
       method: context.req.method,
       headers,
-      body: ['GET', 'HEAD'].includes(context.req.method) ? undefined : context.req.raw.body,
+      body: rawBody,
       redirect: 'manual',
     })
   } catch {

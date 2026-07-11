@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 const DEFAULT_SUPABASE_PROJECT_REF = "hqtkehqtuxdeovdlexic";
+const DEFAULT_TURNSTILE_SITE_KEY = "0x4AAAAAADz6IHwNLnuNwz1u";
 const projectRef =
   process.env.SUPABASE_PROJECT_REF?.trim() || DEFAULT_SUPABASE_PROJECT_REF;
 
@@ -71,6 +72,8 @@ try {
   const supabase = resolveSupabaseConfig();
   process.env.VITE_SUPABASE_URL = supabase.url;
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = supabase.key;
+  process.env.VITE_TURNSTILE_SITE_KEY =
+    process.env.VITE_TURNSTILE_SITE_KEY?.trim() || DEFAULT_TURNSTILE_SITE_KEY;
 
   process.stdout.write("已加载 Jovlo.ai 生产配置，开始构建与部署。\n");
   run("npm", ["run", "build"]);

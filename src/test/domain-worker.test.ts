@@ -37,6 +37,10 @@ describe('Worker API contract', () => {
     expect(response.headers.get('content-security-policy')).toContain("worker-src 'self' blob:")
     expect(response.headers.get('content-security-policy')).toContain("font-src 'self' data:")
     expect(response.headers.get('content-security-policy')).toContain("object-src 'none'")
+    expect(response.headers.get('content-security-policy')).toContain('https://challenges.cloudflare.com')
+    expect(response.headers.get('content-security-policy')).toContain(
+      'frame-src https://challenges.cloudflare.com',
+    )
 
     const demoResponse = await app.request('/', undefined, {
       JOVLO_MODE: 'demo',
@@ -529,29 +533,86 @@ describe('Worker API contract', () => {
     expect(body.data.derived.routeLegs.every((leg) => leg.tollsCny === undefined)).toBe(true)
   })
 
-  it('proxies only the fixed Supabase Auth surface through the Jovlo origin', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ access_token: 'token' }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    }))
-    try {
-      const response = await app.request('/supabase/auth/v1/token?grant_type=password', {
-        method: 'POST',
+  it('verifies Turnstile and forwards protected Supabase Auth bodies unchanged', async () => {
+    const cases = [
+      {
+        path: '/supabase/auth/v1/signup',
+        action: 'signup',
+        body: {
+          email: 'traveler@example.com',
+          password: 'password123',
+          gotrue_meta_security: { captcha_token: 'challenge-signup' },
+        },
+      },
+      {
+        path: '/supabase/auth/v1/token?grant_type=password',
+        action: 'login',
+        body: {
+          email: 'traveler@example.com',
+          password: 'password123',
+          gotrue_meta_security: { captcha_token: 'challenge-login' },
+        },
+      },
+      {
+        path: '/supabase/auth/v1/recover',
+        action: 'password_reset',
+        body: {
+          email: 'traveler@example.com',
+          gotrue_meta_security: { captcha_token: 'challenge-password_reset' },
+        },
+      },
+    ] as const
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url === 'https://challenges.cloudflare.com/turnstile/v0/siteverify') {
+        const form = new URLSearchParams(String(init?.body))
+        return new Response(JSON.stringify({
+          success: true,
+          action: form.get('response')?.replace('challenge-', ''),
+          hostname: 'jovlo.8xd.io',
+        }), { headers: { 'content-type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({ access_token: 'token' }), {
+        status: 200,
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: 'traveler@example.com', password: 'password123' }),
-      }, {
-        JOVLO_MODE: 'production',
-        SUPABASE_URL: 'https://fixed-project.supabase.co',
-        SUPABASE_PUBLISHABLE_KEY: 'public-key',
       })
-      expect(response.status).toBe(200)
-      expect(response.headers.get('cache-control')).toBe('no-store')
-      expect(fetchMock).toHaveBeenCalledWith(
-        'https://fixed-project.supabase.co/auth/v1/token?grant_type=password',
-        expect.objectContaining({ method: 'POST', redirect: 'manual' }),
-      )
-      const init = fetchMock.mock.calls[0][1]
-      expect(new Headers(init?.headers).get('apikey')).toBe('public-key')
+    })
+    try {
+      for (const testCase of cases) {
+        const rawBody = JSON.stringify(testCase.body)
+        const response = await app.request(`https://jovlo.8xd.io${testCase.path}`, {
+          method: 'POST',
+          headers: {
+            'cf-connecting-ip': '203.0.113.10',
+            'content-type': 'application/json',
+          },
+          body: rawBody,
+        }, {
+          JOVLO_MODE: 'production',
+          SUPABASE_URL: 'https://fixed-project.supabase.co',
+          SUPABASE_PUBLISHABLE_KEY: 'public-key',
+          TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
+        })
+        expect(response.status).toBe(200)
+        expect(response.headers.get('cache-control')).toBe('no-store')
+
+        const turnstileCall = fetchMock.mock.calls.at(-2)
+        const turnstileForm = new URLSearchParams(String(turnstileCall?.[1]?.body))
+        expect(turnstileForm.get('secret')).toBe('production-turnstile-secret')
+        expect(turnstileForm.get('response')).toBe(`challenge-${testCase.action}`)
+        expect(turnstileForm.get('remoteip')).toBe('203.0.113.10')
+
+        const supabaseCall = fetchMock.mock.calls.at(-1)
+        expect(supabaseCall?.[0]).toBe(
+          `https://fixed-project.supabase.co/auth/v1${testCase.path.replace('/supabase/auth/v1', '')}`,
+        )
+        expect(supabaseCall?.[1]).toEqual(expect.objectContaining({
+          method: 'POST',
+          body: rawBody,
+          redirect: 'manual',
+        }))
+        expect(new Headers(supabaseCall?.[1]?.headers).get('apikey')).toBe('public-key')
+      }
 
       const rejected = await app.request('/supabase/auth/v1/admin/users', { method: 'GET' }, {
         JOVLO_MODE: 'production',
@@ -559,7 +620,207 @@ describe('Worker API contract', () => {
         SUPABASE_PUBLISHABLE_KEY: 'public-key',
       })
       expect(rejected.status).toBe(404)
+      expect(fetchMock).toHaveBeenCalledTimes(cases.length * 2)
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it.each([
+    '/supabase/auth/v1/signup',
+    '/supabase/auth/v1/token?grant_type=password',
+    '/supabase/auth/v1/recover',
+  ])('fails closed when %s omits the Turnstile token', async (path) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    try {
+      const response = await app.request(`https://jovlo.8xd.io${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'traveler@example.com', password: 'password123' }),
+      }, {
+        JOVLO_MODE: 'production',
+        SUPABASE_URL: 'https://fixed-project.supabase.co',
+        SUPABASE_PUBLISHABLE_KEY: 'public-key',
+        TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
+      })
+      const body = (await response.json()) as { code: string; message: string }
+      expect(response.status).toBe(403)
+      expect(body).toMatchObject({ code: 'FORBIDDEN', message: '请完成人机验证' })
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('returns a concise error and does not forward a failed Turnstile challenge', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+      'error-codes': ['invalid-input-response', 'internal-error-detail-that-must-not-leak'],
+    }), { headers: { 'content-type': 'application/json' } }))
+    try {
+      const response = await app.request('https://jovlo.8xd.io/supabase/auth/v1/signup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'traveler@example.com',
+          password: 'password123',
+          gotrue_meta_security: { captcha_token: 'failed-challenge' },
+        }),
+      }, {
+        JOVLO_MODE: 'production',
+        SUPABASE_URL: 'https://fixed-project.supabase.co',
+        SUPABASE_PUBLISHABLE_KEY: 'public-key',
+        TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
+      })
+      const responseText = await response.text()
+      expect(response.status).toBe(403)
+      expect(responseText).toContain('人机验证未通过，请重试')
+      expect(responseText).not.toContain('invalid-input-response')
+      expect(responseText).not.toContain('internal-error-detail')
       expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('rejects the official always-pass Turnstile secret in production', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    try {
+      const response = await app.request(
+        'https://jovlo.8xd.io/supabase/auth/v1/token?grant_type=password',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            email: 'traveler@example.com',
+            password: 'password123',
+            gotrue_meta_security: { captcha_token: 'challenge-login' },
+          }),
+        },
+        {
+          JOVLO_MODE: 'production',
+          SUPABASE_URL: 'https://fixed-project.supabase.co',
+          SUPABASE_PUBLISHABLE_KEY: 'public-key',
+          TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
+        },
+      )
+      const body = (await response.json()) as { message: string }
+      expect(response.status).toBe(503)
+      expect(body.message).toBe('人机验证服务暂不可用')
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it.each([
+    { action: 'wrong-action', hostname: 'jovlo.8xd.io' },
+    { action: 'login', hostname: 'attacker.example.com' },
+  ])('rejects a successful challenge with mismatched action or hostname: $action / $hostname', async (challenge) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      ...challenge,
+    }), { headers: { 'content-type': 'application/json' } }))
+    try {
+      const response = await app.request(
+        'https://jovlo.8xd.io/supabase/auth/v1/token?grant_type=password',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            email: 'traveler@example.com',
+            password: 'password123',
+            gotrue_meta_security: { captcha_token: 'challenge-login' },
+          }),
+        },
+        {
+          JOVLO_MODE: 'production',
+          SUPABASE_URL: 'https://fixed-project.supabase.co',
+          SUPABASE_PUBLISHABLE_KEY: 'public-key',
+          TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
+        },
+      )
+      expect(response.status).toBe(403)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('uses Cloudflare test validation automatically in demo mode', async () => {
+    const rawBody = JSON.stringify({
+      email: 'traveler@example.com',
+      password: 'password123',
+      gotrue_meta_security: { captcha_token: 'local-test-token' },
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.includes('/turnstile/v0/siteverify')) {
+        const form = new URLSearchParams(String(init?.body))
+        expect(form.get('secret')).toBe('1x0000000000000000000000000000000AA')
+        return new Response(JSON.stringify({ success: true, action: 'login' }), {
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ access_token: 'demo-token' }), {
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    try {
+      const response = await app.request('/supabase/auth/v1/token?grant_type=password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: rawBody,
+      }, {
+        JOVLO_MODE: 'demo',
+        SUPABASE_URL: 'https://fixed-project.supabase.co',
+        SUPABASE_PUBLISHABLE_KEY: 'public-key',
+      })
+      expect(response.status).toBe(200)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('bypasses Turnstile for refresh-token sessions', async () => {
+    const rawBody = JSON.stringify({ refresh_token: 'refresh-token' })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      access_token: 'renewed-token',
+    }), { headers: { 'content-type': 'application/json' } }))
+    try {
+      const response = await app.request(
+        'https://jovlo.8xd.io/supabase/auth/v1/token?grant_type=refresh_token',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: rawBody,
+        },
+        {
+          JOVLO_MODE: 'production',
+          SUPABASE_URL: 'https://fixed-project.supabase.co',
+          SUPABASE_PUBLISHABLE_KEY: 'public-key',
+        },
+      )
+      expect(response.status).toBe(200)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://fixed-project.supabase.co/auth/v1/token?grant_type=refresh_token',
+        expect.objectContaining({ body: rawBody }),
+      )
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('leaves public share routes independent from Turnstile', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    try {
+      const response = await app.request('/api/v1/public/jovlo-demo-trip', undefined, {
+        JOVLO_MODE: 'demo',
+      })
+      expect(response.status).toBe(200)
+      expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       fetchMock.mockRestore()
     }

@@ -21,6 +21,12 @@ vi.mock('@/lib/supabase', () => ({
   getSupabaseClient: () => ({ auth: authMocks }),
 }))
 
+vi.mock('@marsidev/react-turnstile', () => ({
+  Turnstile: ({ onSuccess }: { onSuccess?: (token: string) => void }) => (
+    <button type="button" onClick={() => onSuccess?.('test-turnstile-token')}>完成 Cloudflare 验证</button>
+  ),
+}))
+
 import { AccountPage } from './AccountPage'
 import { AuthCallbackPage } from './AuthCallbackPage'
 import { AuthProvider } from './AuthProvider'
@@ -123,15 +129,30 @@ describe('Supabase authentication flow', () => {
     await screen.findByRole('heading', { name: '继续规划你的旅程' })
     await user.type(screen.getByLabelText('邮箱'), 'Traveler@Example.com ')
     await user.type(screen.getByLabelText('密码'), 'Travel123')
+    await user.click(screen.getByRole('button', { name: '完成 Cloudflare 验证' }))
     await user.click(screen.getByRole('button', { name: '登录' }))
 
     await waitFor(() => {
       expect(authMocks.signInWithPassword).toHaveBeenCalledWith({
         email: 'traveler@example.com',
         password: 'Travel123',
+        options: { captchaToken: 'test-turnstile-token' },
       })
     })
     expect(await screen.findByText('已回到路书')).toBeInTheDocument()
+  })
+
+  it('does not submit login credentials before Turnstile succeeds', async () => {
+    const user = userEvent.setup()
+    renderAuthRoute('/login', '/login', <LoginPage />)
+
+    await screen.findByRole('heading', { name: '继续规划你的旅程' })
+    await user.type(screen.getByLabelText('邮箱'), 'traveler@example.com')
+    await user.type(screen.getByLabelText('密码'), 'Travel123')
+    await user.click(screen.getByRole('button', { name: '登录' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('请先完成人机验证。')
+    expect(authMocks.signInWithPassword).not.toHaveBeenCalled()
   })
 
   it('validates registration passwords and prompts for email verification', async () => {
@@ -150,6 +171,7 @@ describe('Supabase authentication flow', () => {
     await user.clear(screen.getByLabelText('确认密码'))
     await user.type(screen.getByLabelText('密码'), 'Journey8')
     await user.type(screen.getByLabelText('确认密码'), 'Journey8')
+    await user.click(screen.getByRole('button', { name: '完成 Cloudflare 验证' }))
     await user.click(screen.getByRole('button', { name: '创建账号' }))
 
     await waitFor(() => {
@@ -157,6 +179,7 @@ describe('Supabase authentication flow', () => {
         email: 'new@example.com',
         password: 'Journey8',
         options: {
+          captchaToken: 'test-turnstile-token',
           emailRedirectTo: 'http://localhost:3000/auth/callback?returnTo=%2Ftrips',
         },
       })
@@ -171,10 +194,12 @@ describe('Supabase authentication flow', () => {
 
     await screen.findByRole('heading', { name: '找回你的密码' })
     await user.type(screen.getByLabelText('邮箱'), 'Traveler@Example.com ')
+    await user.click(screen.getByRole('button', { name: '完成 Cloudflare 验证' }))
     await user.click(screen.getByRole('button', { name: '发送重置邮件' }))
 
     await waitFor(() => {
       expect(authMocks.resetPasswordForEmail).toHaveBeenCalledWith('traveler@example.com', {
+        captchaToken: 'test-turnstile-token',
         redirectTo: 'http://localhost:3000/auth/callback?returnTo=%2Ftrips',
       })
     })
@@ -214,6 +239,7 @@ describe('Supabase authentication flow', () => {
     renderAuthRoute('/reset-password', '/reset-password', <SetNewPasswordPage />)
 
     await screen.findByRole('heading', { name: '设置新密码' })
+    expect(screen.queryByLabelText('Cloudflare 人机验证')).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('新密码'), 'NewJourney9')
     await user.type(screen.getByLabelText('确认新密码'), 'NewJourney9')
     await user.click(screen.getByRole('button', { name: '保存新密码' }))
@@ -222,6 +248,22 @@ describe('Supabase authentication flow', () => {
       expect(authMocks.updateUser).toHaveBeenCalledWith({ password: 'NewJourney9' })
     })
     expect(await screen.findByRole('heading', { name: '新密码已设置' })).toBeInTheDocument()
+  })
+
+  it('starts a local trial without requiring Turnstile', async () => {
+    const user = userEvent.setup()
+    renderAuthRoute(
+      '/login?returnTo=%2Ftrips',
+      '/login',
+      <LoginPage />,
+      <Route path="/trips" element={<div>本地试用路书</div>} />,
+    )
+
+    await screen.findByRole('heading', { name: '继续规划你的旅程' })
+    await user.click(screen.getByRole('button', { name: '本地试用' }))
+
+    expect(await screen.findByText('本地试用路书')).toBeInTheDocument()
+    expect(authMocks.signInWithPassword).not.toHaveBeenCalled()
   })
 
   it('shows the account email and signs out to the login entry', async () => {

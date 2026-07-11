@@ -1,9 +1,10 @@
 import { ArrowRight, Compass, LoaderCircle, LogIn } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { AuthPageLayout } from './AuthPageLayout'
 import { EmailField, PasswordField } from './AuthFields'
+import { TurnstileGate, type TurnstileGateHandle } from './TurnstileGate'
 import { useAuth } from './AuthProvider'
 import { AUTH_ROUTES, isValidEmail, normalizeEmail, readableAuthError, safeReturnTo } from './auth-utils'
 
@@ -13,8 +14,10 @@ export function LoginPage() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileGateHandle>(null)
   const returnTo = safeReturnTo(searchParams.get('returnTo'))
   const returnToQuery = `?returnTo=${encodeURIComponent(returnTo)}`
 
@@ -42,14 +45,19 @@ export function LoginPage() {
       setMessage('请输入密码。')
       return
     }
+    if (!captchaToken) {
+      setMessage('请先完成人机验证。')
+      return
+    }
 
     setBusy(true)
     setMessage(null)
     try {
-      await signInWithPassword(normalizedEmail, password)
+      await signInWithPassword(normalizedEmail, password, captchaToken)
       navigate(returnTo, { replace: true })
     } catch (error) {
       setMessage(readableAuthError(error))
+      turnstileRef.current?.reset()
     } finally {
       setBusy(false)
     }
@@ -75,6 +83,8 @@ export function LoginPage() {
           onChange={setPassword}
           autoComplete="current-password"
         />
+
+        <TurnstileGate ref={turnstileRef} action="login" onTokenChange={setCaptchaToken} />
 
         <button className="auth-primary" type="submit" disabled={busy}>
           {busy ? <LoaderCircle aria-hidden="true" className="auth-spinner" size={18} /> : <LogIn aria-hidden="true" size={18} />}

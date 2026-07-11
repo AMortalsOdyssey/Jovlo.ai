@@ -208,7 +208,7 @@ const app = new Hono<AppBindings>()
 
 // AMap JSAPI 2.0 evaluates its vector-tile decoder at runtime; inline scripts stay blocked.
 const CONTENT_SECURITY_POLICY =
-  "default-src 'self'; script-src 'self' 'unsafe-eval' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://restapi.amap.com https://*.amap.com https://*.autonavi.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+  "default-src 'self'; script-src 'self' 'unsafe-eval' https://challenges.cloudflare.com https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; font-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com https://*.supabase.co https://restapi.amap.com https://*.amap.com https://*.autonavi.com; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 const DEMO_CONTENT_SECURITY_POLICY = CONTENT_SECURITY_POLICY.replace(
   "script-src 'self' 'unsafe-eval'",
@@ -280,6 +280,20 @@ app.use('*', async (context, next) => {
 })
 
 app.onError((error, context) => {
+  if (error instanceof AppError && new URL(context.req.url).pathname.startsWith('/supabase/auth/v1')) {
+    return context.json(
+      {
+        code: error.code,
+        message: error.message,
+        retryable: error.retryable,
+      },
+      error.status,
+      {
+        'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff',
+      },
+    )
+  }
   if (error instanceof AppError) return failure(context, error)
   if (error instanceof ZodError) {
     return failure(

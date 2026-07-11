@@ -95,20 +95,20 @@ async function deleteTestUser(serviceRole, userId) {
   });
 }
 
-async function signIn(email, password) {
+async function signInDirect(email, password, publishableKey) {
   const response = await fetch(
-    `${ORIGIN}/supabase/auth/v1/token?grant_type=password`,
+    `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
     {
       method: "POST",
       headers: {
-        origin: ORIGIN,
+        apikey: publishableKey,
         "content-type": "application/json",
       },
       body: JSON.stringify({ email, password }),
     },
   );
   const body = await readResponse(response);
-  assert(response.ok && body?.access_token, `同源登录代理返回 ${response.status}：${body?.message || "登录失败"}`);
+  assert(response.ok && body?.access_token, `Supabase 测试登录返回 ${response.status}：${body?.message || "登录失败"}`);
   return body.access_token;
 }
 
@@ -158,8 +158,18 @@ try {
   visitor = await createTestUser(keys.serviceRole, "visitor", runId, password);
   assert(owner?.id && owner?.email && visitor?.id && visitor?.email, "测试用户创建结果不完整。");
 
-  const ownerToken = await signIn(owner.email, password);
-  const visitorToken = await signIn(visitor.email, password);
+  const ownerToken = await signInDirect(owner.email, password, keys.publishable);
+  const visitorToken = await signInDirect(visitor.email, password, keys.publishable);
+
+  const unverifiedLogin = await fetch(
+    `${ORIGIN}/supabase/auth/v1/token?grant_type=password`,
+    {
+      method: "POST",
+      headers: { origin: ORIGIN, "content-type": "application/json" },
+      body: JSON.stringify({ email: owner.email, password }),
+    },
+  );
+  assert(unverifiedLogin.status === 403, `未完成人机验证的登录应为 403，实际为 ${unverifiedLogin.status}。`);
 
   browser = await chromium.launch({ headless: true });
   const ownerContext = await browser.newContext({ viewport: { width: 447, height: 669 } });
@@ -167,6 +177,12 @@ try {
   await ownerPage.goto(`${ORIGIN}/login`, { waitUntil: "networkidle" });
   await ownerPage.locator('input[name="email"]').fill(owner.email);
   await ownerPage.locator('input[name="password"]').fill(password);
+  await ownerPage.locator('input[name="cf-turnstile-response-login"]').waitFor({ state: "attached" });
+  await ownerPage.waitForFunction(
+    () => document.querySelector('input[name="cf-turnstile-response-login"]')?.value,
+    undefined,
+    { timeout: 30_000 },
+  );
   await ownerPage.getByRole("button", { name: "登录", exact: true }).click();
   await ownerPage.waitForURL(`${ORIGIN}/trips`, { timeout: 20_000 });
 
@@ -258,6 +274,7 @@ try {
   }));
   assert(!publicUi.overflow, "单天分享页在 447px 手机宽度发生横向溢出。" );
   assert(!publicUi.text.includes("保存版本") && !publicUi.text.includes("编辑路书"), "只读分享页出现写操作。" );
+  assert(!publicUi.text.includes("人机验证"), "公开分享页不应出现人机验证。" );
 
   const publicationId = day.envelope.data.publicationId || day.envelope.data.publication_id;
   const revoke = await api(`/api/v1/publications/${encodeURIComponent(publicationId)}`, {
@@ -274,6 +291,7 @@ try {
     origin: ORIGIN,
     checks: [
       "邮箱密码登录与首次路书创建",
+      "登录接口缺少 Turnstile 时拒绝，页面验证后放行",
       "总览固定分享",
       "单天服务端过滤与总览跳转",
       "匿名只读访问",

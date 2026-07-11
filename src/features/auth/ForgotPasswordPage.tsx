@@ -1,9 +1,10 @@
 import { ArrowLeft, ArrowRight, LoaderCircle, Mail, MailCheck } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { AuthPageLayout } from './AuthPageLayout'
 import { EmailField } from './AuthFields'
+import { TurnstileGate, type TurnstileGateHandle } from './TurnstileGate'
 import { useAuth } from './AuthProvider'
 import { AUTH_ROUTES, isValidEmail, normalizeEmail, readableAuthError, safeReturnTo } from './auth-utils'
 
@@ -11,9 +12,11 @@ export function ForgotPasswordPage() {
   const { requestPasswordReset } = useAuth()
   const [searchParams] = useSearchParams()
   const [email, setEmail] = useState('')
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [sentTo, setSentTo] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const turnstileRef = useRef<TurnstileGateHandle>(null)
   const returnTo = safeReturnTo(searchParams.get('returnTo'))
   const loginHref = `${AUTH_ROUTES.login}?returnTo=${encodeURIComponent(returnTo)}`
 
@@ -24,17 +27,22 @@ export function ForgotPasswordPage() {
       setMessage('请输入有效的邮箱地址。')
       return
     }
+    if (!captchaToken) {
+      setMessage('请先完成人机验证。')
+      return
+    }
 
     setBusy(true)
     setMessage(null)
     try {
       const callbackUrl = new URL(AUTH_ROUTES.callback, window.location.origin)
       callbackUrl.searchParams.set('returnTo', returnTo)
-      await requestPasswordReset(normalizedEmail, callbackUrl.toString())
+      await requestPasswordReset(normalizedEmail, captchaToken, callbackUrl.toString())
       setEmail(normalizedEmail)
       setSentTo(normalizedEmail)
     } catch (error) {
       setMessage(readableAuthError(error))
+      turnstileRef.current?.reset()
     } finally {
       setBusy(false)
     }
@@ -59,6 +67,7 @@ export function ForgotPasswordPage() {
         <form className="auth-form" onSubmit={handleSubmit} noValidate>
           <label htmlFor="reset-email">邮箱</label>
           <EmailField id="reset-email" value={email} onChange={setEmail} autoFocus />
+          <TurnstileGate ref={turnstileRef} action="password_reset" onTokenChange={setCaptchaToken} />
           <button className="auth-primary" type="submit" disabled={busy}>
             {busy ? <LoaderCircle aria-hidden="true" className="auth-spinner" size={18} /> : <Mail aria-hidden="true" size={18} />}
             发送重置邮件
@@ -70,4 +79,3 @@ export function ForgotPasswordPage() {
     </AuthPageLayout>
   )
 }
-

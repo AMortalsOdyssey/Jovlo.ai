@@ -44,6 +44,8 @@ export function parseEmailTokenType(value: string | null): EmailOtpType | null {
 export function readableAuthError(error: unknown) {
   const message = error instanceof Error ? error.message : ''
 
+  if (/人机验证服务暂不可用/i.test(message)) return '人机验证暂时不可用，请稍后重试。'
+  if (/人机验证|captcha|challenge/i.test(message)) return '人机验证未通过，请刷新后重试。'
   if (/invalid login credentials|invalid credentials/i.test(message)) return '邮箱或密码不正确。'
   if (/email not confirmed/i.test(message)) return '请先完成邮箱验证，再登录。'
   if (/already registered|user already exists/i.test(message)) return '该邮箱已注册，请直接登录。'
@@ -54,4 +56,3 @@ export function readableAuthError(error: unknown) {
   if (/fetch|network|offline/i.test(message)) return '网络连接异常，请检查后重试。'
   return '暂时无法完成操作，请稍后重试。'
 }
-
