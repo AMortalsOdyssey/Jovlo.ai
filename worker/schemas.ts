@@ -88,6 +88,8 @@ export const RouteDryRunRequestSchema = z
 
 export type RouteDryRunRequest = z.infer<typeof RouteDryRunRequestSchema>
 
+export const AgentBridgeTicketRequestSchema = z.object({}).strict()
+
 export const BudgetRequestSchema = z
   .object({
     snapshot: TripSnapshotSchema,
@@ -114,7 +116,7 @@ export const ChangeSetPreviewRequestSchema = z
 
 export const StoredChangeSetDryRunRequestSchema = z
   .object({
-    snapshot: TripSnapshotSchema,
+    snapshot: TripSnapshotSchema.optional(),
     changeSet: TripChangeSetSchema.optional(),
     ...PreviewOptionsFields,
   })

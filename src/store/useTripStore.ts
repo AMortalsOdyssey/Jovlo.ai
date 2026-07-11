@@ -67,6 +67,19 @@ type SettingsPayload = {
 
 type NewExpense = Omit<Expense, 'id' | 'createdAt' | 'updatedAt'> & Partial<Pick<Expense, 'id'>>
 
+export type BudgetAssumptionPatch = {
+  lodgingDefaultPerNight?: number
+  mealPerPersonPerDay?: number
+  fuelLitersPer100Km?: number
+  electricityKwhPer100Km?: number
+  fuelPricePerLiter?: number
+  electricityPricePerKwh?: number
+  rentalCarPerDay?: number
+  insurancePerDay?: number
+  parkingAndTollsPerDay?: number
+  contingencyRate?: number
+}
+
 export type TripStore = {
   trip: TripSnapshot
   trips: TripSnapshot[]
@@ -100,6 +113,7 @@ export type TripStore = {
   requestMoveStop: (stopId: string, targetDayId: string, targetIndex: number) => void
   moveStop: (stopId: string, targetDayId: string, targetIndex?: number) => void
   requestRemoveStop: (stopId: string) => void
+  requestReplaceStop: (stopId: string, placeId: string) => void
   requestStayUpdate: (dayId: string, anchor: StayAnchor) => void
   requestSettingsUpdate: (payload: SettingsPayload) => void
   applyPending: () => void
@@ -111,6 +125,7 @@ export type TripStore = {
   restoreVersion: (versionId: string) => void
   addCandidateStop: (placeId: string, dayId?: string) => void
   replaceStop: (stopId: string, placeId: string) => void
+  updateBudgetAssumptions: (patch: BudgetAssumptionPatch) => void
   addExpense: (expense: NewExpense | Record<string, unknown>) => void
   markActual: (input: Partial<ActualRecord> & { dayId: string; status: 'visited' | 'skipped' }) => void
   delayToday: (minutes: number, dayId?: string) => void
@@ -186,6 +201,44 @@ function publicationToken() {
 
 function recalculate(snapshot: TripSnapshot): DerivedSnapshot {
   return recalculateTrip(snapshot, buildReferenceRouteLegs(snapshot))
+}
+
+function summarizeImpact(
+  before: DerivedSnapshot,
+  after: DerivedSnapshot,
+  title: string,
+  description: string,
+  affectedDayIds: string[],
+) {
+  const totalMinutes = (derived: DerivedSnapshot) => derived.daySchedules
+    .reduce((sum, day) => sum + day.drivingMinutes + day.activityMinutes, 0)
+  const warnings = after.daySchedules
+    .filter((day) => affectedDayIds.includes(day.dayId))
+    .flatMap((day) => day.warnings.map((warning) => warning.message))
+  return {
+    title,
+    description,
+    affectedDayIds,
+    distanceDeltaMeters: after.budget.totalDistanceMeters - before.budget.totalDistanceMeters,
+    durationDeltaMinutes: totalMinutes(after) - totalMinutes(before),
+    budgetDelta: after.budget.total.expected - before.budget.total.expected,
+    warnings: [...new Set(warnings)].slice(0, 4),
+  }
+}
+
+function updateMoneyRange(
+  range: { low: number; expected: number; high: number; currency: 'CNY' },
+  expected: number,
+) {
+  const safeExpected = Number.isFinite(expected) ? Math.max(0, expected) : range.expected
+  const lowRatio = range.expected > 0 ? range.low / range.expected : 0.85
+  const highRatio = range.expected > 0 ? range.high / range.expected : 1.2
+  return {
+    low: Math.round(safeExpected * lowRatio * 100) / 100,
+    expected: safeExpected,
+    high: Math.round(safeExpected * highRatio * 100) / 100,
+    currency: range.currency,
+  }
 }
 
 function findStop(snapshot: TripSnapshot, stopId: string) {
@@ -302,6 +355,25 @@ export const useTripStore = create<TripStore>()(
         commitTrip(next, '地点顺序已调整')
       }
 
+      const replaceNow = (stopId: string, placeId: string) => {
+        const candidate = get().candidates.find((place) => place.placeId === placeId)
+        if (!candidate) return
+        const next = cloneJson(get().trip)
+        const found = findStop(next, stopId)
+        if (!found) return
+        const previousPlaceId = found.stop.placeId
+        next.placeRefs[candidate.placeId] = cloneJson(candidate)
+        found.stop.placeId = candidate.placeId
+        found.stop.sourceIds = [...candidate.sourceIds]
+        next.intent.mustPlaceIds = next.intent.mustPlaceIds.map((id) =>
+          id === previousPlaceId ? candidate.placeId : id,
+        )
+        commitTrip(next, `已用 ${candidate.name} 替换原地点`)
+        mutate((state) => {
+          state.selectedStopId = stopId
+        })
+      }
+
       return {
         ...demo,
         trips: [demo.trip],
@@ -356,6 +428,12 @@ export const useTripStore = create<TripStore>()(
             moveNow(stopId, targetDayId, targetIndex)
             return
           }
+          const next = cloneJson(current.trip)
+          const nextFound = findStop(next, stopId)
+          const targetDay = next.days.find((day) => day.id === targetDayId)
+          if (!nextFound || !targetDay) return
+          const [moving] = next.days[nextFound.dayIndex].stops.splice(nextFound.stopIndex, 1)
+          targetDay.stops.splice(Math.max(0, Math.min(targetDay.stops.length, targetIndex)), 0, moving)
           mutate((state) => {
             state.pendingAction = {
               id: createId('impact'),
@@ -364,14 +442,13 @@ export const useTripStore = create<TripStore>()(
               sourceDayId: sourceDay.id,
               targetDayId,
               targetIndex,
-              impact: {
-                title: '跨日移动地点',
-                description: '两天路线、预计到达和预算将重新计算',
-                affectedDayIds: [sourceDay.id, targetDayId],
-                durationDeltaMinutes: 28,
-                distanceDeltaMeters: 16_000,
-                budgetDelta: 0,
-              },
+              impact: summarizeImpact(
+                current.derived,
+                recalculate(next),
+                '跨日移动地点',
+                '两天路线、预计到达和预算将重新计算',
+                [sourceDay.id, targetDayId],
+              ),
             }
           })
         },
@@ -387,25 +464,73 @@ export const useTripStore = create<TripStore>()(
             return
           }
           const next = cloneJson(current.trip)
+          const dayId = next.days[found.dayIndex].id
           next.days[found.dayIndex].stops.splice(found.stopIndex, 1)
-          commitTrip(next, '地点已移出当天')
+          mutate((state) => {
+            state.pendingAction = {
+              id: createId('impact'),
+              type: 'remove-stop',
+              dayId,
+              stopId,
+              impact: summarizeImpact(
+                current.derived,
+                recalculate(next),
+                '移出当天地点',
+                '后续到达、结束时间、路线和预算将重新计算',
+                [dayId],
+              ),
+            }
+          })
+        },
+
+        requestReplaceStop: (stopId, placeId) => {
+          const current = get()
+          const candidate = current.candidates.find((place) => place.placeId === placeId)
+          const next = cloneJson(current.trip)
+          const found = findStop(next, stopId)
+          if (!candidate || !found) return
+          const dayId = next.days[found.dayIndex].id
+          next.placeRefs[candidate.placeId] = cloneJson(candidate)
+          found.stop.placeId = candidate.placeId
+          found.stop.sourceIds = [...candidate.sourceIds]
+          mutate((state) => {
+            state.pendingAction = {
+              id: createId('impact'),
+              type: 'replace-stop',
+              stopId,
+              placeId,
+              impact: summarizeImpact(
+                current.derived,
+                recalculate(next),
+                `替换为 ${candidate.name}`,
+                '该日路线、到达时间和相关预算将重新计算',
+                [dayId],
+              ),
+            }
+          })
         },
 
         requestStayUpdate: (dayId, anchor) => {
+          const current = get()
+          const next = cloneJson(current.trip)
+          const day = next.days.find((item) => item.id === dayId)
+          if (!day) return
+          day.overnightStay = anchor
+          const dayIndex = next.days.findIndex((item) => item.id === dayId)
+          const affectedDayIds = [dayId, next.days[dayIndex + 1]?.id].filter(Boolean) as string[]
           mutate((state) => {
             state.pendingAction = {
               id: createId('impact'),
               type: 'set-stay',
               dayId,
               anchor,
-              impact: {
-                title: '更换住宿锚点',
-                description: '前一日末段、次日首段和住宿预算将重新计算',
-                affectedDayIds: [dayId],
-                durationDeltaMinutes: 35,
-                distanceDeltaMeters: 18_000,
-                budgetDelta: 160,
-              },
+              impact: summarizeImpact(
+                current.derived,
+                recalculate(next),
+                '更换住宿锚点',
+                '当日末段、次日首段和住宿预算将重新计算',
+                affectedDayIds,
+              ),
             }
           })
         },
@@ -458,6 +583,11 @@ export const useTripStore = create<TripStore>()(
           if (pending.type === 'remove-stop') {
             const found = findStop(next, pending.stopId)
             if (found) next.days[found.dayIndex].stops.splice(found.stopIndex, 1)
+          }
+          if (pending.type === 'replace-stop') {
+            mutate((state) => void (state.pendingAction = null))
+            replaceNow(pending.stopId, pending.placeId)
+            return
           }
           mutate((state) => void (state.pendingAction = null))
           commitTrip(next, pending.impact.title)
@@ -576,23 +706,23 @@ export const useTripStore = create<TripStore>()(
           commitTrip(next, `${candidate.name} 已加入 Day ${target.dayIndex}`)
         },
 
-        replaceStop: (stopId, placeId) => {
-          const candidate = get().candidates.find((place) => place.placeId === placeId)
-          if (!candidate) return
+        replaceStop: (stopId, placeId) => replaceNow(stopId, placeId),
+
+        updateBudgetAssumptions: (patch) => {
           const next = cloneJson(get().trip)
-          const found = findStop(next, stopId)
-          if (!found) return
-          const previousPlaceId = found.stop.placeId
-          next.placeRefs[candidate.placeId] = cloneJson(candidate)
-          found.stop.placeId = candidate.placeId
-          found.stop.sourceIds = [...candidate.sourceIds]
-          next.intent.mustPlaceIds = next.intent.mustPlaceIds.map((id) =>
-            id === previousPlaceId ? candidate.placeId : id,
-          )
-          commitTrip(next, `已用 ${candidate.name} 替换原地点`)
-          mutate((state) => {
-            state.selectedStopId = stopId
-          })
+          const assumptions = next.budgetAssumptions
+          if (patch.lodgingDefaultPerNight !== undefined) assumptions.lodgingDefaultPerNight = updateMoneyRange(assumptions.lodgingDefaultPerNight, patch.lodgingDefaultPerNight)
+          if (patch.mealPerPersonPerDay !== undefined) assumptions.mealPerPersonPerDay = updateMoneyRange(assumptions.mealPerPersonPerDay, patch.mealPerPersonPerDay)
+          if (patch.fuelPricePerLiter !== undefined) assumptions.fuelPricePerLiter = updateMoneyRange(assumptions.fuelPricePerLiter, patch.fuelPricePerLiter)
+          if (patch.electricityPricePerKwh !== undefined) assumptions.electricityPricePerKwh = updateMoneyRange(assumptions.electricityPricePerKwh, patch.electricityPricePerKwh)
+          if (patch.rentalCarPerDay !== undefined) assumptions.rentalCarPerDay = updateMoneyRange(assumptions.rentalCarPerDay, patch.rentalCarPerDay)
+          if (patch.insurancePerDay !== undefined) assumptions.insurancePerDay = updateMoneyRange(assumptions.insurancePerDay, patch.insurancePerDay)
+          if (patch.parkingAndTollsPerDay !== undefined) assumptions.parkingAndTollsPerDay = updateMoneyRange(assumptions.parkingAndTollsPerDay, patch.parkingAndTollsPerDay)
+          if (patch.fuelLitersPer100Km !== undefined && Number.isFinite(patch.fuelLitersPer100Km)) assumptions.fuelLitersPer100Km = Math.max(0.1, Math.min(50, patch.fuelLitersPer100Km))
+          if (patch.electricityKwhPer100Km !== undefined && Number.isFinite(patch.electricityKwhPer100Km)) assumptions.electricityKwhPer100Km = Math.max(0.1, Math.min(100, patch.electricityKwhPer100Km))
+          if (patch.contingencyRate !== undefined && Number.isFinite(patch.contingencyRate)) assumptions.contingency = { kind: 'percentage', rate: Math.max(0, Math.min(1, patch.contingencyRate)) }
+          assumptions.verifiedAt = new Date().toISOString()
+          commitTrip(next, '预算假设已更新')
         },
 
         addExpense: (value) => {

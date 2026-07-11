@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
-import { ZodError } from 'zod'
+import type { D1Database } from '@cloudflare/workers-types'
+import { z, ZodError } from 'zod'
 import {
   DEMO_ACTUALS,
   DEMO_CANDIDATES,
@@ -16,11 +17,13 @@ import {
   ExpenseSchema,
   ReportGenerationSchema,
   TripChangeSetSchema,
+  DerivedSnapshotSchema,
   TripSnapshotSchema,
   TripVersionSchema,
   UuidSchema,
   calculateBudget,
   cloneJson,
+  getDayRouteEndpoints,
   previewChangeSet,
   recalculateTrip,
   semanticDiff,
@@ -30,6 +33,8 @@ import {
   type DerivedSnapshot,
   type Expense,
   type JsonValue,
+  type RouteEndpoint,
+  type RouteLeg,
   type ActualRecord,
   type ReportGeneration,
   type TripChangeSet,
@@ -37,7 +42,13 @@ import {
   type TripVersion,
 } from '../packages/domain/src/index'
 import { AppError } from './lib/errors'
-import { hashPublicationToken, sha256Canonical } from './lib/crypto'
+import {
+  hashPublicationToken,
+  openAgentSession,
+  sealAgentSession,
+  sha256Canonical,
+  sha256Text,
+} from './lib/crypto'
 import {
   failure,
   parseJson,
@@ -47,6 +58,7 @@ import {
 } from './lib/http'
 import {
   ApplyChangeSetRequestSchema,
+  AgentBridgeTicketRequestSchema,
   ActualMutationSchema,
   BudgetRequestSchema,
   ChangeSetPreviewRequestSchema,
@@ -82,6 +94,31 @@ type StoredDemoChangeSet = {
   derived?: DerivedSnapshot
   appliedVersion?: TripVersion
 }
+
+const AgentSessionSchema = z
+  .object({
+    v: z.literal(1),
+    grantHash: z.string().regex(/^[0-9a-f]{64}$/),
+    userId: UuidSchema,
+    accessToken: z.string().min(20).max(8_192).nullable(),
+  })
+  .strict()
+
+type AgentGrantRecord = {
+  grant_hash: string
+  trip_id: string
+  user_id: string
+  encrypted_session: string | null
+  issued_at: number
+  expires_at: number
+  status: 'issued' | 'processing' | 'consumed'
+  request_hash: string | null
+  result_json: string | null
+  attempts: number
+  consumed_at: number | null
+}
+
+type DemoAgentGrant = Omit<AgentGrantRecord, 'grant_hash'> & { grantHash: string }
 
 type DemoPublication = {
   id: string
@@ -120,6 +157,7 @@ const demoReports = new Map<string, ReportGeneration>(
   DEMO_REPORTS.map((report) => [report.id, report]),
 )
 const demoIdempotency = new Map<string, { bodyHash: string; result: unknown }>()
+const demoAgentGrants = new Map<string, DemoAgentGrant>()
 const demoPublications = new Map<string, DemoPublication>([
   [
     'jovlo-demo-trip',
@@ -299,6 +337,11 @@ function randomToken(): string {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+function randomAgentGrant(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
 function requirePepper(context: AppContext): string {
   if (!context.env.SHARE_TOKEN_PEPPER) {
     throw new AppError('DEPENDENCY_UNAVAILABLE', '生产模式缺少分享 token pepper', 503, {
@@ -306,6 +349,27 @@ function requirePepper(context: AppContext): string {
     })
   }
   return context.env.SHARE_TOKEN_PEPPER
+}
+
+function requireAgentBridgeSecret(context: AppContext): string {
+  const secret = context.env.AGENT_BRIDGE_SECRET ?? (context.get('mode') === 'demo'
+    ? 'jovlo-demo-agent-bridge-secret-2026'
+    : undefined)
+  if (!secret || secret.length < 32) {
+    throw new AppError('DEPENDENCY_UNAVAILABLE', 'Agent 投递通道暂未配置', 503, {
+      userAction: '请联系管理员检查服务配置',
+    })
+  }
+  return secret
+}
+
+function requireAgentGrantDatabase(context: AppContext): D1Database {
+  if (!context.env.AGENT_GRANTS) {
+    throw new AppError('DEPENDENCY_UNAVAILABLE', 'Agent 投递通道暂未配置', 503, {
+      userAction: '请联系管理员检查服务配置',
+    })
+  }
+  return context.env.AGENT_GRANTS
 }
 
 async function runDemoIdempotent<T>(
@@ -362,13 +426,14 @@ async function parseChangeSetUpload(context: AppContext): Promise<TripChangeSet>
   const contentType = (context.req.header('content-type') ?? '').toLowerCase()
   let value: unknown
   try {
+    const bytes = new Uint8Array(await context.req.raw.arrayBuffer())
+    if (bytes.byteLength > maximumBytes) {
+      throw new AppError('CHANGESET_INVALID', 'ChangeSet 超过 256KB 限制', 413)
+    }
+    const text = new TextDecoder().decode(bytes)
     if (contentType.includes('application/json')) {
-      value = await context.req.json()
+      value = JSON.parse(text)
     } else if (contentType.includes('text/plain') || contentType.includes('text/markdown')) {
-      const text = await context.req.text()
-      if (new TextEncoder().encode(text).byteLength > maximumBytes) {
-        throw new AppError('CHANGESET_INVALID', 'ChangeSet 超过 256KB 限制', 413)
-      }
       const blocks = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)]
       if (blocks.length > 1) {
         throw new AppError('CHANGESET_INVALID', 'Markdown 只能包含一个 JSON 代码块', 400)
@@ -391,6 +456,187 @@ async function parseChangeSetUpload(context: AppContext): Promise<TripChangeSet>
     })
   }
   return parsed.data
+}
+
+async function claimAgentGrant(context: AppContext, grantHash: string): Promise<AgentGrantRecord> {
+  const now = Date.now()
+  if (context.get('mode') === 'demo') {
+    const grant = demoAgentGrants.get(grantHash)
+    if (!grant || grant.expires_at <= now) {
+      throw new AppError('AUTH_REQUIRED', 'Agent 投递口令无效或已过期', 401, {
+        userAction: '请在 Jovlo 重新生成连接包',
+      })
+    }
+    if (grant.attempts >= 8) {
+      throw new AppError('RATE_LIMITED', 'Agent 投递尝试次数过多', 429, {
+        userAction: '请在 Jovlo 重新生成连接包',
+      })
+    }
+    if (grant.status === 'processing' && (grant.consumed_at ?? now) < now - 60_000) {
+      grant.status = 'issued'
+      grant.request_hash = null
+      grant.consumed_at = null
+    }
+    grant.attempts += 1
+    return {
+      grant_hash: grant.grantHash,
+      trip_id: grant.trip_id,
+      user_id: grant.user_id,
+      encrypted_session: grant.encrypted_session,
+      issued_at: grant.issued_at,
+      expires_at: grant.expires_at,
+      status: grant.status,
+      request_hash: grant.request_hash,
+      result_json: grant.result_json,
+      attempts: grant.attempts,
+      consumed_at: grant.consumed_at,
+    }
+  }
+
+  const database = requireAgentGrantDatabase(context)
+  await database
+    .prepare(`UPDATE agent_grants
+      SET status = 'issued', request_hash = NULL, consumed_at = NULL
+      WHERE grant_hash = ? AND status = 'processing' AND consumed_at < ?`)
+    .bind(grantHash, now - 60_000)
+    .run()
+  const grant = await database
+    .prepare(`UPDATE agent_grants
+      SET attempts = attempts + 1
+      WHERE grant_hash = ? AND expires_at > ? AND attempts < 8
+      RETURNING *`)
+    .bind(grantHash, now)
+    .first<AgentGrantRecord>()
+  if (!grant) {
+    throw new AppError('AUTH_REQUIRED', 'Agent 投递口令无效、已过期或尝试次数过多', 401, {
+      userAction: '请在 Jovlo 重新生成连接包',
+    })
+  }
+  return grant
+}
+
+async function reserveAgentGrant(
+  context: AppContext,
+  grant: AgentGrantRecord,
+  requestHash: string,
+): Promise<void> {
+  if (grant.status === 'consumed') {
+    if (grant.request_hash === requestHash && grant.result_json) return
+    throw new AppError('IDEMPOTENCY_KEY_REUSED', '该投递口令已用于另一份内容', 409, {
+      userAction: '请在 Jovlo 重新生成连接包',
+    })
+  }
+  if (grant.status === 'processing') {
+    throw new AppError('RATE_LIMITED', '同一份资料正在投递', 409, {
+      retryable: true,
+      userAction: '请稍后重试',
+    })
+  }
+
+  if (context.get('mode') === 'demo') {
+    const stored = demoAgentGrants.get(grant.grant_hash)
+    if (!stored || stored.status !== 'issued') {
+      throw new AppError('RATE_LIMITED', '同一份资料正在投递', 409, { retryable: true })
+    }
+    stored.status = 'processing'
+    stored.request_hash = requestHash
+    stored.consumed_at = Date.now()
+    return
+  }
+  const reservation = await requireAgentGrantDatabase(context)
+    .prepare(`UPDATE agent_grants
+      SET status = 'processing', request_hash = ?, consumed_at = ?
+      WHERE grant_hash = ? AND status = 'issued' AND expires_at > ?`)
+    .bind(requestHash, Date.now(), grant.grant_hash, Date.now())
+    .run()
+  if (reservation.meta.changes !== 1) {
+    throw new AppError('RATE_LIMITED', '同一份资料正在投递', 409, {
+      retryable: true,
+      userAction: '请稍后重试',
+    })
+  }
+}
+
+async function releaseAgentGrant(context: AppContext, grantHash: string, requestHash: string) {
+  if (context.get('mode') === 'demo') {
+    const grant = demoAgentGrants.get(grantHash)
+    if (grant?.status === 'processing' && grant.request_hash === requestHash) {
+      grant.status = 'issued'
+      grant.request_hash = null
+      grant.consumed_at = null
+    }
+    return
+  }
+  await requireAgentGrantDatabase(context)
+    .prepare(`UPDATE agent_grants
+      SET status = 'issued', request_hash = NULL, consumed_at = NULL
+      WHERE grant_hash = ? AND status = 'processing' AND request_hash = ?`)
+    .bind(grantHash, requestHash)
+    .run()
+}
+
+async function consumeAgentGrant(
+  context: AppContext,
+  grantHash: string,
+  requestHash: string,
+  result: Record<string, unknown>,
+) {
+  const serialized = JSON.stringify(result)
+  if (context.get('mode') === 'demo') {
+    const grant = demoAgentGrants.get(grantHash)
+    if (!grant || grant.status !== 'processing' || grant.request_hash !== requestHash) {
+      throw new AppError('CHANGESET_STALE', 'Agent 投递状态已变化', 409)
+    }
+    grant.status = 'consumed'
+    grant.result_json = serialized
+    grant.encrypted_session = null
+    grant.consumed_at = Date.now()
+    return
+  }
+  const consumed = await requireAgentGrantDatabase(context)
+    .prepare(`UPDATE agent_grants
+      SET status = 'consumed', result_json = ?, encrypted_session = NULL, consumed_at = ?
+      WHERE grant_hash = ? AND status = 'processing' AND request_hash = ?`)
+    .bind(serialized, Date.now(), grantHash, requestHash)
+    .run()
+  if (consumed.meta.changes !== 1) {
+    throw new AppError('CHANGESET_STALE', 'Agent 投递状态已变化', 409)
+  }
+}
+
+function routeEndpointCoordinate(snapshot: TripSnapshot, endpoint: RouteEndpoint) {
+  const coordinate = endpoint.kind === 'place'
+    ? snapshot.placeRefs[endpoint.placeId]?.gcj02
+    : snapshot.stayAreaRefs[endpoint.areaId]?.gcj02
+  if (!coordinate) {
+    throw new AppError('ROUTE_NO_DATA', '地点缺少路线坐标', 422, {
+      userAction: '请先为新增地点匹配一个已有地点',
+    })
+  }
+  return coordinate
+}
+
+async function calculateSnapshotRouteLegs(snapshot: TripSnapshot, context: AppContext): Promise<RouteLeg[]> {
+  const routeLegs: RouteLeg[] = []
+  for (let dayPosition = 0; dayPosition < snapshot.days.length; dayPosition += 1) {
+    const day = snapshot.days[dayPosition]
+    const endpoints = getDayRouteEndpoints(snapshot, dayPosition)
+    if (endpoints.length < 2) continue
+    const result = await calculateRouteLegs(
+      {
+        dayId: day.id,
+        points: endpoints.map((endpoint) => ({
+          endpoint,
+          coordinate: routeEndpointCoordinate(snapshot, endpoint),
+        })),
+        strategy: '32',
+        inputHash: stableHash({ dayId: day.id, endpoints }),
+      },
+      context.env,
+    )
+    routeLegs.push(...result.legs)
+  }
+  return routeLegs
 }
 
 const health = (context: AppContext) =>
@@ -537,6 +783,68 @@ app.get('/api/v1/trips/:tripId', async (context) => {
   )
   if (!trip || !draft) throw new AppError('FORBIDDEN', '行程不存在或无权访问', 403)
   return success(context, { trip, draft })
+})
+
+app.post('/api/v1/trips/:tripId/agent-tickets', async (context) => {
+  const user = await requireAuthenticatedUser(context)
+  const tripId = validateUuid(context.req.param('tripId'), 'tripId')
+  await parseJson(context, AgentBridgeTicketRequestSchema, 1_024)
+  if (context.get('mode') === 'demo') {
+    if (!demoTrips.has(tripId)) throw new AppError('FORBIDDEN', '行程不存在或无权访问', 403)
+  } else {
+    const trip = await readSupabaseRow<Record<string, unknown>>(
+      context,
+      'trips',
+      `id=eq.${tripId}&select=id`,
+      user.token as string,
+    )
+    if (!trip) throw new AppError('FORBIDDEN', '行程不存在或无权访问', 403)
+  }
+
+  const issuedAt = new Date()
+  const expiresAt = new Date(issuedAt.getTime() + 15 * 60_000)
+  const ticket = randomAgentGrant()
+  const grantHash = await sha256Text(ticket)
+  const encryptedSession = await sealAgentSession(
+    {
+      v: 1,
+      grantHash,
+      userId: user.id,
+      accessToken: user.token,
+    },
+    requireAgentBridgeSecret(context),
+  )
+  if (context.get('mode') === 'demo') {
+    demoAgentGrants.set(grantHash, {
+      grantHash,
+      trip_id: tripId,
+      user_id: user.id,
+      encrypted_session: encryptedSession,
+      issued_at: issuedAt.getTime(),
+      expires_at: expiresAt.getTime(),
+      status: 'issued',
+      request_hash: null,
+      result_json: null,
+      attempts: 0,
+      consumed_at: null,
+    })
+  } else {
+    const database = requireAgentGrantDatabase(context)
+    await database.prepare('DELETE FROM agent_grants WHERE expires_at < ?').bind(Date.now() - 86_400_000).run()
+    await database
+      .prepare(`INSERT INTO agent_grants (
+        grant_hash, trip_id, user_id, encrypted_session, issued_at, expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?)`)
+      .bind(grantHash, tripId, user.id, encryptedSession, issuedAt.getTime(), expiresAt.getTime())
+      .run()
+  }
+  const origin = new URL(context.req.url).origin
+  context.header('cache-control', 'no-store')
+  return success(context, {
+    ticket,
+    expiresAt: expiresAt.toISOString(),
+    deliveryEndpoint: `${origin}/api/v1/agent-imports`,
+  }, 201)
 })
 
 app.put('/api/v1/trips/:tripId/draft', async (context) => {
@@ -865,6 +1173,115 @@ app.post('/api/v1/change-sets/preview', async (context) => {
   return success(context, previewChangeSet(snapshot, changeSet, options))
 })
 
+app.post('/api/v1/agent-imports', async (context) => {
+  const authorization = context.req.header('authorization') ?? ''
+  const match = /^Jovlo-Agent\s+(.+)$/i.exec(authorization)
+  const opaqueTicket = match?.[1]?.trim()
+  if (!opaqueTicket || !/^[0-9a-f]{64}$/.test(opaqueTicket)) {
+    throw new AppError('AUTH_REQUIRED', 'Agent 投递口令无效', 401, {
+      userAction: '请在 Jovlo 重新生成连接包',
+    })
+  }
+  const grantHash = await sha256Text(opaqueTicket)
+  const grant = await claimAgentGrant(context, grantHash)
+  const changeSet = await parseChangeSetUpload(context)
+  const requestHash = await sha256Canonical(changeSet)
+  if (grant.status === 'consumed' && grant.request_hash === requestHash && grant.result_json) {
+    context.header('cache-control', 'no-store')
+    return success(context, JSON.parse(grant.result_json) as Record<string, unknown>)
+  }
+  if (changeSet.tripId !== grant.trip_id) {
+    throw new AppError('CHANGESET_INVALID', 'ChangeSet 不属于投递口令绑定的行程', 400)
+  }
+
+  await reserveAgentGrant(context, grant, requestHash)
+  let sessionValue: unknown
+  try {
+    if (!grant.encrypted_session) throw new Error('missing session')
+    sessionValue = await openAgentSession(grant.encrypted_session, requireAgentBridgeSecret(context))
+  } catch {
+    await releaseAgentGrant(context, grantHash, requestHash)
+    throw new AppError('AUTH_REQUIRED', 'Agent 投递会话无效', 401, {
+      userAction: '请在 Jovlo 重新生成连接包',
+    })
+  }
+  const session = AgentSessionSchema.safeParse(sessionValue)
+  if (!session.success || session.data.grantHash !== grantHash || session.data.userId !== grant.user_id) {
+    await releaseAgentGrant(context, grantHash, requestHash)
+    throw new AppError('AUTH_REQUIRED', 'Agent 投递会话无效', 401, {
+      userAction: '请在 Jovlo 重新生成连接包',
+    })
+  }
+
+  try {
+    let uploadResult: Record<string, unknown>
+    if (context.get('mode') === 'demo') {
+      const state = demoTrips.get(grant.trip_id)
+      if (!state || grant.user_id !== 'd0000000-0000-4000-8000-000000000001') {
+        throw new AppError('FORBIDDEN', '行程不存在或无权访问', 403)
+      }
+      uploadResult = await runDemoIdempotent(
+        grant.user_id,
+        `upload_change_set:${grant.trip_id}`,
+        changeSet.idempotencyKey,
+        changeSet,
+        () => {
+          demoChangeSets.set(changeSet.changeSetId, {
+            ownerId: grant.user_id,
+            snapshot: cloneJson(state.snapshot),
+            changeSet,
+          })
+          return { changeSetId: changeSet.changeSetId, status: 'uploaded' }
+        },
+      )
+    } else {
+      if (!session.data.accessToken) throw new AppError('AUTH_REQUIRED', 'Agent 投递会话无效', 401)
+      uploadResult = await callSupabaseRpc<Record<string, unknown>>(
+        context,
+        'upload_change_set',
+        {
+          p_trip_id: grant.trip_id,
+          p_payload: changeSet,
+          p_base_version_id: changeSet.baseVersionId,
+          p_idempotency_key: changeSet.idempotencyKey,
+        },
+        session.data.accessToken,
+      )
+    }
+    const origin = new URL(context.req.url).origin
+    const result = {
+      ...uploadResult,
+      reviewUrl: `${origin}/trips/${grant.trip_id}/imports/${changeSet.changeSetId}`,
+    }
+    await consumeAgentGrant(context, grantHash, requestHash, result)
+    context.header('cache-control', 'no-store')
+    return success(context, result, 201)
+  } catch (error) {
+    await releaseAgentGrant(context, grantHash, requestHash)
+    throw error
+  }
+})
+
+app.get('/api/v1/change-sets/:changeSetId', async (context) => {
+  const user = await requireAuthenticatedUser(context)
+  const changeSetId = validateUuid(context.req.param('changeSetId'), 'changeSetId')
+  if (context.get('mode') === 'demo') {
+    const stored = demoChangeSets.get(changeSetId)
+    if (!stored || stored.ownerId !== user.id) throw new AppError('FORBIDDEN', 'ChangeSet 不存在或无权访问', 403)
+    return success(context, { changeSet: stored.changeSet, status: stored.appliedVersion ? 'applied' : stored.preview ? 'ready' : 'uploaded' })
+  }
+  const row = await readSupabaseRow<Record<string, unknown>>(
+    context,
+    'change_sets',
+    `id=eq.${changeSetId}&select=id,trip_id,base_version_id,status,payload,created_at,updated_at`,
+    user.token as string,
+  )
+  if (!row) throw new AppError('FORBIDDEN', 'ChangeSet 不存在或无权访问', 403)
+  const changeSet = TripChangeSetSchema.safeParse(row.payload)
+  if (!changeSet.success) throw new AppError('CHANGESET_INVALID', '已存储 ChangeSet 格式无效', 422)
+  return success(context, { changeSet: changeSet.data, status: row.status })
+})
+
 app.post('/api/v1/trips/:tripId/change-sets', async (context) => {
   const user = await requireAuthenticatedUser(context)
   const tripId = validateUuid(context.req.param('tripId'), 'tripId')
@@ -1002,14 +1419,76 @@ app.post('/api/v1/change-sets/:changeSetId/dry-run', async (context) => {
   const changeSetId = validateUuid(context.req.param('changeSetId'), 'changeSetId')
   const idempotencyKey = requireIdempotencyKey(context)
   const input = await parseJson(context, StoredChangeSetDryRunRequestSchema)
-  const stored = demoChangeSets.get(changeSetId)
-  const changeSet = input.changeSet ?? (context.get('mode') === 'demo' ? stored?.changeSet : undefined)
-  if (!changeSet || changeSet.changeSetId !== changeSetId) {
-    throw new AppError('CHANGESET_INVALID', '找不到匹配的 ChangeSet 负载', 404)
+  let snapshot: TripSnapshot
+  let changeSet: TripChangeSet
+  let currentVersionId: string | undefined
+  let routeLegsBefore: RouteLeg[] | undefined
+
+  if (context.get('mode') === 'demo') {
+    const stored = demoChangeSets.get(changeSetId)
+    const parsedSnapshot = TripSnapshotSchema.safeParse(input.snapshot ?? stored?.snapshot)
+    const parsedChangeSet = TripChangeSetSchema.safeParse(input.changeSet ?? stored?.changeSet)
+    if (!parsedSnapshot.success || !parsedChangeSet.success || parsedChangeSet.data.changeSetId !== changeSetId) {
+      throw new AppError('CHANGESET_INVALID', '找不到匹配的 ChangeSet 负载', 404)
+    }
+    snapshot = parsedSnapshot.data
+    changeSet = parsedChangeSet.data
+    currentVersionId = input.currentVersionId
+    routeLegsBefore = input.routeLegsBefore
+  } else {
+    const row = await readSupabaseRow<Record<string, unknown>>(
+      context,
+      'change_sets',
+      `id=eq.${changeSetId}&select=id,trip_id,base_version_id,payload`,
+      user.token as string,
+    )
+    if (!row) throw new AppError('CHANGESET_INVALID', '找不到待审 ChangeSet', 404)
+    const parsedChangeSet = TripChangeSetSchema.safeParse(row.payload)
+    if (!parsedChangeSet.success || parsedChangeSet.data.changeSetId !== changeSetId) {
+      throw new AppError('CHANGESET_INVALID', '已存储 ChangeSet 格式无效', 422)
+    }
+    const tripId = String(row.trip_id)
+    const draft = await readSupabaseRow<Record<string, unknown>>(
+      context,
+      'trip_drafts',
+      `trip_id=eq.${tripId}&select=base_version_id,snapshot`,
+      user.token as string,
+    )
+    const parsedSnapshot = TripSnapshotSchema.safeParse(draft?.snapshot)
+    if (!draft || !parsedSnapshot.success) {
+      throw new AppError('CHANGESET_STALE', '当前行程草稿不可用', 409, {
+        userAction: '请刷新行程后重试',
+      })
+    }
+    snapshot = parsedSnapshot.data
+    changeSet = parsedChangeSet.data
+    currentVersionId = String(draft.base_version_id)
+    const version = await readSupabaseRow<Record<string, unknown>>(
+      context,
+      'trip_versions',
+      `id=eq.${currentVersionId}&select=derived_snapshot`,
+      user.token as string,
+    )
+    const parsedDerived = DerivedSnapshotSchema.safeParse(version?.derived_snapshot)
+    routeLegsBefore = parsedDerived.success ? parsedDerived.data.routeLegs : undefined
   }
-  const { snapshot, changeSet: _ignored, ...options } = input
-  const preview = previewChangeSet(snapshot, changeSet, options)
-  const routeLegs = input.routeLegsAfter ?? []
+
+  const previewOptions = {
+    selectedGroupIds: input.selectedGroupIds,
+    currentVersionId,
+    proposalResolutions: input.proposalResolutions,
+    sourceResolutions: input.sourceResolutions,
+    routeLegsBefore,
+  }
+  let preview = previewChangeSet(snapshot, changeSet, previewOptions)
+  const routeLegs = preview.canApply
+    ? context.get('mode') === 'demo'
+      ? input.routeLegsAfter ?? await calculateSnapshotRouteLegs(preview.candidateSnapshot, context)
+      : await calculateSnapshotRouteLegs(preview.candidateSnapshot, context)
+    : []
+  if (routeLegs.length) {
+    preview = previewChangeSet(snapshot, changeSet, { ...previewOptions, routeLegsAfter: routeLegs })
+  }
   const derived = recalculateTrip(preview.candidateSnapshot, routeLegs)
   const preparedHash = await sha256Canonical({
     changeSetId,

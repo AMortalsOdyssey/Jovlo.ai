@@ -72,6 +72,13 @@ export type PendingAction =
       stopId: string
       impact: ImpactSummary
     }
+  | {
+      id: string
+      type: 'replace-stop'
+      stopId: string
+      placeId: string
+      impact: ImpactSummary
+    }
 
 export type SnackbarState = {
   id: string

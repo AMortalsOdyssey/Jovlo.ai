@@ -1,4 +1,4 @@
-import { BedDouble, CarFront, CircleDollarSign, Plus, ReceiptText, ShoppingBag, Ticket, Utensils, WalletCards } from 'lucide-react'
+import { BedDouble, CarFront, CircleDollarSign, Plus, ReceiptText, Save, ShoppingBag, SlidersHorizontal, Ticket, Utensils, WalletCards } from 'lucide-react'
 import { useMemo, useState, type CSSProperties, type FormEvent } from 'react'
 
 import { useTripStore } from '@/store/useTripStore'
@@ -55,6 +55,19 @@ export function BudgetPage() {
   const [dayId, setDayId] = useState(() => state.selectedDayId ?? days[0]?.id ?? '')
   const [note, setNote] = useState('')
   const [saved, setSaved] = useState(false)
+  const assumptions = state.trip.budgetAssumptions
+  const energyKind = state.trip.intent.vehicle.type === 'ev' ? 'electric' : 'fuel'
+  const [budgetDraft, setBudgetDraft] = useState(() => ({
+    lodgingDefaultPerNight: assumptions.lodgingDefaultPerNight.expected,
+    mealPerPersonPerDay: assumptions.mealPerPersonPerDay.expected,
+    rentalCarPerDay: assumptions.rentalCarPerDay.expected,
+    insurancePerDay: assumptions.insurancePerDay.expected,
+    parkingAndTollsPerDay: assumptions.parkingAndTollsPerDay.expected,
+    energyPrice: energyKind === 'electric' ? assumptions.electricityPricePerKwh.expected : assumptions.fuelPricePerLiter.expected,
+    consumption: energyKind === 'electric' ? assumptions.electricityKwhPer100Km : assumptions.fuelLitersPer100Km,
+    contingencyRate: assumptions.contingency.kind === 'percentage' ? assumptions.contingency.rate * 100 : 8,
+  }))
+  const [assumptionsSaved, setAssumptionsSaved] = useState(false)
 
   const daily = days.map((day) => {
     const derivedDay = getDerivedDay(state.derived, day.id, day.dayIndex)
@@ -99,6 +112,28 @@ export function BudgetPage() {
     setAmount('')
     setNote('')
     setSaved(true)
+  }
+
+  const saveAssumptions = (event: FormEvent) => {
+    event.preventDefault()
+    state.updateBudgetAssumptions({
+      lodgingDefaultPerNight: budgetDraft.lodgingDefaultPerNight,
+      mealPerPersonPerDay: budgetDraft.mealPerPersonPerDay,
+      rentalCarPerDay: budgetDraft.rentalCarPerDay,
+      insurancePerDay: budgetDraft.insurancePerDay,
+      parkingAndTollsPerDay: budgetDraft.parkingAndTollsPerDay,
+      fuelPricePerLiter: energyKind === 'fuel' ? budgetDraft.energyPrice : undefined,
+      electricityPricePerKwh: energyKind === 'electric' ? budgetDraft.energyPrice : undefined,
+      fuelLitersPer100Km: energyKind === 'fuel' ? budgetDraft.consumption : undefined,
+      electricityKwhPer100Km: energyKind === 'electric' ? budgetDraft.consumption : undefined,
+      contingencyRate: Math.max(0, Math.min(100, budgetDraft.contingencyRate)) / 100,
+    })
+    setAssumptionsSaved(true)
+  }
+
+  const setBudgetValue = (key: keyof typeof budgetDraft, value: string) => {
+    setBudgetDraft((current) => ({ ...current, [key]: Number(value) }))
+    setAssumptionsSaved(false)
   }
 
   if (!state.trip) {
@@ -147,6 +182,26 @@ export function BudgetPage() {
             <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="可选" />
           </FormField>
           <Button type="submit" variant="primary" icon={Plus}>记入</Button>
+        </form>
+      </section>
+
+      <section className="feature-section budget-assumptions-section">
+        <SectionHeading title="预算假设" description="修改后立即重算总预算、每日估算和版本差异；实际流水不会被改写。" />
+        <form className="budget-assumptions-form" onSubmit={saveAssumptions}>
+          <div className="budget-assumptions-grid">
+            <FormField label="住宿 / 晚"><input type="number" min="0" step="10" value={budgetDraft.lodgingDefaultPerNight} onChange={(event) => setBudgetValue('lodgingDefaultPerNight', event.target.value)} /></FormField>
+            <FormField label="餐饮 / 人天"><input type="number" min="0" step="10" value={budgetDraft.mealPerPersonPerDay} onChange={(event) => setBudgetValue('mealPerPersonPerDay', event.target.value)} /></FormField>
+            <FormField label="租车 / 天"><input type="number" min="0" step="10" value={budgetDraft.rentalCarPerDay} onChange={(event) => setBudgetValue('rentalCarPerDay', event.target.value)} /></FormField>
+            <FormField label="保险 / 天"><input type="number" min="0" step="5" value={budgetDraft.insurancePerDay} onChange={(event) => setBudgetValue('insurancePerDay', event.target.value)} /></FormField>
+            <FormField label="停车路费 / 天"><input type="number" min="0" step="5" value={budgetDraft.parkingAndTollsPerDay} onChange={(event) => setBudgetValue('parkingAndTollsPerDay', event.target.value)} /></FormField>
+            <FormField label={energyKind === 'electric' ? '电价 / kWh' : '油价 / L'}><input type="number" min="0.01" step="0.01" value={budgetDraft.energyPrice} onChange={(event) => setBudgetValue('energyPrice', event.target.value)} /></FormField>
+            <FormField label={energyKind === 'electric' ? '电耗 / 100km' : '油耗 / 100km'}><input type="number" min="0.1" step="0.1" value={budgetDraft.consumption} onChange={(event) => setBudgetValue('consumption', event.target.value)} /></FormField>
+            <FormField label="机动预算 %"><input type="number" min="0" max="100" step="1" value={budgetDraft.contingencyRate} onChange={(event) => setBudgetValue('contingencyRate', event.target.value)} /></FormField>
+          </div>
+          <div className="budget-assumptions-submit">
+            <span><SlidersHorizontal aria-hidden="true" size={17} />当前按 {state.trip.intent.partySize} 人 · {state.trip.intent.vehicle.type.toUpperCase()} 重算</span>
+            <Button type="submit" variant="primary" icon={Save}>{assumptionsSaved ? '已重算' : '保存并重算'}</Button>
+          </div>
         </form>
       </section>
 

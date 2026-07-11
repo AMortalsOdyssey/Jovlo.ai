@@ -1,4 +1,5 @@
 import type { Context } from 'hono'
+import type { D1Database } from '@cloudflare/workers-types'
 
 export type ApiErrorCode =
   | 'AUTH_REQUIRED'
@@ -25,6 +26,7 @@ export type RuntimeMode = 'demo' | 'production'
 
 export type Env = {
   ASSETS?: { fetch(request: Request): Promise<Response> }
+  AGENT_GRANTS?: D1Database
   CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string }
   JOVLO_MODE?: RuntimeMode
   BUILD_SHA?: string
@@ -33,6 +35,7 @@ export type Env = {
   AMAP_WEB_SERVICE_KEY?: string
   AMAP_SECURITY_JSCODE?: string
   SHARE_TOKEN_PEPPER?: string
+  AGENT_BRIDGE_SECRET?: string
 }
 
 export type AppVariables = {

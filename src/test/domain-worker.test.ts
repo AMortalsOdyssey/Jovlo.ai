@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DEMO_IDS, DEMO_TRIP } from '../../packages/domain/src/index'
+import { DEMO_CHANGESET, DEMO_IDS, DEMO_TRIP } from '../../packages/domain/src/index'
 import { app } from '../../worker/index'
 
 type Envelope = {
   data: unknown
   meta: { requestId: string; mode: string }
-  error: null | { code: string }
+  error: null | { code: string; message?: string }
 }
 
 describe('Worker API contract', () => {
@@ -271,6 +271,140 @@ describe('Worker API contract', () => {
     } finally {
       fetchMock.mockRestore()
     }
+  })
+
+  it('delivers an agent ChangeSet through an opaque one-time grant without applying it', async () => {
+    const bridgeSecret = 'test-agent-bridge-secret-at-least-32-characters'
+    const ticketResponse = await app.request(
+      `/api/v1/trips/${DEMO_TRIP.tripId}/agent-tickets`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      },
+      { JOVLO_MODE: 'demo', AGENT_BRIDGE_SECRET: bridgeSecret },
+    )
+    const ticketBody = (await ticketResponse.json()) as Envelope & {
+      data: { ticket: string; deliveryEndpoint: string; expiresAt: string }
+    }
+    expect(ticketResponse.status).toBe(201)
+    expect(ticketBody.data.ticket).toMatch(/^[0-9a-f]{64}$/)
+    expect(ticketBody.data.ticket).not.toContain(DEMO_TRIP.tripId)
+
+    const changeSet = structuredClone(DEMO_CHANGESET)
+    changeSet.changeSetId = 'c0000000-0000-4000-8000-000000000099'
+    changeSet.idempotencyKey = 'agent-bridge-test-import-v1'
+    const deliveryResponse = await app.request(
+      '/api/v1/agent-imports',
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Jovlo-Agent ${ticketBody.data.ticket}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(changeSet),
+      },
+      { JOVLO_MODE: 'demo', AGENT_BRIDGE_SECRET: bridgeSecret },
+    )
+    const deliveryBody = (await deliveryResponse.json()) as Envelope & {
+      data: { changeSetId: string; status: string; reviewUrl: string }
+    }
+    expect(deliveryResponse.status).toBe(201)
+    expect(deliveryBody.data).toMatchObject({
+      changeSetId: changeSet.changeSetId,
+      status: 'uploaded',
+    })
+    expect(deliveryBody.data.reviewUrl).toContain(`/imports/${changeSet.changeSetId}`)
+
+    const retryResponse = await app.request(
+      '/api/v1/agent-imports',
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Jovlo-Agent ${ticketBody.data.ticket}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(changeSet),
+      },
+      { JOVLO_MODE: 'demo', AGENT_BRIDGE_SECRET: bridgeSecret },
+    )
+    expect(retryResponse.status).toBe(200)
+
+    const differentChangeSet = structuredClone(changeSet)
+    differentChangeSet.changeSetId = 'c0000000-0000-4000-8000-000000000098'
+    differentChangeSet.idempotencyKey = 'agent-bridge-different-import-v1'
+    const replayResponse = await app.request(
+      '/api/v1/agent-imports',
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Jovlo-Agent ${ticketBody.data.ticket}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(differentChangeSet),
+      },
+      { JOVLO_MODE: 'demo', AGENT_BRIDGE_SECRET: bridgeSecret },
+    )
+    const replayBody = (await replayResponse.json()) as Envelope
+    expect(replayResponse.status).toBe(409)
+    expect(replayBody.error?.code).toBe('IDEMPOTENCY_KEY_REUSED')
+
+    const storedResponse = await app.request(
+      `/api/v1/change-sets/${changeSet.changeSetId}`,
+      undefined,
+      { JOVLO_MODE: 'demo', AGENT_BRIDGE_SECRET: bridgeSecret },
+    )
+    const storedBody = (await storedResponse.json()) as Envelope & {
+      data: { changeSet: { changeSetId: string }; status: string }
+    }
+    expect(storedResponse.status).toBe(200)
+    expect(storedBody.data.changeSet.changeSetId).toBe(changeSet.changeSetId)
+    expect(storedBody.data.status).toBe('uploaded')
+  })
+
+  it('rejects a damaged agent ticket without exposing token details', async () => {
+    const response = await app.request(
+      '/api/v1/agent-imports',
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Jovlo-Agent ${'0'.repeat(64)}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(DEMO_CHANGESET),
+      },
+      { JOVLO_MODE: 'demo', AGENT_BRIDGE_SECRET: 'test-agent-bridge-secret-at-least-32-characters' },
+    )
+    const body = (await response.json()) as Envelope & { error: { code: string; message: string } }
+    expect(response.status).toBe(401)
+    expect(body.error.code).toBe('AUTH_REQUIRED')
+    expect(body.error.message).toBe('Agent 投递口令无效或已过期')
+    expect(JSON.stringify(body)).not.toContain('0'.repeat(64))
+  })
+
+  it('rejects an agent payload that exceeds the actual 256KB body limit', async () => {
+    const bridgeSecret = 'test-agent-bridge-secret-at-least-32-characters'
+    const ticketResponse = await app.request(
+      `/api/v1/trips/${DEMO_TRIP.tripId}/agent-tickets`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
+      { JOVLO_MODE: 'demo', AGENT_BRIDGE_SECRET: bridgeSecret },
+    )
+    const ticketBody = (await ticketResponse.json()) as Envelope & { data: { ticket: string } }
+    const response = await app.request(
+      '/api/v1/agent-imports',
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Jovlo-Agent ${ticketBody.data.ticket}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ padding: 'x'.repeat(256 * 1_024) }),
+      },
+      { JOVLO_MODE: 'demo', AGENT_BRIDGE_SECRET: bridgeSecret },
+    )
+    const body = (await response.json()) as Envelope
+    expect(response.status).toBe(413)
+    expect(body.error?.message).toBe('ChangeSet 超过 256KB 限制')
   })
 
   it('returns PUBLICATION_REVOKED for a revoked fixed snapshot', async () => {

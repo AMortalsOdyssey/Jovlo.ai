@@ -104,15 +104,17 @@ function StopEditor({
   stop: TripStop
   place: TripPlaceSnapshot
   onClose: () => void
-  onSave: (stayMinutes: number, publicNote: string) => void
+  onSave: (stayMinutes: number, plannedStart: string, publicNote: string) => void
   onToggleLock: () => void
 }) {
   const [stayMinutes, setStayMinutes] = useState(stop.stayMinutes)
+  const [plannedStart, setPlannedStart] = useState(stop.plannedStart ?? '')
   const [publicNote, setPublicNote] = useState(stop.publicNote ?? '')
+  const durationDelta = stayMinutes - stop.stayMinutes
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    onSave(Math.max(5, Math.min(720, stayMinutes)), publicNote.trim())
+    onSave(Math.max(5, Math.min(720, stayMinutes)), plannedStart, publicNote.trim())
   }
 
   return (
@@ -132,6 +134,14 @@ function StopEditor({
           <button type="button" className="jovlo-button jovlo-button--secondary" onClick={onClose}>关闭</button>
         </header>
         <form onSubmit={submit}>
+          <label>
+            <span>计划到达</span>
+            <input
+              type="time"
+              value={plannedStart}
+              onChange={(event) => setPlannedStart(event.target.value)}
+            />
+          </label>
           <label>
             <span>停留时长（分钟）</span>
             <input
@@ -153,6 +163,11 @@ function StopEditor({
               placeholder="例如停车、预约或游玩提醒"
             />
           </label>
+          <div className="plan-dialog__impact" role="status">
+            <Clock3 aria-hidden="true" size={17} />
+            <span>{durationDelta === 0 ? '保存后重新校验当天时间链' : `当天后续时间预计${durationDelta > 0 ? '顺延' : '提前'} ${Math.abs(durationDelta)} 分钟`}</span>
+            <small>地点未变时，里程与项目预算保持不变</small>
+          </div>
           <div className="plan-dialog__actions">
             <button type="button" className="jovlo-button jovlo-button--secondary" onClick={onToggleLock}>
               {stop.locked ? '解除锁定' : '锁定地点'}
@@ -540,7 +555,7 @@ export function PlanPage() {
                 onSelect={() => { state.selectStop(stop.id); setCandidateId(null) }}
                 actions={{
                   onEdit: () => setEditingStopId(stop.id),
-                  onReplace: () => replacement && state.replaceStop(stop.id, replacement.placeId),
+                  onReplace: () => replacement && state.requestReplaceStop(stop.id, replacement.placeId),
                   onMoveEarlier: () => moveStop(stop, -1),
                   onMoveLater: () => moveStop(stop, 1),
                   onMoveToDay: () => moveToNextDay(stop),
@@ -621,7 +636,7 @@ export function PlanPage() {
       {state.pendingAction ? <ImpactBar delayMinutes={state.pendingAction.impact.durationDeltaMinutes ?? 0} affectedPlaces={state.pendingAction.impact.affectedDayIds.length} budgetDelta={state.pendingAction.impact.budgetDelta} onViewDetails={() => setImpactDetailsOpen(true)} onApply={state.applyPending} onDiscard={state.discardPending} /> : null}
       {impactDetailsOpen && state.pendingAction ? <div className="plan-impact-details" role="dialog" aria-modal="true" aria-label="影响详情"><span>{state.pendingAction.impact.title}</span><strong>{state.pendingAction.impact.description}</strong><p>{formatDistance(state.pendingAction.impact.distanceDeltaMeters ?? 0)} · {formatDuration(Math.abs(state.pendingAction.impact.durationDeltaMinutes ?? 0))} · {formatCurrency(state.pendingAction.impact.budgetDelta ?? 0)}</p><button type="button" className="jovlo-button jovlo-button--primary" onClick={() => setImpactDetailsOpen(false)}>知道了</button></div> : null}
       <Snackbar open={Boolean(state.snackbar)} message={state.snackbar?.message ?? ''} actionLabel={state.snackbar?.actionLabel} onAction={state.snackbar?.actionLabel ? state.undo : undefined} onDismiss={state.dismissSnackbar} />
-      {editingStop && editingPlace ? <StopEditor stop={editingStop} place={editingPlace} onClose={() => setEditingStopId(null)} onToggleLock={() => state.toggleStopLock(editingStop.id)} onSave={(stayMinutes, publicNote) => { state.updateStop(editingStop.id, { stayMinutes, publicNote: publicNote || undefined }); setEditingStopId(null) }} /> : null}
+      {editingStop && editingPlace ? <StopEditor stop={editingStop} place={editingPlace} onClose={() => setEditingStopId(null)} onToggleLock={() => state.toggleStopLock(editingStop.id)} onSave={(stayMinutes, plannedStart, publicNote) => { state.updateStop(editingStop.id, { stayMinutes, plannedStart: plannedStart || undefined, publicNote: publicNote || undefined }); setEditingStopId(null) }} /> : null}
     </>
   )
 }

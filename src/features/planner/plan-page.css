@@ -421,6 +421,22 @@
   font: inherit;
 }
 
+.plan-dialog__impact {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-3);
+  color: var(--brand-text);
+  background: var(--brand-tint);
+  border-left: 3px solid var(--brand);
+  border-radius: var(--radius-control);
+}
+
+.plan-dialog__impact svg { grid-row: 1 / 3; }
+.plan-dialog__impact span { font-weight: 700; }
+.plan-dialog__impact small { color: var(--muted); }
+
 .plan-dialog__actions {
   display: flex;
   justify-content: space-between;

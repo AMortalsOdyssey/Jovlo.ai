@@ -17,6 +17,14 @@
     "run_worker_first": true,
     "not_found_handling": "single-page-application"
   },
+  "d1_databases": [
+    {
+      "binding": "AGENT_GRANTS",
+      "database_name": "jovlo-agent-grants",
+      "database_id": "7183b44e-94cb-40e2-8c72-34e28982b179",
+      "migrations_dir": "worker/migrations"
+    }
+  ],
   "observability": {
     "enabled": true
   },
