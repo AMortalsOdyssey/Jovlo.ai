@@ -85,6 +85,18 @@
   }
 }
 
+.jovlo-copyright {
+  display: flex;
+  min-height: 52px;
+  padding: var(--space-4);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font: 500 11px / 18px var(--font-ui);
+  letter-spacing: 0;
+}
+
 .jovlo-action-menu {
   position: relative;
   display: inline-flex;

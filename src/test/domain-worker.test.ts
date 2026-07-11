@@ -185,6 +185,94 @@ describe('Worker API contract', () => {
     }
   })
 
+  it('retries a temporary AMap rate limit and keeps the road result', async () => {
+    const from = DEMO_TRIP.placeRefs[DEMO_IDS.places.meilan]
+    const to = DEMO_TRIP.placeRefs[DEMO_IDS.places.qilou]
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: '0',
+        info: 'ACCESS_TOO_FREQUENT',
+        infocode: '10004',
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: '1',
+        infocode: '10000',
+        route: { paths: [{ distance: '18500', cost: { duration: '2100' } }] },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    try {
+      const response = await app.request('/api/v1/routes/dry-run', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          dayId: DEMO_IDS.days[0],
+          points: [
+            { endpoint: { kind: 'place', placeId: from.placeId }, coordinate: from.gcj02 },
+            { endpoint: { kind: 'place', placeId: to.placeId }, coordinate: to.gcj02 },
+          ],
+          strategy: '32',
+          inputHash: 'test-amap-retry-route',
+        }),
+      }, { JOVLO_MODE: 'demo', AMAP_WEB_SERVICE_KEY: 'test-secret' })
+      const body = (await response.json()) as Envelope & {
+        data: { providerMode: string; providerNotice: null; legs: Array<{ provider: string }> }
+      }
+      expect(response.status).toBe(200)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(body.data.providerMode).toBe('amap')
+      expect(body.data.providerNotice).toBeNull()
+      expect(body.data.legs[0].provider).toBe('amap')
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('falls back with a concise notice when the AMap daily quota is exhausted', async () => {
+    const from = DEMO_TRIP.placeRefs[DEMO_IDS.places.meilan]
+    const to = DEMO_TRIP.placeRefs[DEMO_IDS.places.qilou]
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      status: '0',
+      info: 'DAILY_QUERY_OVER_LIMIT',
+      infocode: '10003',
+      debug: 'raw provider details must stay private',
+    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    try {
+      const response = await app.request('/api/v1/routes/dry-run', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          dayId: DEMO_IDS.days[0],
+          points: [
+            { endpoint: { kind: 'place', placeId: from.placeId }, coordinate: from.gcj02 },
+            { endpoint: { kind: 'place', placeId: to.placeId }, coordinate: to.gcj02 },
+          ],
+          strategy: '32',
+          inputHash: 'test-amap-quota-fallback',
+        }),
+      }, { JOVLO_MODE: 'demo', AMAP_WEB_SERVICE_KEY: 'test-secret' })
+      const body = (await response.json()) as Envelope & {
+        data: {
+          providerMode: string
+          providerNotice: { code: string; message: string; retryable: boolean; failedLegs: number }
+          legs: Array<{ provider: string }>
+        }
+      }
+      expect(response.status).toBe(200)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(body.data.providerMode).toBe('reference')
+      expect(body.data.providerNotice).toEqual({
+        code: 'quota_exceeded',
+        message: '高德今日额度已用完，已切换参考路线',
+        retryable: false,
+        failedLegs: 1,
+      })
+      expect(body.data.legs[0].provider).toBe('reference')
+      expect(JSON.stringify(body)).not.toContain('DAILY_QUERY_OVER_LIMIT')
+      expect(JSON.stringify(body)).not.toContain('raw provider details')
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
   it('returns PUBLICATION_REVOKED for a revoked fixed snapshot', async () => {
     const response = await app.request('/api/v1/public/jovlo-revoked', undefined, {
       JOVLO_MODE: 'demo',

@@ -13,6 +13,7 @@ import {
   type ReactNode,
 } from 'react'
 import { Link } from 'react-router-dom'
+import { ProductCopyright } from '@/components'
 
 import './feature-pages.css'
 
@@ -25,7 +26,10 @@ type PageShellProps = PropsWithChildren<{
 
 export function PageShell({ children, className = '', width = 'default' }: PageShellProps) {
   return (
-    <main className={`feature-page feature-page--${width} ${className}`.trim()}>{children}</main>
+    <main className={`feature-page feature-page--${width} ${className}`.trim()}>
+      {children}
+      <ProductCopyright className="feature-page-copyright" />
+    </main>
   )
 }
 

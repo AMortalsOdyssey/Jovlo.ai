@@ -3,6 +3,7 @@ import { type FormEvent, useState } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
 
 import { useAuth } from './AuthProvider'
+import { ProductCopyright } from '@/components'
 import './auth.css'
 
 type LoginStep = 'email' | 'sent'
@@ -134,6 +135,7 @@ export function LoginPage() {
 
         {message ? <p className="auth-message" role="alert">{message}</p> : null}
         <p className="auth-privacy">登录即表示你同意仅将邮箱用于账户与行程访问。</p>
+        <ProductCopyright className="auth-copyright" />
       </section>
 
       <aside className="auth-journey" aria-hidden="true">

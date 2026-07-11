@@ -1,5 +1,5 @@
-import { BedDouble, BookOpen, ChevronDown, ChevronUp, Clock3, FileClock, Map as MapIcon, ReceiptText, Settings, Sparkles, TriangleAlert } from 'lucide-react'
-import { useMemo, useState, type FormEvent } from 'react'
+import { BedDouble, BookOpen, ChevronDown, ChevronUp, Clock3, FileClock, Map as MapIcon, ReceiptText, RefreshCcw, Settings, Sparkles, TriangleAlert } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import type { DayHealthStatus, EvidenceTone, FormalMapPoint } from './types'
@@ -19,10 +19,36 @@ import { StopCard } from './StopCard'
 import { TripOverview } from './TripOverview'
 import { TripHeader } from './TripHeader'
 import { buildAmapNavigationUrl } from '@/lib/amap'
+import { apiRequest } from '@/lib/api'
+import { ProductCopyright } from '@/components'
 import { formatCurrency, formatDistance, formatDuration } from '@/lib/format'
 import { currentVersion, selectedDay, useTripStore } from '@/store/useTripStore'
-import type { TripPlaceSnapshot, TripStop } from '@domain'
+import { recalculateTrip, stableHash, type RouteEndpoint, type RouteLeg, type TripPlaceSnapshot, type TripStop } from '@domain'
 import './plan-page.css'
+
+type RouteProviderNotice = {
+  code: 'rate_limited' | 'quota_exceeded' | 'configuration' | 'no_route' | 'unavailable' | 'not_configured'
+  message: string
+  retryable: boolean
+  retryAfterSeconds?: number
+  failedLegs: number
+}
+
+type RouteDryRunResponse = {
+  providerMode: 'amap' | 'mixed' | 'reference'
+  authoritative: boolean
+  legs: RouteLeg[]
+  warning: string | null
+  providerNotice: RouteProviderNotice | null
+  inputHash: string
+}
+
+type RouteRequestPoint = {
+  endpoint: RouteEndpoint
+  coordinate: { crs: 'GCJ02'; lon: number; lat: number }
+}
+
+type LiveRouteResult = RouteDryRunResponse & { tripHash: string }
 
 const HEALTH_STATUS: Record<string, DayHealthStatus> = {
   comfortable: 'comfortable',
@@ -144,31 +170,14 @@ export function PlanPage() {
   const state = useTripStore()
   const day = selectedDay(state)
   const version = currentVersion(state)
-  const schedule = state.derived.daySchedules.find((item) => item.dayId === day.id)
-  const dayLegs = state.derived.routeLegs.filter((leg) => leg.dayId === day.id)
   const [candidateId, setCandidateId] = useState<string | null>(null)
   const [editingStopId, setEditingStopId] = useState<string | null>(null)
   const [impactDetailsOpen, setImpactDetailsOpen] = useState(false)
   const [overviewOpen, setOverviewOpen] = useState(false)
   const [mobileMapCollapsed, setMobileMapCollapsed] = useState(false)
-
-  const daySummaries = state.trip.days.map((item) => {
-    const itemSchedule = state.derived.daySchedules.find((entry) => entry.dayId === item.id)
-    const finalPlace = state.trip.placeRefs[item.stops.at(-1)?.placeId ?? '']
-    const area = item.overnightStay?.label ?? finalPlace?.address?.split('市')[0] ?? '路线待定'
-    const hotel = item.overnightStay?.kind === 'place' ? item.overnightStay.label : undefined
-    return {
-      id: item.id,
-      dayNumber: item.dayIndex,
-      area,
-      hotel,
-      driveDuration: itemSchedule ? formatDuration(itemSchedule.drivingMinutes) : '待计算',
-      riskCount: itemSchedule?.warnings.filter((warning) => warning.severity !== 'info').length ?? 0,
-      healthStatus: HEALTH_STATUS[itemSchedule?.health ?? 'data_unconfirmed'],
-      date: item.date,
-      stopCount: item.stops.length,
-    }
-  })
+  const [routeRetryNonce, setRouteRetryNonce] = useState(0)
+  const [liveRoutes, setLiveRoutes] = useState<Record<string, LiveRouteResult>>({})
+  const routeCache = useRef(new Map<string, RouteDryRunResponse>())
 
   const dayRoutePoints = useMemo<FormalMapPoint[]>(() => {
     const points: FormalMapPoint[] = []
@@ -196,6 +205,137 @@ export function PlanPage() {
     }
     return points
   }, [day, state.trip])
+
+  const routeRequestPoints = useMemo<RouteRequestPoint[]>(() => {
+    const points: RouteRequestPoint[] = []
+    const append = (endpoint: RouteEndpoint, place?: { gcj02: { lon: number; lat: number } }) => {
+      if (!place) return
+      const previous = points.at(-1)
+      if (
+        previous &&
+        previous.coordinate.lon === place.gcj02.lon &&
+        previous.coordinate.lat === place.gcj02.lat
+      ) return
+      points.push({
+        endpoint,
+        coordinate: { crs: 'GCJ02', lon: place.gcj02.lon, lat: place.gcj02.lat },
+      })
+    }
+    const dayIndex = state.trip.days.findIndex((item) => item.id === day.id)
+    const previousStay = dayIndex > 0 ? state.trip.days[dayIndex - 1]?.overnightStay : undefined
+    if (previousStay?.kind === 'place') {
+      append({ kind: 'place', placeId: previousStay.placeId }, state.trip.placeRefs[previousStay.placeId])
+    } else if (previousStay?.kind === 'area') {
+      append({ kind: 'area', areaId: previousStay.areaId }, state.trip.stayAreaRefs[previousStay.areaId])
+    } else {
+      append(
+        { kind: 'place', placeId: state.trip.intent.entryAnchor.placeId },
+        state.trip.placeRefs[state.trip.intent.entryAnchor.placeId],
+      )
+    }
+    day.stops.forEach((stop) => {
+      append({ kind: 'place', placeId: stop.placeId }, state.trip.placeRefs[stop.placeId])
+    })
+    if (day.overnightStay?.kind === 'place') {
+      append({ kind: 'place', placeId: day.overnightStay.placeId }, state.trip.placeRefs[day.overnightStay.placeId])
+    } else if (day.overnightStay?.kind === 'area') {
+      append({ kind: 'area', areaId: day.overnightStay.areaId }, state.trip.stayAreaRefs[day.overnightStay.areaId])
+    } else {
+      append(
+        { kind: 'place', placeId: state.trip.intent.exitAnchor.placeId },
+        state.trip.placeRefs[state.trip.intent.exitAnchor.placeId],
+      )
+    }
+    return points
+  }, [day, state.trip])
+
+  const tripHash = useMemo(() => stableHash(state.trip), [state.trip])
+  const routeInputHash = useMemo(
+    () => stableHash({ tripHash, dayId: day.id, points: routeRequestPoints, strategy: '32' }),
+    [day.id, routeRequestPoints, tripHash],
+  )
+
+  useEffect(() => {
+    if (routeRequestPoints.length < 2 || routeRequestPoints.length > 9) return
+    const cached = routeCache.current.get(routeInputHash)
+    if (cached) {
+      setLiveRoutes((current) => ({
+        ...current,
+        [day.id]: { ...cached, tripHash },
+      }))
+      return
+    }
+
+    const controller = new AbortController()
+    apiRequest<RouteDryRunResponse>('/api/v1/routes/dry-run', {
+      method: 'POST',
+      signal: controller.signal,
+      body: JSON.stringify({
+        dayId: day.id,
+        points: routeRequestPoints,
+        strategy: '32',
+        inputHash: routeInputHash,
+      }),
+    }).then((result) => {
+      routeCache.current.set(routeInputHash, result)
+      setLiveRoutes((current) => ({
+        ...current,
+        [day.id]: { ...result, tripHash },
+      }))
+    }).catch((error: unknown) => {
+      if (controller.signal.aborted) return
+      setLiveRoutes((current) => ({
+        ...current,
+        [day.id]: {
+          providerMode: 'reference',
+          authoritative: false,
+          legs: [],
+          warning: '路线服务暂时不可用，已继续使用参考路线',
+          providerNotice: {
+            code: 'unavailable',
+            message: '路线服务暂时不可用，已继续使用参考路线',
+            retryable: true,
+            retryAfterSeconds: 2,
+            failedLegs: Math.max(0, routeRequestPoints.length - 1),
+          },
+          inputHash: routeInputHash,
+          tripHash,
+        },
+      }))
+      console.warn('Route refresh failed', error instanceof Error ? error.name : 'unknown')
+    })
+    return () => controller.abort()
+  }, [day.id, routeInputHash, routeRequestPoints, routeRetryNonce, tripHash])
+
+  const derived = useMemo(() => {
+    const validRoutes = Object.entries(liveRoutes).filter(([, result]) => result.tripHash === tripHash && result.legs.length)
+    if (!validRoutes.length) return state.derived
+    const refreshedDays = new Set(validRoutes.map(([dayId]) => dayId))
+    const routeLegs = state.derived.routeLegs.filter((leg) => !refreshedDays.has(leg.dayId))
+    validRoutes.forEach(([, result]) => routeLegs.push(...result.legs))
+    return recalculateTrip(state.trip, routeLegs)
+  }, [liveRoutes, state.derived, state.trip, tripHash])
+
+  const currentRouteResult = liveRoutes[day.id]?.tripHash === tripHash ? liveRoutes[day.id] : undefined
+  const schedule = derived.daySchedules.find((item) => item.dayId === day.id)
+  const dayLegs = derived.routeLegs.filter((leg) => leg.dayId === day.id)
+  const daySummaries = state.trip.days.map((item) => {
+    const itemSchedule = derived.daySchedules.find((entry) => entry.dayId === item.id)
+    const finalPlace = state.trip.placeRefs[item.stops.at(-1)?.placeId ?? '']
+    const area = item.overnightStay?.label ?? finalPlace?.address?.split('市')[0] ?? '路线待定'
+    const hotel = item.overnightStay?.kind === 'place' ? item.overnightStay.label : undefined
+    return {
+      id: item.id,
+      dayNumber: item.dayIndex,
+      area,
+      hotel,
+      driveDuration: itemSchedule ? formatDuration(itemSchedule.drivingMinutes) : '待计算',
+      riskCount: itemSchedule?.warnings.filter((warning) => warning.severity !== 'info').length ?? 0,
+      healthStatus: HEALTH_STATUS[itemSchedule?.health ?? 'data_unconfirmed'],
+      date: item.date,
+      stopCount: item.stops.length,
+    }
+  })
 
   const overviewRoutePoints = useMemo<FormalMapPoint[]>(() => {
     const points: FormalMapPoint[] = []
@@ -319,10 +459,10 @@ export function PlanPage() {
 
   const budgetPanel = (
     <section className="plan-mobile-panel" aria-label="预算摘要">
-      <header><span>当前估算</span><strong>{formatCurrency(state.derived.budget.total.expected)}</strong></header>
-      <div className="plan-budget-range"><span>{formatCurrency(state.derived.budget.total.low)}</span><span>至</span><span>{formatCurrency(state.derived.budget.total.high)}</span></div>
-      <dl>{state.derived.budget.categories.map((item) => <div key={item.category}><dt>{CATEGORY_LABEL[item.category] ?? item.category}</dt><dd>{formatCurrency(item.amount.expected)}</dd></div>)}</dl>
-      <p>已记账 {formatCurrency(totalSpent)} · {formatDistance(state.derived.budget.totalDistanceMeters)}</p>
+      <header><span>当前估算</span><strong>{formatCurrency(derived.budget.total.expected)}</strong></header>
+      <div className="plan-budget-range"><span>{formatCurrency(derived.budget.total.low)}</span><span>至</span><span>{formatCurrency(derived.budget.total.high)}</span></div>
+      <dl>{derived.budget.categories.map((item) => <div key={item.category}><dt>{CATEGORY_LABEL[item.category] ?? item.category}</dt><dd>{formatCurrency(item.amount.expected)}</dd></div>)}</dl>
+      <p>已记账 {formatCurrency(totalSpent)} · {formatDistance(derived.budget.totalDistanceMeters)}</p>
       <Link className="jovlo-button jovlo-button--primary" to={`/trips/${state.trip.tripId}/budget`}>打开预算与记账</Link>
     </section>
   )
@@ -348,11 +488,29 @@ export function PlanPage() {
           driving: formatDuration(schedule?.drivingMinutes ?? 0),
           playing: formatDuration(schedule?.activityMinutes ?? 0),
           buffer: schedule ? formatDuration(Math.max(0, schedule.freeMinutes)) : '待确认',
-          budget: formatCurrency(state.derived.budget.total.expected / state.trip.days.length),
+          budget: formatCurrency(derived.budget.total.expected / state.trip.days.length),
         }}
         status={HEALTH_STATUS[schedule?.health ?? 'data_unconfirmed']}
       />
-      {schedule?.warnings.length ? <div className="plan-warning-strip" title={schedule.warnings[0].message}><TriangleAlert aria-hidden="true" size={15} /><span>{compactWarning(schedule.warnings[0].message)}</span></div> : null}
+      {currentRouteResult?.providerNotice || schedule?.warnings.length ? (
+        <div className="plan-warning-strip" role="status">
+          <TriangleAlert aria-hidden="true" size={15} />
+          <span>{currentRouteResult?.providerNotice?.message ?? compactWarning(schedule!.warnings[0].message)}</span>
+          {currentRouteResult?.providerNotice?.retryable ? (
+            <button
+              type="button"
+              aria-label="重新计算高德路线"
+              title="重新计算高德路线"
+              onClick={() => {
+                routeCache.current.delete(routeInputHash)
+                setRouteRetryNonce((value) => value + 1)
+              }}
+            >
+              <RefreshCcw aria-hidden="true" size={15} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <RouteTimeline>
         {day.stops.map((stop, index) => {
           const place = state.trip.placeRefs[stop.placeId]
@@ -412,15 +570,16 @@ export function PlanPage() {
           </div>
         ) : null}
       </RouteTimeline>
+      <ProductCopyright className="plan-product-copyright" />
     </div>
   )
 
   const overview = (
     <TripOverview
       days={daySummaries}
-      totalDistance={formatDistance(state.derived.budget.totalDistanceMeters)}
-      totalDriving={formatDuration(state.derived.daySchedules.reduce((sum, item) => sum + item.drivingMinutes, 0))}
-      totalBudget={formatCurrency(state.derived.budget.total.expected)}
+      totalDistance={formatDistance(derived.budget.totalDistanceMeters)}
+      totalDriving={formatDuration(derived.daySchedules.reduce((sum, item) => sum + item.drivingMinutes, 0))}
+      totalBudget={formatCurrency(derived.budget.total.expected)}
       totalStops={state.trip.days.reduce((sum, item) => sum + item.stops.length, 0)}
       onSelectDay={updateDay}
     />

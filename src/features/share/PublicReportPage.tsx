@@ -167,7 +167,7 @@ export function PublicReportPage() {
         </section>
       </article>
 
-      <footer className="public-footer report-footer"><a href="/"><img src="/jovlo-mark.svg" alt="" />用 Jovlo 制作</a><span>报告第 {report.generationNo} 版 · 固定快照</span></footer>
+      <footer className="public-footer report-footer"><a href="/"><img src="/jovlo-mark.svg" alt="" />用 Jovlo 制作</a><span>© 2026 Jovlo.ai · 报告第 {report.generationNo} 版 · 固定快照</span></footer>
     </main>
   )
 }

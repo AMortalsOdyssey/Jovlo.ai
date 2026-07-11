@@ -247,6 +247,39 @@
   flex: 0 0 auto;
 }
 
+.plan-warning-strip > span {
+  min-width: 0;
+  flex: 1;
+}
+
+.plan-warning-strip button {
+  display: grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  color: inherit;
+  background: rgb(255 255 255 / 58%);
+  border: 0;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-out), transform var(--motion-press) var(--ease-out);
+}
+
+.plan-warning-strip button:hover {
+  background: var(--surface);
+}
+
+.plan-warning-strip button:active {
+  transform: rotate(-12deg) scale(0.96);
+}
+
+.plan-product-copyright {
+  margin-top: var(--space-6);
+  border-top: 1px solid var(--line);
+}
+
 .plan-route-fragment {
   display: contents;
 }

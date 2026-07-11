@@ -781,8 +781,9 @@
 .public-route-spine .feature-route-content { padding: var(--space-1) 0 var(--space-4); }
 .public-nav-link { display: inline-flex; min-height: var(--target-min); align-items: center; gap: var(--space-1); padding: 0 var(--space-2); color: var(--sky-text); border-radius: var(--radius-control); font-size: var(--text-supporting-size); font-weight: 700; text-decoration: none; }
 .public-nav-link:hover { background: var(--sky-tint); }
-.public-footer { display: flex; min-height: 64px; align-items: center; justify-content: center; padding: var(--space-3); border-top: 1px solid var(--line); }
+.public-footer { display: flex; min-height: 64px; align-items: center; justify-content: center; padding: var(--space-3); border-top: 1px solid var(--line); gap: var(--space-3); flex-wrap: wrap; }
 .public-footer a { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--muted); font-size: var(--text-supporting-size); text-decoration: none; }
+.public-footer > span { color: var(--muted); font-size: var(--text-supporting-size); }
 .public-footer img { width: 18px; height: 18px; }
 .public-footer a:hover { color: var(--brand-text); }
 

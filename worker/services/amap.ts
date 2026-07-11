@@ -8,6 +8,56 @@ const AMAP_SERVICE_PREFIX = '/_AMapService'
 const AMAP_PROXY_TIMEOUT_MS = 8_000
 const AMAP_PROXY_MAX_RESPONSE_BYTES = 1_000_000
 const AMAP_PROXY_MAX_QUERY_BYTES = 2_048
+const AMAP_ROUTE_CONCURRENCY = 2
+const AMAP_ROUTE_START_INTERVAL_MS = 420
+const AMAP_ROUTE_MAX_ATTEMPTS = 3
+const AMAP_ROUTE_RETRY_BASE_MS = 350
+
+type AmapFailureKind = 'rate-limit' | 'quota' | 'configuration' | 'no-route' | 'unavailable'
+
+export type RouteProviderNotice = {
+  code: 'rate_limited' | 'quota_exceeded' | 'configuration' | 'no_route' | 'unavailable' | 'not_configured'
+  message: string
+  retryable: boolean
+  retryAfterSeconds?: number
+  failedLegs: number
+}
+
+class AmapRouteError extends Error {
+  constructor(
+    readonly kind: AmapFailureKind,
+    readonly retryable: boolean,
+    readonly retryAfterSeconds?: number,
+  ) {
+    super(kind)
+    this.name = 'AmapRouteError'
+  }
+}
+
+const AMAP_RATE_LIMIT_CODES = new Set([
+  '10004',
+  '10014',
+  '10015',
+  '10019',
+  '10020',
+  '10021',
+  '10029',
+])
+const AMAP_QUOTA_CODES = new Set(['10003', '10044', '40000', '40002', '40003'])
+const AMAP_CONFIGURATION_CODES = new Set([
+  '10001',
+  '10002',
+  '10005',
+  '10006',
+  '10007',
+  '10009',
+  '10012',
+  '10013',
+  '10026',
+  '10041',
+])
+const AMAP_NO_ROUTE_CODES = new Set(['20800', '20801', '20802', '20803'])
+const AMAP_TRANSIENT_CODES = new Set(['10016', '10017', '20003'])
 
 type AmapProxyRule = {
   upstreamOrigin: 'https://restapi.amap.com' | 'https://webapi.amap.com'
@@ -323,7 +373,39 @@ function referenceLegs(input: RouteDryRunRequest): RouteLeg[] {
   })
 }
 
-async function fetchAmapLeg(
+function classifyAmapFailure(infocode?: string): AmapRouteError {
+  const code = infocode ?? ''
+  if (AMAP_RATE_LIMIT_CODES.has(code)) return new AmapRouteError('rate-limit', true, 2)
+  if (AMAP_QUOTA_CODES.has(code)) return new AmapRouteError('quota', false)
+  if (AMAP_CONFIGURATION_CODES.has(code)) return new AmapRouteError('configuration', false)
+  if (AMAP_NO_ROUTE_CODES.has(code)) return new AmapRouteError('no-route', false)
+  if (AMAP_TRANSIENT_CODES.has(code) || /^3\d{4}$/.test(code)) {
+    return new AmapRouteError('unavailable', true, 2)
+  }
+  return new AmapRouteError('no-route', false)
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+function createAmapRequestGate() {
+  let queue = Promise.resolve()
+  let nextStartAt = 0
+  return async () => {
+    const slot = queue.then(async () => {
+      const waitMs = Math.max(0, nextStartAt - Date.now())
+      if (waitMs) await sleep(waitMs)
+      nextStartAt = Date.now() + AMAP_ROUTE_START_INTERVAL_MS
+    })
+    queue = slot.catch(() => undefined)
+    await slot
+  }
+}
+
+const waitForAmapRequestStart = createAmapRequestGate()
+
+async function fetchAmapLegOnce(
   input: RouteDryRunRequest,
   index: number,
   key: string,
@@ -342,39 +424,29 @@ async function fetchAmapLeg(
   try {
     response = await fetch(url, { signal: controller.signal })
   } catch {
-    throw new AppError('ROUTE_PROVIDER_UNAVAILABLE', '道路算路服务暂时不可用', 503, {
-      retryable: true,
-      userAction: '可先保存草稿，稍后重算',
-    })
+    throw new AmapRouteError('unavailable', true, 2)
   } finally {
     clearTimeout(timer)
   }
   if (!response.ok) {
-    throw new AppError('ROUTE_PROVIDER_UNAVAILABLE', '道路算路服务暂时不可用', 503, {
-      retryable: response.status >= 500,
-      userAction: '可先保存草稿，稍后重算',
-    })
+    if (response.status === 429) throw new AmapRouteError('rate-limit', true, 2)
+    throw new AmapRouteError('unavailable', response.status >= 500, 2)
   }
-  const parsed = AMapResponseSchema.safeParse(await response.json())
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch {
+    throw new AmapRouteError('unavailable', true, 2)
+  }
+  const parsed = AMapResponseSchema.safeParse(body)
   if (!parsed.success) {
-    throw new AppError('ROUTE_PROVIDER_UNAVAILABLE', '道路 Provider 返回了未知格式', 502, {
-      retryable: true,
-    })
+    throw new AmapRouteError('unavailable', true, 2)
   }
   const result = parsed.data
-  if (['10003', '10004', '10020', '10021'].includes(result.infocode ?? '')) {
-    throw new AppError('ROUTE_QUOTA_EXCEEDED', '道路算路配额暂不可用', 429, {
-      retryable: true,
-      userAction: '请稍后重试',
-    })
-  }
   const path = result.route?.paths?.[0]
   const durationSeconds = path?.duration ?? path?.cost?.duration
   if (result.status !== '1' || !path || durationSeconds === undefined) {
-    throw new AppError('ROUTE_NO_DATA', '该路段没有可用道路结果', 422, {
-      userAction: '请检查地点坐标或调整路线',
-      details: { infocode: result.infocode, info: result.info },
-    })
+    throw classifyAmapFailure(result.infocode)
   }
   return RouteLegSchema.parse({
     id: crypto.randomUUID(),
@@ -396,24 +468,136 @@ async function fetchAmapLeg(
   })
 }
 
+async function fetchAmapLeg(
+  input: RouteDryRunRequest,
+  index: number,
+  key: string,
+  waitForStart: () => Promise<void>,
+): Promise<RouteLeg> {
+  let lastError = new AmapRouteError('unavailable', true, 2)
+  for (let attempt = 0; attempt < AMAP_ROUTE_MAX_ATTEMPTS; attempt += 1) {
+    await waitForStart()
+    try {
+      return await fetchAmapLegOnce(input, index, key)
+    } catch (error) {
+      lastError = error instanceof AmapRouteError
+        ? error
+        : new AmapRouteError('unavailable', true, 2)
+      if (!lastError.retryable || attempt === AMAP_ROUTE_MAX_ATTEMPTS - 1) break
+      const backoff = AMAP_ROUTE_RETRY_BASE_MS * 2 ** attempt
+      const jitter = Math.floor(Math.random() * 120)
+      await sleep(backoff + jitter)
+    }
+  }
+  throw lastError
+}
+
+function providerNotice(kind: AmapFailureKind, failedLegs: number): RouteProviderNotice {
+  switch (kind) {
+    case 'rate-limit':
+      return {
+        code: 'rate_limited',
+        message: '高德请求过于频繁，已切换参考路线',
+        retryable: true,
+        retryAfterSeconds: 2,
+        failedLegs,
+      }
+    case 'quota':
+      return {
+        code: 'quota_exceeded',
+        message: '高德今日额度已用完，已切换参考路线',
+        retryable: false,
+        failedLegs,
+      }
+    case 'configuration':
+      return {
+        code: 'configuration',
+        message: '高德路线权限暂不可用，已切换参考路线',
+        retryable: false,
+        failedLegs,
+      }
+    case 'no-route':
+      return {
+        code: 'no_route',
+        message: '部分路段暂无道路结果，已使用参考估算',
+        retryable: false,
+        failedLegs,
+      }
+    default:
+      return {
+        code: 'unavailable',
+        message: '高德路线服务暂时不可用，已切换参考路线',
+        retryable: true,
+        retryAfterSeconds: 2,
+        failedLegs,
+      }
+  }
+}
+
+const NOTICE_PRIORITY: Record<AmapFailureKind, number> = {
+  quota: 5,
+  configuration: 4,
+  'rate-limit': 3,
+  unavailable: 2,
+  'no-route': 1,
+}
+
 export async function calculateRouteLegs(input: RouteDryRunRequest, env: Env) {
+  const fallbackLegs = referenceLegs(input)
   if (!env.AMAP_WEB_SERVICE_KEY) {
+    const notice: RouteProviderNotice = {
+      code: 'not_configured',
+      message: '高德路线暂未启用，当前显示参考路线',
+      retryable: false,
+      failedLegs: fallbackLegs.length,
+    }
     return {
       providerMode: 'reference' as const,
       authoritative: false,
-      legs: referenceLegs(input),
-      warning: 'AMAP_WEB_SERVICE_KEY 未配置，返回人工参考/直线走廊估算，不可标记为已验证道路结果',
+      legs: fallbackLegs,
+      warning: notice.message,
+      providerNotice: notice,
     }
   }
-  const legs = await Promise.all(
-    input.points.slice(0, -1).map((_, index) =>
-      fetchAmapLeg(input, index, env.AMAP_WEB_SERVICE_KEY as string),
-    ),
+
+  const legs = [...fallbackLegs]
+  const failures: AmapFailureKind[] = []
+  let nextIndex = 0
+  let terminalFailure: AmapFailureKind | null = null
+  const worker = async () => {
+    while (nextIndex < legs.length) {
+      const index = nextIndex
+      nextIndex += 1
+      if (terminalFailure) {
+        failures.push(terminalFailure)
+        continue
+      }
+      try {
+        legs[index] = await fetchAmapLeg(
+          input,
+          index,
+          env.AMAP_WEB_SERVICE_KEY as string,
+          waitForAmapRequestStart,
+        )
+      } catch (error) {
+        const failure = error instanceof AmapRouteError ? error : new AmapRouteError('unavailable', true, 2)
+        failures.push(failure.kind)
+        if (failure.kind === 'quota' || failure.kind === 'configuration') terminalFailure = failure.kind
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(AMAP_ROUTE_CONCURRENCY, legs.length) }, () => worker()),
   )
+
+  const amapLegCount = legs.filter((leg) => leg.provider === 'amap').length
+  const primaryFailure = failures.sort((left, right) => NOTICE_PRIORITY[right] - NOTICE_PRIORITY[left])[0]
+  const notice = primaryFailure ? providerNotice(primaryFailure, legs.length - amapLegCount) : null
   return {
-    providerMode: 'amap' as const,
-    authoritative: true,
+    providerMode: amapLegCount === legs.length ? 'amap' as const : amapLegCount > 0 ? 'mixed' as const : 'reference' as const,
+    authoritative: amapLegCount === legs.length,
     legs,
-    warning: null,
+    warning: notice?.message ?? null,
+    providerNotice: notice,
   }
 }
