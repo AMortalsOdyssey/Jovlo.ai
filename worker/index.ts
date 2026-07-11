@@ -167,13 +167,12 @@ const demoPublications = new Map<string, DemoPublication>([
 
 const app = new Hono<AppBindings>()
 
+// AMap JSAPI 2.0 uses an internal javascript: bootstrap for its WebGL base-map renderer.
 const CONTENT_SECURITY_POLICY =
-  "default-src 'self'; script-src 'self' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://restapi.amap.com https://*.amap.com https://*.autonavi.com; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+  "default-src 'self'; script-src 'self' 'unsafe-inline' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://restapi.amap.com https://*.amap.com https://*.autonavi.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
-function setSecurityHeaders(headers: Headers, currentRequestId: string, mode: RuntimeMode) {
-  const contentSecurityPolicy = mode === 'demo'
-    ? CONTENT_SECURITY_POLICY.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
-    : CONTENT_SECURITY_POLICY
+function setSecurityHeaders(headers: Headers, currentRequestId: string) {
+  const contentSecurityPolicy = CONTENT_SECURITY_POLICY
   headers.set('x-request-id', currentRequestId)
   headers.set('x-content-type-options', 'nosniff')
   headers.set('referrer-policy', 'strict-origin-when-cross-origin')
@@ -194,7 +193,7 @@ app.use('*', async (context, next) => {
   context.set('requestId', requestId(context))
   context.set('mode', runtimeMode(context.env))
   const responseHeaders = new Headers()
-  setSecurityHeaders(responseHeaders, context.get('requestId'), context.get('mode'))
+  setSecurityHeaders(responseHeaders, context.get('requestId'))
   responseHeaders.forEach((value, name) => context.header(name, value))
 
   const origin = context.req.header('origin')
@@ -268,7 +267,7 @@ app.notFound(async (context) => {
   if (isAssetRequest && context.env.ASSETS) {
     const assetResponse = await context.env.ASSETS.fetch(context.req.raw)
     const headers = new Headers(assetResponse.headers)
-    setSecurityHeaders(headers, context.get('requestId'), context.get('mode'))
+    setSecurityHeaders(headers, context.get('requestId'))
     return new Response(assetResponse.body, {
       status: assetResponse.status,
       statusText: assetResponse.statusText,

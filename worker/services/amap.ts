@@ -49,7 +49,18 @@ const AMAP_PROXY_RULES: ReadonlyMap<string, AmapProxyRule> = new Map([
     '/v3/log/init',
     {
       upstreamOrigin: 'https://restapi.amap.com',
-      queryParameters: queryParameters('eventId', 'product', 't', 'resolution', 'mob', 'vt', 'dpr', 'scale'),
+      queryParameters: queryParameters(
+        'eventId',
+        'product',
+        't',
+        'resolution',
+        'mob',
+        'vt',
+        'dpr',
+        'scale',
+        'label',
+        'value',
+      ),
     },
   ],
   [
