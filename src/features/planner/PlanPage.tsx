@@ -1,4 +1,4 @@
-import { BedDouble, BookOpen, ChevronDown, ChevronUp, FileClock, Map as MapIcon, ReceiptText, Settings, Sparkles } from 'lucide-react'
+import { BedDouble, BookOpen, ChevronDown, ChevronUp, Clock3, FileClock, Map as MapIcon, ReceiptText, Settings, Sparkles, TriangleAlert } from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
@@ -51,6 +51,11 @@ function evidenceTone(place: TripPlaceSnapshot): EvidenceTone {
 function evidenceLabel(place: TripPlaceSnapshot) {
   if (!place.verifiedAt) return '待核验'
   return place.sourceIds.length > 1 ? `${place.sourceIds.length} 源一致` : '单一来源'
+}
+
+function compactWarning(message: string) {
+  if (message.includes('参考或区域中心估算')) return '参考估算 · 非实时路况'
+  return message
 }
 
 function placeCoordinate(place?: TripPlaceSnapshot) {
@@ -336,18 +341,18 @@ export function PlanPage() {
     <div className="plan-timeline-shell">
       <div className="plan-day-heading">
         <div><span>{day.date ?? '日期待定'}</span><h1>Day {day.dayIndex} · {daySummaries.find((item) => item.id === day.id)?.area}</h1></div>
-        <small>预计 {schedule?.expectedEndTime ?? '--:--'} 结束</small>
+        <small aria-label={`预计 ${schedule?.expectedEndTime ?? '--:--'} 结束`}><Clock3 aria-hidden="true" size={14} />{schedule?.expectedEndTime ?? '--:--'}</small>
       </div>
       <DayHealthBar
         metrics={{
           driving: formatDuration(schedule?.drivingMinutes ?? 0),
           playing: formatDuration(schedule?.activityMinutes ?? 0),
-          buffer: schedule ? `${Math.max(0, schedule.freeMinutes)} min` : '待确认',
+          buffer: schedule ? formatDuration(Math.max(0, schedule.freeMinutes)) : '待确认',
           budget: formatCurrency(state.derived.budget.total.expected / state.trip.days.length),
         }}
         status={HEALTH_STATUS[schedule?.health ?? 'data_unconfirmed']}
       />
-      {schedule?.warnings.length ? <div className="plan-warning-strip">{schedule.warnings[0].message}</div> : null}
+      {schedule?.warnings.length ? <div className="plan-warning-strip" title={schedule.warnings[0].message}><TriangleAlert aria-hidden="true" size={15} /><span>{compactWarning(schedule.warnings[0].message)}</span></div> : null}
       <RouteTimeline>
         {day.stops.map((stop, index) => {
           const place = state.trip.placeRefs[stop.placeId]

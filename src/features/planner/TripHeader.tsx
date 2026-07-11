@@ -13,7 +13,6 @@ import {
 } from 'lucide-react'
 
 import { ActionMenu, IconButton, type ActionMenuItem } from '../../components'
-import jovloLogoUrl from '../../../brand/current/jovlo-logo.svg?url'
 import type { SaveStatus } from './types'
 import './planner.css'
 
@@ -42,7 +41,7 @@ export function TripHeader({
   title,
   version,
   saveStatus,
-  logoSrc = jovloLogoUrl,
+  logoSrc = '/jovlo-mark.svg',
   onBack,
   onImport,
   onHistory,

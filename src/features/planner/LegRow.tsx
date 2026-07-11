@@ -1,4 +1,4 @@
-import { CarFront, Footprints, Navigation, Route } from 'lucide-react'
+import { CarFront, Clock3, Footprints, Navigation, Route, Ruler, Timer } from 'lucide-react'
 
 import type { TravelMode } from './types'
 import './planner.css'
@@ -64,7 +64,16 @@ export function LegRow({
               <span className="jovlo-skeleton" aria-hidden="true" />
             </span>
           ) : (
-            <span className={status === 'error' ? 'jovlo-leg-row__error' : 'jovlo-numeric'}>{description}</span>
+            status === 'error' ? (
+              <span className="jovlo-leg-row__error">{description}</span>
+            ) : (
+              <span className="jovlo-leg-row__metrics jovlo-numeric" aria-hidden="true">
+                <span title="路段距离"><Ruler size={14} />{distance ?? '待确认'}</span>
+                <span title="驾驶耗时"><Timer size={14} />{duration ?? '待确认'}</span>
+                {eta ? <span title="预计到达"><Clock3 size={14} />{eta}</span> : null}
+                {estimated ? <span className="jovlo-leg-row__estimate" title="参考估算">估</span> : null}
+              </span>
+            )
           )}
         </button>
         <button

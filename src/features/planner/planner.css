@@ -137,15 +137,13 @@
 
 .jovlo-trip-header__brand {
   display: block;
-  width: 104px;
+  width: 32px;
   height: 32px;
-  overflow: hidden;
   flex: 0 0 auto;
 }
 
 .jovlo-trip-header__brand img {
-  width: 104px;
-  max-width: none;
+  width: 32px;
   height: 32px;
   object-fit: contain;
 }
@@ -158,11 +156,9 @@
 }
 
 .jovlo-trip-header__trip strong {
-  max-width: 320px;
-  overflow: hidden;
+  max-width: 420px;
   font: 700 var(--text-panel-size) / var(--text-panel-line) var(--font-ui);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .jovlo-trip-header__version {
@@ -357,7 +353,7 @@ button.jovlo-day-health:hover {
   min-width: 0;
   gap: var(--space-3);
   align-items: center;
-  overflow: hidden;
+  flex-wrap: wrap;
 }
 
 .jovlo-day-health__metric {
@@ -366,6 +362,11 @@ button.jovlo-day-health:hover {
   gap: var(--space-1);
   align-items: baseline;
   white-space: nowrap;
+}
+
+.jovlo-day-health__metric-icon {
+  display: none;
+  color: var(--sea-text);
 }
 
 .jovlo-day-health__metric-label {
@@ -539,13 +540,10 @@ button.jovlo-day-health:hover {
 }
 
 .jovlo-stop-card__name {
-  display: -webkit-box;
+  display: block;
   min-width: 0;
-  overflow: hidden;
   font: 700 var(--text-panel-size) / var(--text-panel-line) var(--font-ui);
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .jovlo-stop-card__time,
@@ -553,6 +551,20 @@ button.jovlo-day-health:hover {
   color: var(--muted);
   font-size: var(--text-supporting-size);
   line-height: var(--text-supporting-line);
+}
+
+.jovlo-stop-card__time {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.jovlo-stop-card__time > span {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  white-space: nowrap;
 }
 
 .jovlo-stop-card__summary {
@@ -589,9 +601,7 @@ button.jovlo-day-health:hover {
 
 .jovlo-stop-card__tags {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .jovlo-stop-card__actions {
@@ -695,10 +705,37 @@ button.jovlo-day-health:hover {
 .jovlo-leg-row__details {
   min-width: 0;
   padding: var(--space-2) var(--space-3);
-  overflow: hidden;
   text-align: left;
-  text-overflow: ellipsis;
+}
+
+.jovlo-leg-row__metrics {
+  display: flex;
+  min-width: 0;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.jovlo-leg-row__metrics > span {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
   white-space: nowrap;
+}
+
+.jovlo-leg-row__metrics svg {
+  color: var(--sea-text);
+}
+
+.jovlo-leg-row__estimate {
+  display: grid !important;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  color: var(--sun-text);
+  background: var(--sun-tint);
+  border-radius: 50%;
+  font: 700 10px / 1 var(--font-ui);
 }
 
 .jovlo-leg-row__details:disabled {
@@ -980,21 +1017,21 @@ button.jovlo-day-health:hover {
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  min-width: 80px;
+  min-width: 60px;
   height: var(--target-min);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-2);
   gap: var(--space-1);
   align-items: center;
-  color: var(--muted);
+  color: var(--cocoa-text);
   background: transparent;
   border: 0;
   border-bottom: 3px solid transparent;
+  box-shadow: inset -1px 0 0 rgb(223 195 165 / 55%);
 }
 
 .jovlo-mobile-day-strip__day > span {
-  overflow: hidden;
   font-size: var(--text-supporting-size);
-  text-overflow: ellipsis;
+  font-weight: 550;
   white-space: nowrap;
 }
 
@@ -1007,7 +1044,7 @@ button.jovlo-day-health:hover {
   position: sticky;
   z-index: 1;
   left: 0;
-  min-width: 88px;
+  min-width: 72px;
   grid-template-columns: auto auto;
   justify-content: center;
   color: var(--brand-text);
@@ -1632,11 +1669,10 @@ button.jovlo-day-health:hover {
   .jovlo-trip-header {
     padding: 0 var(--space-2);
     gap: var(--space-1);
-    overflow: hidden;
   }
 
   .jovlo-trip-header__identity {
-    gap: 0;
+    gap: var(--space-1);
   }
 
   .jovlo-trip-header__version,
@@ -1646,23 +1682,26 @@ button.jovlo-day-health:hover {
 
   .jovlo-trip-header__brand {
     display: block;
-    width: 32px;
-    min-width: 32px;
-    height: 32px;
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
   }
 
   .jovlo-trip-header__brand img {
-    width: 107px;
-    max-width: none;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     object-fit: contain;
-    object-position: left center;
+  }
+
+  .jovlo-trip-header__trip {
+    flex: 1 1 auto;
   }
 
   .jovlo-trip-header__trip strong {
-    max-width: 104px;
+    max-width: none;
     font-size: var(--text-body-size);
-    line-height: var(--text-body-line);
+    line-height: 18px;
+    white-space: normal;
   }
 
   .jovlo-trip-header__commands {
@@ -1670,21 +1709,27 @@ button.jovlo-day-health:hover {
   }
 
   .jovlo-trip-header__status {
-    width: 68px;
+    width: 36px;
+    min-width: 36px;
     padding: var(--space-1);
-    overflow: hidden;
   }
 
   .jovlo-trip-header__status span {
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: none;
   }
 
   .jovlo-trip-header__save {
-    padding: var(--space-2);
+    width: var(--target-min);
+    min-width: var(--target-min);
+    padding: 0;
+    justify-content: center;
   }
 
   .jovlo-trip-header__save svg {
+    display: block;
+  }
+
+  .jovlo-trip-header__save span {
     display: none;
   }
 
@@ -1694,18 +1739,64 @@ button.jovlo-day-health:hover {
 
   .jovlo-day-health {
     padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
   }
 
   .jovlo-day-health__metrics {
-    gap: var(--space-2);
+    gap: var(--space-2) var(--space-3);
+    flex-wrap: nowrap;
   }
 
   .jovlo-day-health__metric-label {
     display: none;
   }
 
+  .jovlo-day-health__metric-icon {
+    display: block;
+  }
+
+  .jovlo-day-health__metric {
+    gap: 3px;
+    font-size: 13px;
+  }
+
+  .jovlo-day-health__status {
+    padding: var(--space-1) 6px;
+  }
+
   .jovlo-route-timeline__items {
     padding: var(--space-3);
+  }
+
+  .jovlo-leg-row__content {
+    grid-template-columns: minmax(0, 1fr) var(--target-min);
+  }
+
+  .jovlo-leg-row__details {
+    padding-right: var(--space-1);
+    font-size: 13px;
+  }
+
+  .jovlo-leg-row__metrics {
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .jovlo-leg-row__navigate {
+    width: var(--target-min);
+    padding: 0;
+    justify-content: center;
+  }
+
+  .jovlo-leg-row__navigate span {
+    display: none;
+  }
+
+  .jovlo-stop-card__select {
+    padding: var(--space-3) 0 var(--space-3) var(--space-3);
+  }
+
+  .jovlo-stop-card__time {
+    gap: var(--space-2);
   }
 
   .jovlo-route-timeline__items::before {
@@ -1760,6 +1851,12 @@ button.jovlo-day-health:hover {
 
   .jovlo-impact-bar__summary-compact {
     display: inline;
+  }
+
+  .jovlo-impact-bar__summary {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .jovlo-impact-bar__action span {
@@ -1945,25 +2042,28 @@ button.jovlo-day-health:hover {
     grid-template-rows: clamp(180px, 30dvh, 240px) minmax(0, 1fr);
   }
 
-  .jovlo-trip-header__trip strong {
-    max-width: 80px;
+  .jovlo-trip-header__brand {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
   }
 
-  .jovlo-trip-header__status {
-    width: 40px;
-    min-width: 40px;
+  .jovlo-trip-header__brand img {
+    width: 26px;
+    height: 26px;
   }
 
-  .jovlo-trip-header__status span {
-    display: none;
+  .jovlo-day-health__metrics {
+    gap: var(--space-1) var(--space-2);
   }
 
-  .jovlo-trip-header__save {
+  .jovlo-day-health__metric {
     font-size: var(--text-supporting-size);
   }
 
-  .jovlo-day-health__metric:nth-child(3) {
-    display: none;
+  .jovlo-day-health__metric-icon {
+    width: 14px;
+    height: 14px;
   }
 
   .jovlo-impact-bar__summary {
@@ -1972,12 +2072,8 @@ button.jovlo-day-health:hover {
 }
 
 @media (max-width: 350px) {
-  .jovlo-trip-header__trip strong {
-    max-width: 48px;
-  }
-
   .jovlo-trip-header__status {
-    width: var(--target-min);
+    display: none;
   }
 
 }

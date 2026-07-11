@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { CarFront, Hourglass, MapPinned, WalletCards } from 'lucide-react'
 
 import type { DayHealthStatus } from './types'
 import './planner.css'
@@ -25,11 +26,11 @@ const STATUS_LABELS: Record<DayHealthStatus, string> = {
   unconfirmed: '数据待确认',
 }
 
-const METRIC_LABELS: Array<[keyof DayHealthMetrics, string]> = [
-  ['driving', '驾驶'],
-  ['playing', '游玩'],
-  ['buffer', '余量'],
-  ['budget', '预算'],
+const METRIC_LABELS: Array<[keyof DayHealthMetrics, string, typeof CarFront]> = [
+  ['driving', '驾驶', CarFront],
+  ['playing', '游玩', MapPinned],
+  ['buffer', '余量', Hourglass],
+  ['budget', '预算', WalletCards],
 ]
 
 export function DayHealthBar({
@@ -42,8 +43,9 @@ export function DayHealthBar({
   const content: ReactNode = (
     <>
       <span className="jovlo-day-health__metrics">
-        {METRIC_LABELS.map(([key, label]) => (
-          <span key={key} className="jovlo-day-health__metric">
+        {METRIC_LABELS.map(([key, label, Icon]) => (
+          <span key={key} className="jovlo-day-health__metric" aria-label={`${label} ${metrics[key]}`} title={label}>
+            <Icon className="jovlo-day-health__metric-icon" aria-hidden="true" size={15} strokeWidth={1.8} />
             {!compact && <span className="jovlo-day-health__metric-label">{label}</span>}
             {loading ? (
               <span className="jovlo-skeleton jovlo-day-health__skeleton" aria-hidden="true" />

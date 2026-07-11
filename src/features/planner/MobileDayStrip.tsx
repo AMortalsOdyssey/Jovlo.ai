@@ -3,6 +3,14 @@ import { Route } from 'lucide-react'
 import type { DaySummary } from './types'
 import './planner.css'
 
+function compactAreaLabel(area: string) {
+  return area
+    .replace(/(?:周边)?住宿区$/u, '')
+    .replace(/(?:舒适型|豪华型|经济型)?酒店(?:示例)?$/u, '')
+    .replace(/镇$/u, '')
+    .trim() || area
+}
+
 export interface MobileDayStripProps {
   days: DaySummary[]
   selectedDayId: string
@@ -48,7 +56,7 @@ export function MobileDayStrip({
               onClick={() => onSelectDay(day.id)}
             >
               <strong>D{day.dayNumber}</strong>
-              <span>{day.area}</span>
+              <span>{compactAreaLabel(day.area)}</span>
             </button>
           )
         })}

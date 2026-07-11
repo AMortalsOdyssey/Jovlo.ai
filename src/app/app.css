@@ -40,6 +40,7 @@
 .workspace-brand img {
   width: 32px;
   height: 32px;
+  filter: drop-shadow(0 2px 4px rgb(93 64 28 / 12%));
 }
 
 .workspace-nav {

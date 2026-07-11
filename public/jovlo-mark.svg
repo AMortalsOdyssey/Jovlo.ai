@@ -3,23 +3,23 @@
   <desc id="desc">指南针与环岛路线组成的 Jovlo 标志</desc>
   <defs>
     <linearGradient id="needle" x1="124" y1="258" x2="238" y2="86" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#65d6ad"/>
-      <stop offset="1" stop-color="#725dff"/>
+      <stop offset="0" stop-color="#168c78"/>
+      <stop offset="1" stop-color="#d96d30"/>
     </linearGradient>
     <linearGradient id="orbit" x1="67" y1="93" x2="294" y2="262" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#725dff"/>
-      <stop offset="0.56" stop-color="#65d6ad"/>
-      <stop offset="1" stop-color="#ffb84d"/>
+      <stop offset="0" stop-color="#d96d30"/>
+      <stop offset="0.56" stop-color="#168c78"/>
+      <stop offset="1" stop-color="#e99a2d"/>
     </linearGradient>
   </defs>
-  <circle cx="180" cy="180" r="122" fill="#fafaf8" stroke="#e7e3ff" stroke-width="4"/>
+  <circle cx="180" cy="180" r="122" fill="none" stroke="#dfc3a5" stroke-width="4"/>
   <ellipse cx="180" cy="180" rx="120" ry="54" fill="none" stroke="url(#orbit)" stroke-width="10" stroke-linecap="round" transform="rotate(-24 180 180)"/>
-  <ellipse cx="180" cy="180" rx="83" ry="83" fill="none" stroke="#edebf8" stroke-width="3"/>
+  <ellipse cx="180" cy="180" rx="83" ry="83" fill="none" stroke="#dfc3a5" stroke-width="3" opacity=".72"/>
   <path d="M183 74 223 214 180 192 136 262 159 121Z" fill="url(#needle)"/>
   <path d="M183 74 180 192 159 121Z" fill="#fff" opacity=".62"/>
   <circle cx="180" cy="180" r="20" fill="#242124"/>
   <circle cx="180" cy="180" r="8" fill="#fff"/>
   <circle cx="264" cy="129" r="13" fill="#ffb84d" stroke="#fff" stroke-width="5"/>
   <circle cx="97" cy="232" r="10" fill="#65d6ad" stroke="#fff" stroke-width="5"/>
-  <path d="M100 115h26M113 102v26" stroke="#725dff" stroke-width="7" stroke-linecap="round"/>
+  <path d="M100 115h26M113 102v26" stroke="#d96d30" stroke-width="7" stroke-linecap="round"/>
 </svg>

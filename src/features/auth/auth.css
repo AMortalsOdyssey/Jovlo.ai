@@ -28,6 +28,7 @@
 .auth-brand img {
   width: 36px;
   height: 36px;
+  filter: drop-shadow(0 2px 5px rgb(93 64 28 / 14%));
 }
 
 .auth-copy {

@@ -3,7 +3,9 @@ import {
   ArrowRightLeft,
   ArrowUp,
   CalendarArrowDown,
+  Clock3,
   Edit3,
+  Hourglass,
   SkipForward,
   Trash2,
 } from 'lucide-react'
@@ -11,6 +13,17 @@ import {
 import { ActionMenu, type ActionMenuItem } from '../../components'
 import type { EvidenceTone } from './types'
 import './planner.css'
+
+const TAG_LABELS: Record<string, string> = {
+  attraction: '景点',
+  museum: '博物馆',
+  hotel: '住宿',
+  meal: '餐饮',
+  food: '餐饮',
+  shopping: '购物',
+  transport: '交通',
+  locked: '已锁定',
+}
 
 export interface StopCardActions {
   onEdit: () => void
@@ -47,6 +60,7 @@ export function StopCard({
   actions,
   onSelect,
 }: StopCardProps) {
+  const visibleTags = [...new Set(tags.map((tag) => TAG_LABELS[tag] ?? tag))].slice(0, 2)
   const menuItems: ActionMenuItem[] = actions
     ? [
         { label: '编辑', icon: Edit3, onSelect: actions.onEdit },
@@ -76,11 +90,12 @@ export function StopCard({
           >
             <strong className="jovlo-stop-card__name">{name}</strong>
             <span className="jovlo-stop-card__time jovlo-numeric">
-              {plannedTime} · 停留 {duration}
+              <span title="到达时间"><Clock3 aria-hidden="true" size={14} />{plannedTime}</span>
+              <span title="停留时长"><Hourglass aria-hidden="true" size={14} />{duration}</span>
             </span>
             <span className="jovlo-stop-card__summary">
               <span className={`jovlo-evidence jovlo-evidence--${evidenceTone}`}>{evidenceLabel}</span>
-              {!!tags.length && <span className="jovlo-stop-card__tags">· {tags.slice(0, 2).join(' / ')}</span>}
+              {!!visibleTags.length && <span className="jovlo-stop-card__tags">{visibleTags.join(' · ')}</span>}
             </span>
           </button>
           {actions && <ActionMenu label={`${name} 的更多操作`} items={menuItems} />}

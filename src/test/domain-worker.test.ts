@@ -47,6 +47,7 @@ describe('Worker API contract', () => {
       },
     })
     expect(demoResponse.headers.get('content-security-policy')).toContain("script-src 'self' 'unsafe-eval'")
+    expect(demoResponse.headers.get('content-security-policy')).toContain("'unsafe-inline'")
   })
 
   it('fails closed when production authentication cannot be verified', async () => {
