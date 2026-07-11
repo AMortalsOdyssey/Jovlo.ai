@@ -168,7 +168,7 @@ const demoPublications = new Map<string, DemoPublication>([
 const app = new Hono<AppBindings>()
 
 const CONTENT_SECURITY_POLICY =
-  "default-src 'self'; script-src 'self' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amap.com; connect-src 'self' https://*.supabase.co https://restapi.amap.com https://*.amap.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+  "default-src 'self'; script-src 'self' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://restapi.amap.com https://*.amap.com https://*.autonavi.com; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 function setSecurityHeaders(headers: Headers, currentRequestId: string, mode: RuntimeMode) {
   const contentSecurityPolicy = mode === 'demo'

@@ -14,7 +14,17 @@ type AmapProxyRule = {
   queryParameters: ReadonlySet<string>
 }
 
-const COMMON_QUERY_PARAMETERS = ['key', 'output', 's', 'platform', 'sdkversion', 'logversion', 'appname', 'csid']
+const COMMON_QUERY_PARAMETERS = [
+  'key',
+  'output',
+  's',
+  'platform',
+  'sdkversion',
+  'logversion',
+  'appname',
+  'csid',
+  'callback',
+]
 
 function queryParameters(...parameters: string[]): ReadonlySet<string> {
   return new Set([...COMMON_QUERY_PARAMETERS, ...parameters])
@@ -33,6 +43,13 @@ const AMAP_PROXY_RULES: ReadonlyMap<string, AmapProxyRule> = new Map([
     {
       upstreamOrigin: 'https://restapi.amap.com',
       queryParameters: queryParameters('keywords', 'subdistrict', 'showbiz', 'extensions', 'filter'),
+    },
+  ],
+  [
+    '/v3/log/init',
+    {
+      upstreamOrigin: 'https://restapi.amap.com',
+      queryParameters: queryParameters('eventId', 'product', 't', 'resolution', 'mob', 'vt', 'dpr', 'scale'),
     },
   ],
   [
@@ -138,6 +155,10 @@ function validateProxyQuery(requestUrl: URL, rule: AmapProxyRule): void {
   if (!key || !/^[A-Za-z0-9]{16,64}$/.test(key)) {
     throw new AppError('VALIDATION_FAILED', '高德 JS Key 格式无效', 400)
   }
+  const callback = requestUrl.searchParams.get('callback')
+  if (callback && !/^[A-Za-z_$][A-Za-z0-9_$]{0,127}$/.test(callback)) {
+    throw new AppError('VALIDATION_FAILED', '高德 JSONP 回调格式无效', 400)
+  }
 }
 
 function proxyRequestHeaders(request: Request): Headers {
@@ -198,7 +219,9 @@ export async function proxyAmapJsApiRequest(request: Request, env: Env): Promise
     if (body.byteLength > AMAP_PROXY_MAX_RESPONSE_BYTES) {
       throw new AppError('ROUTE_PROVIDER_UNAVAILABLE', '高德代理响应超过大小限制', 502)
     }
-    const contentType = response.headers.get('content-type') ?? 'application/json; charset=utf-8'
+    const contentType = requestUrl.searchParams.has('callback')
+      ? 'application/javascript; charset=utf-8'
+      : response.headers.get('content-type') ?? 'application/json; charset=utf-8'
     return new Response(body, {
       status: response.status,
       headers: {

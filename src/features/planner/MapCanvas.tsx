@@ -163,11 +163,10 @@ export function MapCanvas({
     }
 
     let cancelled = false
-    let candidateCluster: any
     setLoadState('loading')
     configureAmapServiceHost()
 
-    loadAmap({ key: apiKey, version: '2.0', plugins: ['AMap.MarkerCluster'] })
+    loadAmap({ key: apiKey, version: '2.0' })
       .then((AMap: any) => {
         if (cancelled || !hostRef.current) return
 
@@ -214,49 +213,36 @@ export function MapCanvas({
           })
         })
 
-        map.add([...routeOverlays, ...formalMarkers])
+        const candidateMarkers = clusters.map((cluster) => {
+          const pointIds = cluster.points.map((point) => point.id)
+          const isCluster = cluster.points.length > 1
+          const lng = cluster.points.reduce((sum, point) => sum + point.lng, 0) / cluster.points.length
+          const lat = cluster.points.reduce((sum, point) => sum + point.lat, 0) / cluster.points.length
+          const markerButton = document.createElement('button')
+          markerButton.type = 'button'
+          markerButton.className = isCluster ? 'jovlo-amap-candidate-cluster' : 'jovlo-amap-candidate-marker'
+          markerButton.dataset.mapMarkerKind = isCluster ? 'candidate-cluster' : 'candidate'
+          markerButton.dataset.type = cluster.type
+          markerButton.dataset.selected = String(pointIds.includes(selectedPointId ?? ''))
+          markerButton.setAttribute(
+            'aria-label',
+            isCluster ? `${cluster.points.length} 个候选地点` : `候选地点：${cluster.points[0].name}`,
+          )
+          markerButton.title = markerButton.getAttribute('aria-label') ?? ''
+          markerButton.textContent = isCluster
+            ? String(cluster.points.length)
+            : CANDIDATE_TYPE_LABEL[cluster.type].slice(0, 1)
+          markerButton.addEventListener('click', () => callbacksRef.current.onSelectCandidateCluster?.(pointIds))
 
-        if (candidatePoints.length > 0) {
-          const candidateData = candidatePoints.map((point) => ({
-            lnglat: [point.lng, point.lat],
-            id: point.id,
-            type: point.type,
-            name: point.name,
-          }))
-
-          candidateCluster = new AMap.MarkerCluster(map, candidateData, {
-            gridSize: 72,
-            renderMarker(context: any) {
-              const point = context.data[0]
-              const markerButton = document.createElement('button')
-              markerButton.type = 'button'
-              markerButton.className = 'jovlo-amap-candidate-marker'
-              markerButton.dataset.mapMarkerKind = 'candidate'
-              markerButton.dataset.type = point.type
-              markerButton.setAttribute('aria-label', `候选地点：${point.name}`)
-              markerButton.title = `候选地点：${point.name}`
-              markerButton.textContent = CANDIDATE_TYPE_LABEL[point.type as CandidateMapPoint['type']].slice(0, 1)
-              markerButton.addEventListener('click', () => callbacksRef.current.onSelectCandidateCluster?.([point.id]))
-              context.marker.setContent(markerButton)
-              context.marker.setOffset(new AMap.Pixel(-14, -14))
-            },
-            renderClusterMarker(context: any) {
-              const markerButton = document.createElement('button')
-              const pointIds = context.clusterData.map((point: { id: string }) => point.id)
-              const dominantType = context.clusterData[0]?.type ?? 'other'
-              markerButton.type = 'button'
-              markerButton.className = 'jovlo-amap-candidate-cluster'
-              markerButton.dataset.mapMarkerKind = 'candidate-cluster'
-              markerButton.dataset.type = dominantType
-              markerButton.setAttribute('aria-label', `${context.count} 个候选地点`)
-              markerButton.title = `${context.count} 个候选地点`
-              markerButton.textContent = String(context.count)
-              markerButton.addEventListener('click', () => callbacksRef.current.onSelectCandidateCluster?.(pointIds))
-              context.marker.setContent(markerButton)
-              context.marker.setOffset(new AMap.Pixel(-18, -18))
-            },
+          return new AMap.Marker({
+            position: [lng, lat],
+            content: markerButton,
+            offset: new AMap.Pixel(isCluster ? -18 : -14, isCluster ? -18 : -14),
+            zIndex: 16,
           })
-        }
+        })
+
+        map.add([...routeOverlays, ...formalMarkers, ...candidateMarkers])
 
         if (routeOverlays.length > 0) map.setFitView(routeOverlays, false, [48, 48, 48, 48], 14)
         setLoadState('ready')
@@ -265,6 +251,10 @@ export function MapCanvas({
       .catch((reason: unknown) => {
         if (cancelled) return
         const error = reason instanceof Error ? reason : new Error('高德地图加载失败')
+        console.error('[Jovlo Map] AMap initialization failed', {
+          name: error.name,
+          message: error.message,
+        })
         setLoadState('error')
         callbacksRef.current.onLoadError?.(error)
         callbacksRef.current.onReady?.('local-reference')
@@ -272,7 +262,6 @@ export function MapCanvas({
 
     return () => {
       cancelled = true
-      candidateCluster?.setMap?.(null)
       mapRef.current?.destroy?.()
       mapRef.current = null
     }

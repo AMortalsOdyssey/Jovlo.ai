@@ -66,8 +66,7 @@ describe('MapCanvas fallback', () => {
   it('loads AMap when a key exists while keeping formal markers outside candidate clustering', async () => {
     const mapAdd = vi.fn()
     const mapDestroy = vi.fn()
-    const formalMarkerOptions: Array<{ content: HTMLElement }> = []
-    let clusteredCandidates: Array<{ id: string }> = []
+    const markerOptions: Array<{ content: HTMLElement }> = []
 
     function FakeMap(this: Record<string, unknown>) {
       this.add = mapAdd
@@ -82,17 +81,8 @@ describe('MapCanvas fallback', () => {
     }
 
     function FakeMarker(this: Record<string, unknown>, options: { content: HTMLElement }) {
-      formalMarkerOptions.push(options)
+      markerOptions.push(options)
       this.options = options
-    }
-
-    function FakeMarkerCluster(
-      this: Record<string, unknown>,
-      _map: unknown,
-      data: Array<{ id: string }>,
-    ) {
-      clusteredCandidates = data
-      this.setMap = vi.fn()
     }
 
     function FakePixel(this: Record<string, unknown>, x: number, y: number) {
@@ -104,7 +94,6 @@ describe('MapCanvas fallback', () => {
       Map: FakeMap,
       Polyline: FakePolyline,
       Marker: FakeMarker,
-      MarkerCluster: FakeMarkerCluster,
       Pixel: FakePixel,
     })
 
@@ -118,7 +107,7 @@ describe('MapCanvas fallback', () => {
         ]}
         candidatePoints={[
           { id: 'c1', name: '候选海滩 A', type: 'beach', lng: 110.2, lat: 18.67 },
-          { id: 'c2', name: '候选咖啡 B', type: 'coffee', lng: 110.21, lat: 18.68 },
+          { id: 'c2', name: '候选咖啡 B', type: 'coffee', lng: 110.2, lat: 18.67 },
         ]}
         onReady={onReady}
       />,
@@ -128,14 +117,15 @@ describe('MapCanvas fallback', () => {
     expect(loadAmap).toHaveBeenCalledWith({
       key: 'amap-test-key',
       version: '2.0',
-      plugins: ['AMap.MarkerCluster'],
     })
     expect(window._AMapSecurityConfig).toEqual({
       serviceHost: `${window.location.origin}/_AMapService`,
     })
+    const formalMarkerOptions = markerOptions.filter(({ content }) => content.dataset.mapMarkerKind === 'formal')
+    const candidateMarkerOptions = markerOptions.filter(({ content }) => content.dataset.mapMarkerKind === 'candidate-cluster')
     expect(formalMarkerOptions).toHaveLength(2)
-    expect(formalMarkerOptions.every(({ content }) => content.dataset.mapMarkerKind === 'formal')).toBe(true)
-    expect(clusteredCandidates.map(({ id }) => id)).toEqual(['c1', 'c2'])
+    expect(candidateMarkerOptions).toHaveLength(1)
+    expect(candidateMarkerOptions[0].content).toHaveAttribute('aria-label', '2 个候选地点')
     expect(onReady).toHaveBeenCalledWith('amap')
   })
 })

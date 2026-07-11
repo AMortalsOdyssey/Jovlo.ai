@@ -33,6 +33,8 @@ describe('Worker API contract', () => {
     expect(response.headers.get('x-content-type-options')).toBe('nosniff')
     expect(response.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
     expect(response.headers.get('content-security-policy')).not.toContain("script-src 'self' 'unsafe-inline'")
+    expect(response.headers.get('content-security-policy')).toContain("worker-src 'self' blob:")
+    expect(response.headers.get('content-security-policy')).toContain("font-src 'self' data:")
 
     const demoResponse = await app.request('/', undefined, {
       JOVLO_MODE: 'demo',

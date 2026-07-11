@@ -68,6 +68,32 @@ describe('AMap JS API security proxy', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('supports the fixed AMap JS initialization log JSONP without opening callback injection', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('jsonp_123_({"status":"1","info":"OK"})', {
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const query = new URLSearchParams({
+      key: '1234567890abcdef1234567890abcdef',
+      eventId: 'resource.load',
+      product: 'JsInit',
+      platform: 'JS',
+      callback: 'jsonp_123_',
+    })
+
+    const response = await proxyRequest(`/_AMapService/v3/log/init?${query}`)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('application/javascript')
+    expect(await response.text()).toContain('"status":"1"')
+
+    const invalidCallback = await proxyRequest(
+      '/_AMapService/v3/log/init?key=1234567890abcdef1234567890abcdef&callback=alert(1)',
+    )
+    expect(invalidCallback.status).toBe(400)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects cross-origin and non-GET requests before contacting AMap', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     const crossOrigin = await proxyRequest(
