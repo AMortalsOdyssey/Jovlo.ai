@@ -32,6 +32,17 @@ describe('Worker API contract', () => {
     expect(response.headers.get('content-type')).toContain('text/html')
     expect(response.headers.get('x-content-type-options')).toBe('nosniff')
     expect(response.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
+    expect(response.headers.get('content-security-policy')).not.toContain("script-src 'self' 'unsafe-inline'")
+
+    const demoResponse = await app.request('/', undefined, {
+      JOVLO_MODE: 'demo',
+      ASSETS: {
+        fetch: async () => new Response('<!doctype html><title>Jovlo</title>', {
+          headers: { 'content-type': 'text/html' },
+        }),
+      },
+    })
+    expect(demoResponse.headers.get('content-security-policy')).toContain("script-src 'self' 'unsafe-inline'")
   })
 
   it('fails closed when production authentication cannot be verified', async () => {

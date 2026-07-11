@@ -71,7 +71,7 @@ import {
   readSupabaseRows,
   requireAuthenticatedUser,
 } from './services/supabase'
-import type { AppBindings, AppContext } from './types'
+import type { AppBindings, AppContext, RuntimeMode } from './types'
 
 type StoredDemoChangeSet = {
   ownerId: string
@@ -170,13 +170,16 @@ const app = new Hono<AppBindings>()
 const CONTENT_SECURITY_POLICY =
   "default-src 'self'; script-src 'self' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amap.com; connect-src 'self' https://*.supabase.co https://restapi.amap.com https://*.amap.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
-function setSecurityHeaders(headers: Headers, currentRequestId: string) {
+function setSecurityHeaders(headers: Headers, currentRequestId: string, mode: RuntimeMode) {
+  const contentSecurityPolicy = mode === 'demo'
+    ? CONTENT_SECURITY_POLICY.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
+    : CONTENT_SECURITY_POLICY
   headers.set('x-request-id', currentRequestId)
   headers.set('x-content-type-options', 'nosniff')
   headers.set('referrer-policy', 'strict-origin-when-cross-origin')
   headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=(self)')
   headers.set('x-frame-options', 'DENY')
-  headers.set('content-security-policy', CONTENT_SECURITY_POLICY)
+  headers.set('content-security-policy', contentSecurityPolicy)
 }
 
 function requestId(context: AppContext): string {
@@ -191,7 +194,7 @@ app.use('*', async (context, next) => {
   context.set('requestId', requestId(context))
   context.set('mode', runtimeMode(context.env))
   const responseHeaders = new Headers()
-  setSecurityHeaders(responseHeaders, context.get('requestId'))
+  setSecurityHeaders(responseHeaders, context.get('requestId'), context.get('mode'))
   responseHeaders.forEach((value, name) => context.header(name, value))
 
   const origin = context.req.header('origin')
@@ -265,7 +268,7 @@ app.notFound(async (context) => {
   if (isAssetRequest && context.env.ASSETS) {
     const assetResponse = await context.env.ASSETS.fetch(context.req.raw)
     const headers = new Headers(assetResponse.headers)
-    setSecurityHeaders(headers, context.get('requestId'))
+    setSecurityHeaders(headers, context.get('requestId'), context.get('mode'))
     return new Response(assetResponse.body, {
       status: assetResponse.status,
       statusText: assetResponse.statusText,
