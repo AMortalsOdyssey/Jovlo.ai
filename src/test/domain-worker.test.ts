@@ -19,6 +19,21 @@ describe('Worker API contract', () => {
     expect(response.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
   })
 
+  it('keeps security headers on static asset responses', async () => {
+    const response = await app.request('/', undefined, {
+      JOVLO_MODE: 'production',
+      ASSETS: {
+        fetch: async () => new Response('<!doctype html><title>Jovlo</title>', {
+          headers: { 'content-type': 'text/html' },
+        }),
+      },
+    })
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('text/html')
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(response.headers.get('content-security-policy')).toContain("frame-ancestors 'none'")
+  })
+
   it('fails closed when production authentication cannot be verified', async () => {
     const noToken = await app.request(
       '/api/v1/budgets/calculate',

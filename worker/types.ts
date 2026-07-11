@@ -25,6 +25,7 @@ export type RuntimeMode = 'demo' | 'production'
 
 export type Env = {
   ASSETS?: { fetch(request: Request): Promise<Response> }
+  CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string }
   JOVLO_MODE?: RuntimeMode
   BUILD_SHA?: string
   SUPABASE_URL?: string

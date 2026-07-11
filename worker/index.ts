@@ -167,6 +167,18 @@ const demoPublications = new Map<string, DemoPublication>([
 
 const app = new Hono<AppBindings>()
 
+const CONTENT_SECURITY_POLICY =
+  "default-src 'self'; script-src 'self' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amap.com; connect-src 'self' https://*.supabase.co https://restapi.amap.com https://*.amap.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+function setSecurityHeaders(headers: Headers, currentRequestId: string) {
+  headers.set('x-request-id', currentRequestId)
+  headers.set('x-content-type-options', 'nosniff')
+  headers.set('referrer-policy', 'strict-origin-when-cross-origin')
+  headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=(self)')
+  headers.set('x-frame-options', 'DENY')
+  headers.set('content-security-policy', CONTENT_SECURITY_POLICY)
+}
+
 function requestId(context: AppContext): string {
   const incoming = context.req.header('x-request-id')
   return incoming && /^[A-Za-z0-9_-]{8,100}$/.test(incoming)
@@ -178,15 +190,9 @@ app.use('*', async (context, next) => {
   const startedAt = Date.now()
   context.set('requestId', requestId(context))
   context.set('mode', runtimeMode(context.env))
-  context.header('x-request-id', context.get('requestId'))
-  context.header('x-content-type-options', 'nosniff')
-  context.header('referrer-policy', 'strict-origin-when-cross-origin')
-  context.header('permissions-policy', 'camera=(), microphone=(), geolocation=(self)')
-  context.header('x-frame-options', 'DENY')
-  context.header(
-    'content-security-policy',
-    "default-src 'self'; script-src 'self' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amap.com; connect-src 'self' https://*.supabase.co https://restapi.amap.com https://*.amap.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-  )
+  const responseHeaders = new Headers()
+  setSecurityHeaders(responseHeaders, context.get('requestId'))
+  responseHeaders.forEach((value, name) => context.header(name, value))
 
   const origin = context.req.header('origin')
   const ownOrigin = new URL(context.req.url).origin
@@ -250,14 +256,21 @@ app.onError((error, context) => {
   )
 })
 
-app.notFound((context) => {
+app.notFound(async (context) => {
   const pathname = new URL(context.req.url).pathname
   const isAssetRequest =
     (context.req.method === 'GET' || context.req.method === 'HEAD') &&
     !pathname.startsWith('/api/') &&
     !pathname.startsWith('/_AMapService/')
   if (isAssetRequest && context.env.ASSETS) {
-    return context.env.ASSETS.fetch(context.req.raw)
+    const assetResponse = await context.env.ASSETS.fetch(context.req.raw)
+    const headers = new Headers(assetResponse.headers)
+    setSecurityHeaders(headers, context.get('requestId'))
+    return new Response(assetResponse.body, {
+      status: assetResponse.status,
+      statusText: assetResponse.statusText,
+      headers,
+    })
   }
   return failure(context, new AppError('VALIDATION_FAILED', '接口不存在', 404))
 })
@@ -377,7 +390,7 @@ const health = (context: AppContext) =>
   success(context, {
     ok: true,
     service: 'jovlo-worker',
-    buildSha: context.env.BUILD_SHA ?? 'development',
+    buildSha: context.env.BUILD_SHA ?? context.env.CF_VERSION_METADATA?.id ?? 'development',
     persistence: context.get('mode') === 'demo' ? 'demo-ephemeral' : 'supabase-rls-rpc',
     now: new Date().toISOString(),
   })
