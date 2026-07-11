@@ -9,6 +9,7 @@
   display: flex;
   width: min(100%, 520px);
   min-width: 0;
+  min-height: 100vh;
   padding: 44px 64px;
   justify-self: center;
   flex-direction: column;
@@ -69,6 +70,25 @@
   font-weight: 700;
 }
 
+.auth-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.auth-label-row a,
+.auth-privacy a {
+  color: var(--brand-text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.auth-label-row a:hover,
+.auth-privacy a:hover {
+  text-decoration: underline;
+}
+
 .auth-input-wrap {
   display: grid;
   min-height: 50px;
@@ -108,6 +128,50 @@
   font-variant-numeric: tabular-nums;
 }
 
+.auth-input-wrap--action {
+  padding-right: var(--space-2);
+  grid-template-columns: auto minmax(0, 1fr) 36px;
+}
+
+.auth-field-action {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  place-items: center;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.auth-field-action:hover {
+  color: var(--ink);
+  background: var(--brand-tint);
+}
+
+.auth-password-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.auth-password-hints span::before {
+  margin-right: var(--space-1);
+  content: '○';
+}
+
+.auth-password-hints .is-valid {
+  color: var(--brand-text);
+}
+
+.auth-password-hints .is-valid::before {
+  content: '✓';
+}
+
 .auth-sent > svg {
   color: var(--brand-text);
 }
@@ -139,6 +203,7 @@
   margin-top: var(--space-1);
   color: #fff;
   background: var(--brand-strong);
+  text-decoration: none;
 }
 
 .auth-primary svg:last-child {
@@ -159,6 +224,14 @@
   opacity: 0.62;
 }
 
+.auth-primary--danger {
+  background: var(--coral-text);
+}
+
+.auth-primary--danger:hover:not(:disabled) {
+  background: var(--coral);
+}
+
 .auth-back {
   color: var(--muted);
   background: transparent;
@@ -176,6 +249,80 @@
   background: var(--coral-tint);
   border-radius: var(--radius-control);
   font-size: 13px;
+}
+
+.auth-trial {
+  display: grid;
+  margin-top: var(--space-5);
+  justify-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+}
+
+.auth-trial > span { font-size: 11px; }
+.auth-trial .auth-back { min-height: 40px; }
+.auth-trial small { text-align: center; }
+
+.auth-result {
+  display: grid;
+  margin-top: var(--space-8);
+  justify-items: start;
+  gap: var(--space-4);
+  color: var(--brand-text);
+}
+
+.auth-result > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.auth-result .auth-primary {
+  width: 100%;
+}
+
+.auth-result--failed {
+  color: var(--coral-text);
+}
+
+.auth-account {
+  display: grid;
+  margin-top: var(--space-8);
+  gap: var(--space-4);
+}
+
+.auth-account__row {
+  display: grid;
+  min-width: 0;
+  padding: var(--space-4) 0;
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  color: var(--brand-text);
+  border-top: 1px solid var(--brand-tint);
+  border-bottom: 1px solid var(--brand-tint);
+}
+
+.auth-account__row div {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.auth-account__row span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.auth-account__row strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.auth-account .auth-back {
+  text-decoration: none;
 }
 
 .auth-privacy {
@@ -356,6 +503,7 @@
   border-radius: var(--radius-control) 0 0 var(--radius-control);
   box-shadow: var(--shadow-float);
   cursor: pointer;
+  text-decoration: none;
   transform: translateY(-50%);
   transition: width var(--motion-state), background var(--motion-state);
 }
@@ -394,7 +542,7 @@
   }
 
   .auth-copy {
-    margin-top: clamp(72px, 14vh, 120px);
+    margin-top: clamp(44px, 9vh, 84px);
   }
 
   .auth-journey {
@@ -405,6 +553,16 @@
 @media (max-width: 420px) {
   .auth-panel {
     padding: var(--space-6) var(--space-4);
+  }
+
+  .auth-copy {
+    margin-top: var(--space-12);
+  }
+
+  .auth-form,
+  .auth-result,
+  .auth-account {
+    margin-top: var(--space-6);
   }
 
   .auth-copy h1 {

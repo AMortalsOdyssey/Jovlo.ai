@@ -90,6 +90,9 @@ export type DisclosureConfig = {
   showExactDates: boolean
   showSources: boolean
   showBudget: boolean
+  viewScope: 'overview' | 'day'
+  dayId?: string
+  overviewToken?: string
 }
 
 export type LocalPublication = {

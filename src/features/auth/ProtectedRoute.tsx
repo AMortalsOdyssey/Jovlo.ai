@@ -1,6 +1,5 @@
-import { LoaderCircle, LogOut } from 'lucide-react'
-import { useState } from 'react'
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { LoaderCircle, UserRound } from 'lucide-react'
+import { Link, Navigate, Outlet, useLocation } from 'react-router-dom'
 
 import { useAuth } from './AuthProvider'
 import { isSupabaseConfigured } from '@/lib/supabase'
@@ -8,38 +7,18 @@ import { useTripStore } from '@/store/useTripStore'
 import './auth.css'
 
 function SessionControl() {
-  const { signOut, user } = useAuth()
-  const [busy, setBusy] = useState(false)
-  const [failed, setFailed] = useState(false)
-
-  async function handleSignOut() {
-    setBusy(true)
-    setFailed(false)
-    try {
-      await signOut()
-    } catch {
-      setFailed(true)
-      setBusy(false)
-    }
-  }
-
-  const label = failed
-    ? '退出失败，点击重试'
-    : user?.email
-      ? `退出 ${user.email}`
-      : '退出登录'
+  const { status, user } = useAuth()
+  const label = status === 'trial' ? '本地试用与账号' : user?.email ? `账号：${user.email}` : '账号管理'
 
   return (
-    <button
-      className={`auth-session-control${failed ? ' auth-session-control--failed' : ''}`}
-      type="button"
-      onClick={handleSignOut}
-      disabled={busy}
+    <Link
+      className="auth-session-control"
+      to="/account"
       aria-label={label}
       title={label}
     >
-      {busy ? <LoaderCircle aria-hidden="true" className="auth-spinner" size={18} /> : <LogOut aria-hidden="true" size={18} />}
-    </button>
+      <UserRound aria-hidden="true" size={18} />
+    </Link>
   )
 }
 
@@ -82,7 +61,7 @@ export function ProtectedRoute() {
   return (
     <>
       <Outlet />
-      {status === 'authenticated' ? <SessionControl /> : null}
+      {status === 'authenticated' || status === 'trial' ? <SessionControl /> : null}
     </>
   )
 }

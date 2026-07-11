@@ -15,6 +15,81 @@ function requireSupabaseConfig(context: AppContext) {
   return { url, publishableKey }
 }
 
+const AUTH_PROXY_METHODS: Record<string, readonly string[]> = {
+  '/signup': ['POST'],
+  '/token': ['POST'],
+  '/verify': ['POST'],
+  '/recover': ['POST'],
+  '/resend': ['POST'],
+  '/user': ['GET', 'PUT'],
+  '/logout': ['POST'],
+  '/settings': ['GET'],
+}
+
+export async function proxySupabaseAuthRequest(context: AppContext): Promise<Response> {
+  const requestUrl = new URL(context.req.url)
+  const origin = context.req.header('origin')
+  if (origin && origin !== requestUrl.origin) {
+    throw new AppError('FORBIDDEN', '不允许跨站调用账号接口', 403)
+  }
+  const authPath = requestUrl.pathname.slice('/supabase/auth/v1'.length) || '/settings'
+  const allowedMethods = AUTH_PROXY_METHODS[authPath]
+  if (!allowedMethods?.includes(context.req.method)) {
+    throw new AppError('VALIDATION_FAILED', '认证接口不存在', 404)
+  }
+
+  const contentLength = Number(context.req.header('content-length') ?? 0)
+  if (Number.isFinite(contentLength) && contentLength > 64 * 1_024) {
+    throw new AppError('VALIDATION_FAILED', '认证请求内容过大', 413)
+  }
+  if (!['GET', 'HEAD'].includes(context.req.method)) {
+    const contentType = (context.req.header('content-type') ?? '').toLowerCase()
+    if (!contentType.includes('application/json')) {
+      throw new AppError('VALIDATION_FAILED', '认证请求必须使用 application/json', 415)
+    }
+  }
+
+  const { url, publishableKey } = requireSupabaseConfig(context)
+  const headers = new Headers({
+    apikey: publishableKey,
+    accept: 'application/json',
+  })
+  const authorization = context.req.header('authorization')
+  const contentType = context.req.header('content-type')
+  const clientInfo = context.req.header('x-client-info')
+  if (authorization) headers.set('authorization', authorization)
+  if (contentType) headers.set('content-type', contentType)
+  if (clientInfo) headers.set('x-client-info', clientInfo.slice(0, 200))
+
+  let response: Response
+  try {
+    response = await fetch(`${url}/auth/v1${authPath}${requestUrl.search}`, {
+      method: context.req.method,
+      headers,
+      body: ['GET', 'HEAD'].includes(context.req.method) ? undefined : context.req.raw.body,
+      redirect: 'manual',
+    })
+  } catch {
+    throw new AppError('DEPENDENCY_UNAVAILABLE', '账号服务暂时不可用', 503, {
+      retryable: true,
+      userAction: '请稍后重试',
+    })
+  }
+
+  const responseHeaders = new Headers()
+  for (const name of ['content-type', 'cache-control', 'x-supabase-api-version']) {
+    const value = response.headers.get(name)
+    if (value) responseHeaders.set(name, value)
+  }
+  responseHeaders.set('cache-control', 'no-store')
+  responseHeaders.set('x-content-type-options', 'nosniff')
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: responseHeaders,
+  })
+}
+
 export async function requireAuthenticatedUser(
   context: AppContext,
 ): Promise<AuthenticatedUser> {

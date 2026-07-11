@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DEMO_CHANGESET, DEMO_IDS, DEMO_TRIP } from '../../packages/domain/src/index'
+import { DEMO_CHANGESET, DEMO_IDS, DEMO_TRIP, DEMO_VERSIONS } from '../../packages/domain/src/index'
 import { app } from '../../worker/index'
 
 type Envelope = {
@@ -432,5 +432,136 @@ describe('Worker API contract', () => {
     expect(body.data.report.versionId).toBe('80000000-0000-4000-8000-000000000002')
     expect(body.data.snapshot.tripId).toBe(DEMO_TRIP.tripId)
     expect(body.data.derived.inputHash).toBeTruthy()
+  })
+
+  it('creates a day-only fixed share and never returns other days', async () => {
+    const overviewResponse = await app.request(
+      `/api/v1/trips/${DEMO_TRIP.tripId}/publications`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() },
+        body: JSON.stringify({
+          versionId: DEMO_VERSIONS[1].id,
+          disclosureConfig: {
+            showExactDates: false,
+            showSources: true,
+            showBudget: true,
+            viewScope: 'overview',
+          },
+        }),
+      },
+      { JOVLO_MODE: 'demo' },
+    )
+    const overview = (await overviewResponse.json()) as Envelope & { data: { token: string } }
+    expect(overviewResponse.status).toBe(201)
+
+    const selectedDay = DEMO_TRIP.days[2]
+    const dayResponse = await app.request(
+      `/api/v1/trips/${DEMO_TRIP.tripId}/publications`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() },
+        body: JSON.stringify({
+          versionId: DEMO_VERSIONS[1].id,
+          disclosureConfig: {
+            showExactDates: false,
+            showSources: true,
+            showBudget: true,
+            viewScope: 'day',
+            dayId: selectedDay.id,
+            overviewToken: overview.data.token,
+          },
+        }),
+      },
+      { JOVLO_MODE: 'demo' },
+    )
+    const dayPublication = (await dayResponse.json()) as Envelope & { data: { token: string } }
+    const publicResponse = await app.request(`/api/v1/public/${dayPublication.data.token}`, undefined, {
+      JOVLO_MODE: 'demo',
+    })
+    const publicBody = (await publicResponse.json()) as Envelope & {
+      data: {
+        snapshot: typeof DEMO_TRIP
+        derived: { routeLegs: Array<{ dayId: string }>; daySchedules: Array<{ dayId: string }> }
+        view: { scope: string; overviewToken: string }
+      }
+    }
+    expect(publicResponse.status).toBe(200)
+    expect(publicBody.data.snapshot.days).toHaveLength(1)
+    expect(publicBody.data.snapshot.days[0].id).toBe(selectedDay.id)
+    expect(publicBody.data.snapshot.intent.days).toBe(1)
+    expect(publicBody.data.snapshot.days[0].date).toBeUndefined()
+    expect(publicBody.data.derived.routeLegs.every((leg) => leg.dayId === selectedDay.id)).toBe(true)
+    expect(publicBody.data.derived.daySchedules.map((day) => day.dayId)).toEqual([selectedDay.id])
+    expect(publicBody.data.view).toMatchObject({ scope: 'day', overviewToken: overview.data.token })
+  })
+
+  it('redacts source and budget data in the response body, not only in the UI', async () => {
+    const createResponse = await app.request(
+      `/api/v1/trips/${DEMO_TRIP.tripId}/publications`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'idempotency-key': crypto.randomUUID() },
+        body: JSON.stringify({
+          versionId: DEMO_VERSIONS[1].id,
+          disclosureConfig: {
+            showExactDates: false,
+            showSources: false,
+            showBudget: false,
+            viewScope: 'overview',
+          },
+        }),
+      },
+      { JOVLO_MODE: 'demo' },
+    )
+    const publication = (await createResponse.json()) as Envelope & { data: { token: string } }
+    const response = await app.request(`/api/v1/public/${publication.data.token}`, undefined, { JOVLO_MODE: 'demo' })
+    const body = (await response.json()) as Envelope & {
+      data: {
+        snapshot: typeof DEMO_TRIP
+        derived: { budget: { total: { expected: number }; categories: unknown[] }; routeLegs: Array<{ tollsCny?: number }> }
+      }
+    }
+    expect(body.data.snapshot.sourceRefs).toEqual({})
+    expect(body.data.snapshot.days.flatMap((day) => day.stops).every((stop) => stop.sourceIds.length === 0)).toBe(true)
+    expect(body.data.derived.budget.total.expected).toBe(0)
+    expect(body.data.derived.budget.categories).toEqual([])
+    expect(body.data.derived.routeLegs.every((leg) => leg.tollsCny === undefined)).toBe(true)
+  })
+
+  it('proxies only the fixed Supabase Auth surface through the Jovlo origin', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ access_token: 'token' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }))
+    try {
+      const response = await app.request('/supabase/auth/v1/token?grant_type=password', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'traveler@example.com', password: 'password123' }),
+      }, {
+        JOVLO_MODE: 'production',
+        SUPABASE_URL: 'https://fixed-project.supabase.co',
+        SUPABASE_PUBLISHABLE_KEY: 'public-key',
+      })
+      expect(response.status).toBe(200)
+      expect(response.headers.get('cache-control')).toBe('no-store')
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://fixed-project.supabase.co/auth/v1/token?grant_type=password',
+        expect.objectContaining({ method: 'POST', redirect: 'manual' }),
+      )
+      const init = fetchMock.mock.calls[0][1]
+      expect(new Headers(init?.headers).get('apikey')).toBe('public-key')
+
+      const rejected = await app.request('/supabase/auth/v1/admin/users', { method: 'GET' }, {
+        JOVLO_MODE: 'production',
+        SUPABASE_URL: 'https://fixed-project.supabase.co',
+        SUPABASE_PUBLISHABLE_KEY: 'public-key',
+      })
+      expect(rejected.status).toBe(404)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      fetchMock.mockRestore()
+    }
   })
 })

@@ -1,11 +1,12 @@
 import { BedDouble, ExternalLink, MapPin, Navigation, Route, Timer, WalletCards } from 'lucide-react'
 import { Fragment, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import type { DerivedSnapshot, TripSnapshot } from '@domain'
+import { cloneJson, recalculateTrip, type DerivedSnapshot, type TripSnapshot } from '@domain'
 import { useParams } from 'react-router-dom'
 
 import { buildAmapNavigationUrl } from '@/lib/amap'
 import { apiRequest } from '@/lib/api'
+import { isSupabaseConfigured } from '@/lib/supabase'
 import { useTripStore } from '@/store/useTripStore'
 
 import {
@@ -42,6 +43,17 @@ type PublicTripResponse = {
   versionId: string
   snapshot: TripSnapshot
   derived: DerivedSnapshot
+  disclosureConfig: {
+    showExactDates: boolean
+    showSources: boolean
+    showBudget: boolean
+    viewScope?: 'overview' | 'day'
+  }
+  view: {
+    scope: 'overview' | 'day'
+    dayId?: string
+    overviewToken?: string
+  }
 }
 
 export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProps = {}) {
@@ -58,15 +70,37 @@ export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProp
   const remote = useQuery({
     queryKey: ['public-trip', token],
     queryFn: () => apiRequest<PublicTripResponse>(`/api/v1/public/${encodeURIComponent(token as string)}`),
-    enabled: Boolean(token && !snapshot && !localPublication),
+    enabled: Boolean(token && !snapshot && (isSupabaseConfigured || !localPublication)),
     retry: false,
   })
-  const trip = snapshot ?? localVersion?.snapshot ?? remote.data?.snapshot
-  const derived = derivedSnapshot ?? localVersion?.derivedSnapshot ?? remote.data?.derived
-  const disclosure = localPublication?.disclosureConfig ?? {
+  const preferRemote = Boolean(token && isSupabaseConfigured)
+  const scopedLocal = useMemo(() => {
+    if (!localVersion || localPublication?.disclosureConfig.viewScope !== 'day' || !localPublication.disclosureConfig.dayId) {
+      return localVersion ? { snapshot: localVersion.snapshot, derived: localVersion.derivedSnapshot } : undefined
+    }
+    const day = localVersion.snapshot.days.find((item) => item.id === localPublication.disclosureConfig.dayId)
+    if (!day) return undefined
+    const scoped = cloneJson(localVersion.snapshot)
+    scoped.days = [day]
+    scoped.intent.days = 1
+    scoped.intent.startDate = day.date
+    return {
+      snapshot: scoped,
+      derived: recalculateTrip(scoped, localVersion.derivedSnapshot.routeLegs.filter((leg) => leg.dayId === day.id)),
+    }
+  }, [localPublication, localVersion])
+  const trip = snapshot ?? (preferRemote ? remote.data?.snapshot : scopedLocal?.snapshot ?? remote.data?.snapshot)
+  const derived = derivedSnapshot ?? (preferRemote ? remote.data?.derived : scopedLocal?.derived ?? remote.data?.derived)
+  const disclosure = remote.data?.disclosureConfig ?? localPublication?.disclosureConfig ?? {
     showExactDates: true,
     showSources: true,
     showBudget: true,
+    viewScope: 'overview' as const,
+  }
+  const view = remote.data?.view ?? {
+    scope: disclosure.viewScope ?? 'overview',
+    dayId: localPublication?.disclosureConfig.dayId,
+    overviewToken: localPublication?.disclosureConfig.overviewToken,
   }
   const days = useMemo(() => getTripDays(trip), [trip])
   const places = useMemo(() => getPlaceRefs(trip), [trip])
@@ -102,7 +136,7 @@ export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProp
         <div className="public-brand"><img src="/jovlo-mark.svg" alt="" /><span>Jovlo.ai</span></div>
         <div className="public-hero-grid">
           <div className="public-hero-copy">
-            <p>海南自驾路书</p>
+            <p>{view.scope === 'day' ? '海南自驾 · 单天路书' : '海南自驾路书'}</p>
             <h1>{getTripTitle(trip)}</h1>
             <div className="public-hero-meta"><span>{days.length} 天</span><span>{totalStops} 个停靠点</span><span>{(getTripDistanceMeters(derived) / 1000).toFixed(0)} km</span></div>
           </div>
@@ -118,6 +152,10 @@ export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProp
         </div>
       </header>
 
+      {view.scope === 'day' && view.overviewToken ? (
+        <div className="public-overview-link"><a href={`/s/${encodeURIComponent(view.overviewToken)}`}><MapPin aria-hidden="true" size={17} />查看整份路书</a><span>当前为单天只读分享</span></div>
+      ) : null}
+
       <section className="public-summary" aria-label="行程摘要">
         <div><Route aria-hidden="true" size={20} /><span>总距离</span><strong>{(getTripDistanceMeters(derived) / 1000).toFixed(0)} km</strong></div>
         <div><Timer aria-hidden="true" size={20} /><span>计划驾驶</span><strong>{formatMinutes(getTripDriveMinutes(derived))}</strong></div>
@@ -125,13 +163,13 @@ export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProp
         <div><BedDouble aria-hidden="true" size={20} /><span>过夜</span><strong>{Math.max(0, days.length - 1)} 晚</strong></div>
       </section>
 
-      <nav className="public-day-strip" aria-label="选择日期">
+      {days.length > 1 ? <nav className="public-day-strip" aria-label="选择日期">
         {days.map((day) => (
           <button className={day.id === selectedDay.id ? 'is-active' : ''} type="button" onClick={() => setSelectedDayId(day.id)} key={day.id}>
             <span>Day {day.dayIndex}</span><small>{disclosure.showExactDates ? formatDateLabel(day.date) : '日期已隐藏'}</small>
           </button>
         ))}
-      </nav>
+      </nav> : null}
 
       <article className="public-itinerary">
         <header className="public-day-heading">
@@ -148,9 +186,10 @@ export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProp
               const to = asRecord(asRecord(item).to)
               return readString(item, 'dayId') === selectedDay.id && readString(to, 'placeId') === stop.placeId
             })
-            const sourceCount = disclosure.showSources
-              ? new Set(stop.sourceIds.filter((sourceId) => sources[sourceId])).size
-              : 0
+            const stopSources = disclosure.showSources
+              ? [...new Set(stop.sourceIds)].map((sourceId) => sources[sourceId]).filter(Boolean)
+              : []
+            const sourceCount = stopSources.length
             const navUrl = readNumber(coordinate, 'lon') !== undefined && readNumber(coordinate, 'lat') !== undefined
               ? buildAmapNavigationUrl({ name: stop.name, lon: readNumber(coordinate, 'lon')!, lat: readNumber(coordinate, 'lat')! })
               : undefined
@@ -170,7 +209,7 @@ export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProp
                   title={stop.name}
                   meta={`${readString(schedule, 'arrivalTime') ?? stop.plannedStart ?? '--:--'} · 停留 ${formatMinutes(stop.stayMinutes)}`}
                   note={stop.note ?? readString(place, 'address')}
-                  action={sourceCount ? <StatusBadge tone={sourceCount >= 2 ? 'sky' : 'sun'}>{sourceCount >= 2 ? `${sourceCount} 个来源一致` : '单一来源'}</StatusBadge> : undefined}
+                  action={sourceCount ? <div className="public-source-actions"><StatusBadge tone={sourceCount >= 2 ? 'sky' : 'sun'}>{sourceCount >= 2 ? `${sourceCount} 源一致` : '单一来源'}</StatusBadge>{stopSources.slice(0, 2).map((source) => <a href={readString(source, 'url')} target="_blank" rel="noreferrer" aria-label={`打开来源：${readString(source, 'title') ?? '资料'}`} key={readString(source, 'sourceId') ?? readString(source, 'url')}><ExternalLink aria-hidden="true" size={15} /></a>)}</div> : undefined}
                 />
               </Fragment>
             )

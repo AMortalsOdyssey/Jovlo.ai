@@ -12,6 +12,45 @@
   gap: var(--space-2);
 }
 
+.share-config {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3);
+}
+
+.share-scope-switch {
+  display: inline-grid;
+  width: fit-content;
+  grid-template-columns: repeat(2, minmax(108px, 1fr));
+  padding: 3px;
+  background: var(--neutral-tint);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.share-scope-switch button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius-control) - 2px);
+  font-weight: 700;
+}
+
+.share-scope-switch button.is-active {
+  color: var(--brand-text);
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(55 39 23 / 10%);
+}
+
+.share-day-select {
+  width: min(440px, 100%);
+}
+
 .share-options label {
   display: inline-flex;
   min-height: var(--target-min);
@@ -107,6 +146,15 @@
   color: var(--muted);
 }
 
+.share-error {
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-4);
+  color: var(--coral-text);
+  background: var(--coral-tint);
+  border-left: 3px solid var(--coral);
+  border-radius: var(--radius-control);
+}
+
 @media (max-width: 900px) {
   .share-row {
     grid-template-columns: minmax(0, 1fr);
@@ -127,5 +175,13 @@
   .share-controls > .feature-button,
   .share-report-create > .feature-button {
     width: 100%;
+  }
+
+  .share-scope-switch {
+    width: 100%;
+  }
+
+  .share-options label {
+    flex: 1 1 120px;
   }
 }

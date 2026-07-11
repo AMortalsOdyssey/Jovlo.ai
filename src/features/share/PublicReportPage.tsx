@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { DerivedSnapshot, ReportGeneration, TripSnapshot } from '@domain'
 
 import { apiRequest } from '@/lib/api'
+import { isSupabaseConfigured } from '@/lib/supabase'
 import { useTripStore } from '@/store/useTripStore'
 
 import { EmptyState, RouteSpine, RouteSpineItem, StatusBadge } from '@/features/trips/feature-ui'
@@ -30,6 +31,12 @@ type PublicReportResponse = {
   derived: DerivedSnapshot | null
   expenseSummary: { count: number; total: number }
   actualSummary: { visited: number; skipped: number }
+  disclosureConfig: {
+    showExactDates: boolean
+    showSources: boolean
+    showBudget: boolean
+    viewScope?: 'overview' | 'day'
+  }
 }
 
 export function PublicReportPage() {
@@ -45,24 +52,26 @@ export function PublicReportPage() {
   const remote = useQuery({
     queryKey: ['public-report', token],
     queryFn: () => apiRequest<PublicReportResponse>(`/api/v1/public/reports/${encodeURIComponent(token as string)}`),
-    enabled: Boolean(token && !localReportEntity && !localPublication),
+    enabled: Boolean(token && (isSupabaseConfigured || (!localReportEntity && !localPublication))),
     retry: false,
   })
-  const report = localReportEntity
+  const preferRemote = Boolean(token && isSupabaseConfigured)
+  const report = !preferRemote && localReportEntity
     ? normalizeReports([localReportEntity])[0]
     : remote.data?.report
       ? normalizeReports([remote.data.report])[0]
       : undefined
-  const trip = localSnapshot?.trip ?? remote.data?.snapshot ?? undefined
-  const derived = localSnapshot?.derived ?? remote.data?.derived ?? undefined
+  const trip = preferRemote ? remote.data?.snapshot ?? undefined : localSnapshot?.trip ?? remote.data?.snapshot ?? undefined
+  const derived = preferRemote ? remote.data?.derived ?? undefined : localSnapshot?.derived ?? remote.data?.derived ?? undefined
   const days = useMemo(() => getTripDays(trip), [trip])
   const actuals = useMemo(() => normalizeActuals(localSnapshot?.actuals ?? []), [localSnapshot])
   const expenses = useMemo(() => normalizeExpenses(localSnapshot?.expenses ?? []), [localSnapshot])
   const sources = useMemo(() => Object.values(getSourceRefs(trip)), [trip])
-  const disclosure = localPublication?.disclosureConfig ?? {
+  const disclosure = remote.data?.disclosureConfig ?? localPublication?.disclosureConfig ?? {
     showExactDates: true,
     showSources: true,
     showBudget: true,
+    viewScope: 'overview' as const,
   }
 
   if (localPublication?.revokedAt || remote.isError || (!remote.isLoading && (!trip || !derived || !report))) {

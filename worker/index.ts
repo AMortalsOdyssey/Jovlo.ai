@@ -82,6 +82,7 @@ import {
   readSupabaseRow,
   readSupabaseRows,
   requireAuthenticatedUser,
+  proxySupabaseAuthRequest,
 } from './services/supabase'
 import type { AppBindings, AppContext, RuntimeMode } from './types'
 
@@ -231,6 +232,12 @@ function requestId(context: AppContext): string {
     : crypto.randomUUID()
 }
 
+function logRoute(pathname: string) {
+  if (pathname.startsWith('/api/v1/public/reports/')) return '/api/v1/public/reports/:token'
+  if (pathname.startsWith('/api/v1/public/')) return '/api/v1/public/:token'
+  return pathname
+}
+
 app.use('*', async (context, next) => {
   const startedAt = Date.now()
   context.set('requestId', requestId(context))
@@ -263,7 +270,7 @@ app.use('*', async (context, next) => {
       JSON.stringify({
         ts: new Date().toISOString(),
         requestId: context.get('requestId'),
-        route: `${context.req.method} ${new URL(context.req.url).pathname}`,
+        route: `${context.req.method} ${logRoute(new URL(context.req.url).pathname)}`,
         status: context.res.status,
         durationMs: Date.now() - startedAt,
         mode: context.get('mode'),
@@ -319,6 +326,8 @@ app.notFound(async (context) => {
   }
   return failure(context, new AppError('VALIDATION_FAILED', '接口不存在', 404))
 })
+
+app.all('/supabase/auth/v1/*', (context) => proxySupabaseAuthRequest(context))
 
 function validateUuid(value: string, label: string): string {
   const parsed = UuidSchema.safeParse(value)
@@ -399,6 +408,11 @@ function disclosureFlag(config: JsonValue, key: string): boolean {
   return typeof config === 'object' && config !== null && !Array.isArray(config) && config[key] === true
 }
 
+function disclosureValue(config: JsonValue, key: string): string | undefined {
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) return undefined
+  return typeof config[key] === 'string' ? config[key] : undefined
+}
+
 function publicSnapshot(snapshot: TripSnapshot, disclosureConfig: JsonValue) {
   const output = cloneJson(snapshot)
   delete output.userNotes
@@ -415,6 +429,130 @@ function publicSnapshot(snapshot: TripSnapshot, disclosureConfig: JsonValue) {
     output.days.forEach((day) => day.stops.forEach((stop) => (stop.sourceIds = [])))
   }
   return output
+}
+
+function redactBudget(snapshot: TripSnapshot, derived: DerivedSnapshot) {
+  const outputSnapshot = cloneJson(snapshot)
+  const outputDerived = cloneJson(derived)
+  const hiddenRange = { low: 0, expected: 0, high: 0, currency: 'CNY' as const }
+
+  Object.values(outputSnapshot.placeRefs).forEach((place) => {
+    if (place.selectedVariant?.priceRange) place.selectedVariant.priceRange = hiddenRange
+  })
+  Object.values(outputSnapshot.stayAreaRefs).forEach((area) => {
+    area.priceReference = hiddenRange
+  })
+  const assumptions = outputSnapshot.budgetAssumptions
+  assumptions.lodgingDefaultPerNight = hiddenRange
+  assumptions.lodgingByArea = Object.fromEntries(Object.keys(assumptions.lodgingByArea).map((key) => [key, hiddenRange]))
+  assumptions.mealPerPersonPerDay = hiddenRange
+  assumptions.fuelLitersPer100Km = 0
+  assumptions.electricityKwhPer100Km = 0
+  assumptions.fuelPricePerLiter = hiddenRange
+  assumptions.electricityPricePerKwh = hiddenRange
+  assumptions.rentalCarPerDay = hiddenRange
+  assumptions.insurancePerDay = hiddenRange
+  assumptions.parkingAndTollsPerDay = hiddenRange
+  assumptions.ticketByPlaceId = Object.fromEntries(Object.keys(assumptions.ticketByPlaceId).map((key) => [key, hiddenRange]))
+  assumptions.specialMealByStopId = Object.fromEntries(Object.keys(assumptions.specialMealByStopId).map((key) => [key, hiddenRange]))
+  assumptions.contingency = assumptions.contingency.kind === 'fixed'
+    ? { kind: 'fixed', amount: hiddenRange }
+    : { kind: 'percentage', rate: 0 }
+  outputSnapshot.intent.totalBudget = undefined
+  outputSnapshot.intent.partySize = 1
+  outputSnapshot.intent.vehicle = { type: 'fuel' }
+  outputDerived.routeLegs.forEach((leg) => delete leg.tollsCny)
+  outputDerived.budget = {
+    ...outputDerived.budget,
+    categories: [],
+    total: hiddenRange,
+    perPerson: hiddenRange,
+    warnings: ['预算未公开'],
+  }
+  return { snapshot: outputSnapshot, derived: outputDerived }
+}
+
+function publicTripPayload(
+  snapshot: TripSnapshot,
+  derived: DerivedSnapshot,
+  disclosureConfig: JsonValue,
+) {
+  const scope = disclosureValue(disclosureConfig, 'viewScope') === 'day' ? 'day' : 'overview'
+  const dayId = disclosureValue(disclosureConfig, 'dayId')
+  let scopedSnapshot = cloneJson(snapshot)
+  let scopedDerived = cloneJson(derived)
+
+  if (scope === 'day') {
+    const selectedDay = scopedSnapshot.days.find((day) => day.id === dayId)
+    if (!selectedDay) {
+      throw new AppError('VALIDATION_FAILED', '单天分享对应的行程已不存在', 404)
+    }
+    scopedSnapshot.days = [selectedDay]
+    scopedSnapshot.intent.days = 1
+    scopedSnapshot.intent.startDate = selectedDay.date
+    const firstStop = selectedDay.stops[0]
+    const lastStop = selectedDay.stops.at(-1)
+    if (firstStop) scopedSnapshot.intent.entryAnchor = { placeId: firstStop.placeId, label: scopedSnapshot.placeRefs[firstStop.placeId]?.name ?? '当日起点' }
+    if (lastStop) scopedSnapshot.intent.exitAnchor = { placeId: lastStop.placeId, label: scopedSnapshot.placeRefs[lastStop.placeId]?.name ?? '当日终点' }
+    const dayPlaceIds = new Set(selectedDay.stops.map((stop) => stop.placeId))
+    scopedSnapshot.intent.mustPlaceIds = scopedSnapshot.intent.mustPlaceIds.filter((placeId) => dayPlaceIds.has(placeId))
+    scopedSnapshot.intent.avoidTags = []
+    scopedSnapshot.intent.totalBudget = undefined
+    const routeLegs = scopedDerived.routeLegs.filter((leg) => leg.dayId === selectedDay.id)
+    scopedDerived = {
+      ...scopedDerived,
+      inputHash: stableHash(scopedSnapshot),
+      routeLegs,
+      daySchedules: scopedDerived.daySchedules.filter((day) => day.dayId === selectedDay.id),
+      budget: calculateBudget(scopedSnapshot, routeLegs, scopedDerived.calculatedAt),
+    }
+
+    const retainedPlaceIds = new Set<string>([
+      scopedSnapshot.intent.entryAnchor.placeId,
+      scopedSnapshot.intent.exitAnchor.placeId,
+      ...selectedDay.stops.map((stop) => stop.placeId),
+      ...(selectedDay.overnightStay?.kind === 'place' ? [selectedDay.overnightStay.placeId] : []),
+    ])
+    scopedSnapshot.placeRefs = Object.fromEntries(
+      Object.entries(scopedSnapshot.placeRefs).filter(([placeId]) => retainedPlaceIds.has(placeId)),
+    )
+    const retainedAreaIds = new Set(
+      selectedDay.overnightStay?.kind === 'area' ? [selectedDay.overnightStay.areaId] : [],
+    )
+    scopedSnapshot.stayAreaRefs = Object.fromEntries(
+      Object.entries(scopedSnapshot.stayAreaRefs).filter(([areaId]) => retainedAreaIds.has(areaId)),
+    )
+    const retainedSourceIds = new Set([
+      ...selectedDay.stops.flatMap((stop) => stop.sourceIds),
+      ...Object.values(scopedSnapshot.placeRefs).flatMap((place) => place.sourceIds),
+    ])
+    scopedSnapshot.sourceRefs = Object.fromEntries(
+      Object.entries(scopedSnapshot.sourceRefs).filter(([sourceId]) => retainedSourceIds.has(sourceId)),
+    )
+  }
+
+  scopedSnapshot = publicSnapshot(scopedSnapshot, disclosureConfig)
+  if (!disclosureFlag(disclosureConfig, 'showBudget')) {
+    const redacted = redactBudget(scopedSnapshot, scopedDerived)
+    scopedSnapshot = redacted.snapshot
+    scopedDerived = redacted.derived
+  }
+
+  return {
+    snapshot: scopedSnapshot,
+    derived: scopedDerived,
+    disclosureConfig: {
+      showExactDates: disclosureFlag(disclosureConfig, 'showExactDates'),
+      showSources: disclosureFlag(disclosureConfig, 'showSources'),
+      showBudget: disclosureFlag(disclosureConfig, 'showBudget'),
+      viewScope: scope,
+    },
+    view: {
+      scope,
+      dayId: scope === 'day' ? dayId : undefined,
+      overviewToken: scope === 'day' ? disclosureValue(disclosureConfig, 'overviewToken') : undefined,
+    },
+  }
 }
 
 async function parseChangeSetUpload(context: AppContext): Promise<TripChangeSet> {
@@ -1730,6 +1868,20 @@ app.post('/api/v1/trips/:tripId/publications', async (context) => {
   const tripId = validateUuid(context.req.param('tripId'), 'tripId')
   const idempotencyKey = requireIdempotencyKey(context)
   const input = await parseJson(context, TripPublicationRequestSchema)
+  if (input.disclosureConfig.viewScope === 'day') {
+    const version = context.get('mode') === 'demo'
+      ? DEMO_VERSIONS.find((item) => item.id === input.versionId && item.tripId === tripId)
+      : await readSupabaseRow<{ snapshot: TripSnapshot }>(
+          context,
+          'trip_versions',
+          `id=eq.${input.versionId}&trip_id=eq.${tripId}&select=snapshot`,
+          user.token as string,
+        )
+    const snapshot = version ? TripSnapshotSchema.parse(version.snapshot) : null
+    if (!snapshot?.days.some((day) => day.id === input.disclosureConfig.dayId)) {
+      throw new AppError('VALIDATION_FAILED', '选择的单天不属于这个固定版本', 400)
+    }
+  }
   const token = randomToken()
   if (context.get('mode') === 'demo') {
     const result = await runDemoIdempotent(
@@ -1956,13 +2108,14 @@ app.get('/api/v1/public/reports/:token', async (context) => {
         userAction: '请联系分享者重新生成报告',
       })
     }
+    const publicTrip = publicTripPayload(version.snapshot, version.derivedSnapshot, publication.disclosureConfig)
+    const showBudget = disclosureFlag(publication.disclosureConfig, 'showBudget')
     return success(context, {
       report,
-      snapshot: publicSnapshot(version.snapshot, publication.disclosureConfig),
-      derived: version.derivedSnapshot,
+      ...publicTrip,
       expenseSummary: {
-        count: DEMO_EXPENSES.length,
-        total: DEMO_EXPENSES.reduce((sum, expense) => sum + expense.amount, 0),
+        count: showBudget ? DEMO_EXPENSES.length : 0,
+        total: showBudget ? DEMO_EXPENSES.reduce((sum, expense) => sum + expense.amount, 0) : 0,
       },
       actualSummary: {
         visited: DEMO_ACTUALS.filter((actual) => actual.status === 'visited').length,
@@ -1974,7 +2127,19 @@ app.get('/api/v1/public/reports/:token', async (context) => {
   const result = await callSupabaseRpc<Record<string, unknown>>(context, 'read_public_report', {
     p_token_hash: tokenHash,
   })
-  return success(context, result)
+  const disclosureConfig = result.disclosureConfig as JsonValue
+  const publicTrip = publicTripPayload(
+    TripSnapshotSchema.parse(result.snapshot),
+    DerivedSnapshotSchema.parse(result.derived),
+    disclosureConfig,
+  )
+  const showBudget = disclosureFlag(disclosureConfig, 'showBudget')
+  const expenseSummary = result.expenseSummary as { count?: number; total?: number } | undefined
+  return success(context, {
+    ...result,
+    ...publicTrip,
+    expenseSummary: showBudget ? expenseSummary : { count: 0, total: 0 },
+  })
 })
 
 app.get('/api/v1/public/:token', async (context) => {
@@ -1996,15 +2161,23 @@ app.get('/api/v1/public/:token', async (context) => {
     return success(context, {
       publicationId: publication.id,
       versionId: version.id,
-      snapshot: publicSnapshot(version.snapshot, publication.disclosureConfig),
-      derived: version.derivedSnapshot,
+      ...publicTripPayload(version.snapshot, version.derivedSnapshot, publication.disclosureConfig),
     })
   }
   const tokenHash = await hashPublicationToken(token, requirePepper(context))
   const result = await callSupabaseRpc<Record<string, unknown>>(context, 'read_public_trip', {
     p_token_hash: tokenHash,
   })
-  return success(context, result)
+  const disclosureConfig = result.disclosureConfig as JsonValue
+  return success(context, {
+    publicationId: result.publicationId,
+    versionId: result.versionId,
+    ...publicTripPayload(
+      TripSnapshotSchema.parse(result.snapshot),
+      DerivedSnapshotSchema.parse(result.derived),
+      disclosureConfig,
+    ),
+  })
 })
 
 export { app }

@@ -7,14 +7,20 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && supabasePublishableKe
 
 let client: SupabaseClient | null = null
 
+function authApiUrl() {
+  if (typeof window === 'undefined') return supabaseUrl as string
+  return `${window.location.origin}/supabase`
+}
+
 export function getSupabaseClient(): SupabaseClient | null {
   if (!isSupabaseConfigured) return null
 
   if (!client) {
-    client = createClient(supabaseUrl as string, supabasePublishableKey as string, {
+    client = createClient(authApiUrl(), supabasePublishableKey as string, {
       auth: {
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        detectSessionInUrl: false,
+        flowType: 'pkce',
         persistSession: true,
       },
     })

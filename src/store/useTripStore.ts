@@ -136,6 +136,7 @@ export type TripStore = {
   generateReport: (type?: 'plan' | 'actual') => ReportGeneration
   createTripPublication: (config: DisclosureConfig) => LocalPublication
   createReportPublication: (reportId: string, config: DisclosureConfig) => LocalPublication | null
+  recordPublication: (publication: LocalPublication) => void
   revokePublication: (publicationId: string) => void
   setProductionSync: (patch: Partial<ProductionSyncState>) => void
   hydrateProduction: (payload: ProductionHydration) => void
@@ -168,7 +169,7 @@ function cloneDemo() {
       targetKind: 'version',
       versionId: DEMO_VERSIONS[1].id,
       reportId: null,
-      disclosureConfig: { showExactDates: false, showSources: true, showBudget: true },
+      disclosureConfig: { showExactDates: false, showSources: true, showBudget: true, viewScope: 'overview' },
       createdAt: '2026-07-11T12:30:00+08:00',
       revokedAt: null,
     },
@@ -178,7 +179,7 @@ function cloneDemo() {
       targetKind: 'report',
       versionId: null,
       reportId: DEMO_REPORTS[1].id,
-      disclosureConfig: { showExactDates: false, showSources: true, showBudget: true },
+      disclosureConfig: { showExactDates: false, showSources: true, showBudget: true, viewScope: 'overview' },
       createdAt: '2026-08-15T21:30:00+08:00',
       revokedAt: null,
     },
@@ -882,7 +883,11 @@ export const useTripStore = create<TripStore>()(
         createTripPublication: (config) => {
           const head = currentVersion(get())
           const existing = get().publications.find(
-            (item) => item.targetKind === 'version' && item.versionId === head.id && !item.revokedAt,
+            (item) => item.targetKind === 'version'
+              && item.versionId === head.id
+              && !item.revokedAt
+              && (item.disclosureConfig.viewScope ?? 'overview') === config.viewScope
+              && item.disclosureConfig.dayId === config.dayId,
           )
           if (existing) return existing
           const publication: LocalPublication = {
@@ -926,6 +931,15 @@ export const useTripStore = create<TripStore>()(
           return publication
         },
 
+        recordPublication: (publication) => {
+          mutate((state) => {
+            const index = state.publications.findIndex((item) => item.id === publication.id)
+            if (index >= 0) state.publications[index] = publication
+            else state.publications.unshift(publication)
+            state.snackbar = { id: createId('snackbar'), message: '分享链接已创建' }
+          })
+        },
+
         revokePublication: (publicationId) => {
           const revokedAt = new Date().toISOString()
           mutate((state) => {
@@ -949,12 +963,20 @@ export const useTripStore = create<TripStore>()(
             state.trips = [cloneJson(snapshot)]
             state.derived = cloneJson(payload.derived)
             state.versions = cloneJson(payload.versions)
+            state.expenses = []
+            state.actuals = []
+            state.reports = []
+            state.reportSnapshots = {}
+            state.publications = []
             state.selectedDayId = snapshot.days[0].id
             state.selectedStopId = null
             state.dirty = false
             state.revision += 1
             state.saveStatus = 'saved'
             state.pendingAction = null
+            state.changeSetPreview = null
+            state.acceptedChangeSetGroups = []
+            state.unassignedStops = []
             state.undoStack = []
             state.productionPublishQueue = []
             state.productionSync = {

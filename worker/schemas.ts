@@ -139,16 +139,37 @@ export const ReportCreateRequestSchema = z
   })
   .strict()
 
+const PublicationDisclosureSchema = z
+  .object({
+    showExactDates: z.boolean(),
+    showSources: z.boolean(),
+    showBudget: z.boolean(),
+    viewScope: z.enum(['overview', 'day']),
+    dayId: UuidSchema.optional(),
+    overviewToken: z.string().regex(/^[A-Za-z0-9_-]{24,160}$/).optional(),
+  })
+  .strict()
+  .superRefine((config, context) => {
+    if (config.viewScope === 'day' && !config.dayId) {
+      context.addIssue({ code: 'custom', path: ['dayId'], message: 'dayId is required for a day share' })
+    }
+    if (config.viewScope === 'overview' && (config.dayId || config.overviewToken)) {
+      context.addIssue({ code: 'custom', message: 'overview shares cannot include day-only fields' })
+    }
+  })
+
 export const TripPublicationRequestSchema = z
   .object({
     versionId: UuidSchema,
-    disclosureConfig: JsonValueSchema,
+    disclosureConfig: PublicationDisclosureSchema,
   })
   .strict()
 
 export const ReportPublicationRequestSchema = z
   .object({
-    disclosureConfig: JsonValueSchema,
+    disclosureConfig: PublicationDisclosureSchema.refine((config) => config.viewScope === 'overview', {
+      message: 'reports only support overview disclosure',
+    }),
   })
   .strict()
 

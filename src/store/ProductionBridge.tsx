@@ -1,5 +1,6 @@
-import { createClient, type Session } from '@supabase/supabase-js'
+import type { Session } from '@supabase/supabase-js'
 import {
+  DEMO_TRIP,
   TripSnapshotSchema,
   TripVersionSchema,
   cloneJson,
@@ -11,6 +12,7 @@ import {
 import { useEffect } from 'react'
 
 import { apiRequest } from '@/lib/api'
+import { getSupabaseClient } from '@/lib/supabase'
 import { buildReferenceRouteLegs } from './reference-routes'
 import type { ProductionPublishRequest } from './store-types'
 import { useTripStore } from './useTripStore'
@@ -176,7 +178,7 @@ export class ProductionSyncController {
       const firstTrip = asRecord(trips[0])
       const existingTripId = readString(firstTrip, 'id', 'tripId', 'trip_id')
       if (!existingTripId) {
-        snapshot = cloneJson(useTripStore.getState().trip)
+        snapshot = cloneJson(DEMO_TRIP)
         snapshot.tripId = crypto.randomUUID()
         snapshot = TripSnapshotSchema.parse(snapshot)
         const created = await this.request<UnknownRecord>('/api/v1/trips', {
@@ -355,17 +357,29 @@ export function ProductionBridge({ apiBase, debounceMs }: ProductionBridgeProps)
       return
     }
 
-    const supabase = createClient(config.supabaseUrl, config.publishableKey)
+    const supabase = getSupabaseClient()
+    if (!supabase) return
     let controller: ProductionSyncController | null = null
     let activeToken: string | null = null
+    let activeUserId: string | null = null
     let disposed = false
 
     const activate = (session: Session | null) => {
+      const recoveryRoute = window.location.pathname === '/reset-password'
+        || ((window.location.pathname === '/auth/callback' || window.location.pathname === '/auth/confirm')
+          && new URLSearchParams(window.location.search).get('type') === 'recovery')
+      if (recoveryRoute) {
+        controller?.dispose()
+        controller = null
+        activeToken = null
+        return
+      }
       if (disposed || session?.access_token === activeToken) return
       controller?.dispose()
       controller = null
       activeToken = session?.access_token ?? null
       if (!session) {
+        activeUserId = null
         useTripStore.getState().setProductionSync({
           mode: 'auth-required',
           hydrated: false,
@@ -374,6 +388,10 @@ export function ProductionBridge({ apiBase, debounceMs }: ProductionBridgeProps)
           error: null,
         })
         return
+      }
+      if (activeUserId !== session.user.id) {
+        useTripStore.getState().resetDemo()
+        activeUserId = session.user.id
       }
       controller = createProductionSyncController({
         accessToken: session.access_token,
