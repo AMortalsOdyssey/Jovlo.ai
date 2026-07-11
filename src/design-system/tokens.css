@@ -37,6 +37,11 @@
   --cocoa-tint: rgb(138 98 75 / 12%);
   --neutral-tint: rgb(122 106 88 / 10%);
 
+  /* Warm chrome surfaces keep navigation distinct without competing with content. */
+  --header-surface: #f6e6d5;
+  --header-surface-soft: #fff5e9;
+  --header-line: #dfc3a5;
+
   /* Warm map ground colors (reference map + AMap fallback) */
   --map-land: #f2ebda;
   --map-water: #bfd9e2;

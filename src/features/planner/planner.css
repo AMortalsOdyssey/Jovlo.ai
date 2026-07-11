@@ -109,8 +109,8 @@
   padding: 0 var(--space-6);
   align-items: center;
   justify-content: space-between;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  background: var(--header-surface);
+  border-bottom: 1px solid var(--header-line);
 }
 
 .jovlo-trip-header__identity,
@@ -265,6 +265,20 @@ button.jovlo-trip-header__status:hover {
 .jovlo-day-rail__item[data-selected] {
   background: var(--brand-tint);
   border-left-color: var(--brand);
+}
+
+.jovlo-day-rail__overview {
+  min-height: 72px;
+  border-bottom: 1px solid var(--line);
+}
+
+.jovlo-day-rail__overview .jovlo-day-rail__heading {
+  align-items: center;
+  color: var(--brand-text);
+}
+
+.jovlo-day-rail__overview .jovlo-day-rail__meta {
+  padding-left: 25px;
 }
 
 .jovlo-day-rail__heading {
@@ -946,8 +960,8 @@ button.jovlo-day-health:hover {
   height: var(--target-min);
   min-height: var(--target-min);
   overflow: hidden;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  background: var(--header-surface-soft);
+  border-bottom: 1px solid var(--header-line);
 }
 
 .jovlo-mobile-day-strip__scroller {
@@ -987,6 +1001,18 @@ button.jovlo-day-health:hover {
 .jovlo-mobile-day-strip__day[data-selected] {
   color: var(--ink);
   border-bottom-color: var(--brand);
+}
+
+.jovlo-mobile-day-strip__overview {
+  position: sticky;
+  z-index: 1;
+  left: 0;
+  min-width: 88px;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  color: var(--brand-text);
+  background: var(--header-surface-soft);
+  box-shadow: 1px 0 0 var(--header-line);
 }
 
 /* Mobile nav */
@@ -1606,6 +1632,7 @@ button.jovlo-day-health:hover {
   .jovlo-trip-header {
     padding: 0 var(--space-2);
     gap: var(--space-1);
+    overflow: hidden;
   }
 
   .jovlo-trip-header__identity {
@@ -1811,14 +1838,18 @@ button.jovlo-day-health:hover {
   }
 
   .jovlo-planner-workspace__body {
-    display: block;
+    display: grid;
     min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: clamp(190px, 32dvh, 280px) minmax(0, 1fr);
     overflow: hidden;
   }
 
-  .jovlo-planner-workspace__rail,
+  .jovlo-planner-workspace__rail {
+    display: none;
+  }
+
   .jovlo-planner-workspace__timeline,
-  .jovlo-planner-workspace__map,
   .jovlo-planner-workspace__budget,
   .jovlo-planner-workspace__more {
     display: none;
@@ -1828,11 +1859,39 @@ button.jovlo-day-health:hover {
     border: 0;
   }
 
+  .jovlo-planner-workspace__timeline,
+  .jovlo-planner-workspace__budget,
+  .jovlo-planner-workspace__more {
+    grid-row: 2;
+  }
+
+  .jovlo-planner-workspace__map {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    grid-row: 1;
+    overflow: hidden;
+    border-bottom: 1px solid var(--header-line);
+  }
+
+  .jovlo-planner-workspace__map .jovlo-map-canvas {
+    min-height: 0;
+  }
+
   .jovlo-planner-workspace[data-mobile-view="plan"] .jovlo-planner-workspace__timeline,
-  .jovlo-planner-workspace[data-mobile-view="map"] .jovlo-planner-workspace__map,
   .jovlo-planner-workspace[data-mobile-view="budget"] .jovlo-planner-workspace__budget,
   .jovlo-planner-workspace[data-mobile-view="more"] .jovlo-planner-workspace__more {
     display: block;
+  }
+
+  .jovlo-planner-workspace[data-mobile-view="map"] .jovlo-planner-workspace__body {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .jovlo-planner-workspace[data-mobile-view="map"] .jovlo-planner-workspace__map {
+    grid-row: 1;
+    border-bottom: 0;
   }
 
   .jovlo-planner-workspace__inspector {
@@ -1844,12 +1903,21 @@ button.jovlo-day-health:hover {
 }
 
 @media (max-width: 430px) {
+  .jovlo-planner-workspace__body {
+    grid-template-rows: clamp(180px, 30dvh, 240px) minmax(0, 1fr);
+  }
+
   .jovlo-trip-header__trip strong {
     max-width: 80px;
   }
 
   .jovlo-trip-header__status {
-    width: 60px;
+    width: 40px;
+    min-width: 40px;
+  }
+
+  .jovlo-trip-header__status span {
+    display: none;
   }
 
   .jovlo-trip-header__save {
@@ -1874,9 +1942,6 @@ button.jovlo-day-health:hover {
     width: var(--target-min);
   }
 
-  .jovlo-trip-header__status span {
-    display: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,4 +1,4 @@
-import { AlertTriangle, BedDouble, CarFront } from 'lucide-react'
+import { AlertTriangle, BedDouble, CarFront, Route } from 'lucide-react'
 
 import type { DaySummary } from './types'
 import './planner.css'
@@ -8,14 +8,40 @@ export interface DayRailProps {
   selectedDayId: string
   onSelectDay: (dayId: string) => void
   label?: string
+  overviewSelected?: boolean
+  onSelectOverview?: () => void
 }
 
-export function DayRail({ days, selectedDayId, onSelectDay, label = '行程日期' }: DayRailProps) {
+export function DayRail({
+  days,
+  selectedDayId,
+  onSelectDay,
+  label = '行程日期',
+  overviewSelected = false,
+  onSelectOverview,
+}: DayRailProps) {
   return (
     <nav className="jovlo-day-rail" aria-label={label}>
       <ol className="jovlo-day-rail__list">
+        {onSelectOverview ? (
+          <li>
+            <button
+              type="button"
+              className="jovlo-day-rail__item jovlo-day-rail__overview"
+              data-selected={overviewSelected || undefined}
+              aria-current={overviewSelected ? 'page' : undefined}
+              onClick={onSelectOverview}
+            >
+              <span className="jovlo-day-rail__heading">
+                <Route aria-hidden="true" size={17} />
+                <strong>全程总览</strong>
+              </span>
+              <span className="jovlo-day-rail__meta">{days.length} 天完整路线</span>
+            </button>
+          </li>
+        ) : null}
         {days.map((day) => {
-          const selected = day.id === selectedDayId
+          const selected = !overviewSelected && day.id === selectedDayId
 
           return (
             <li key={day.id}>

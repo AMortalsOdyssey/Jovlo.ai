@@ -16,6 +16,7 @@ import { PlannerWorkspace } from './PlannerWorkspace'
 import { RouteTimeline } from './RouteTimeline'
 import { Snackbar } from './Snackbar'
 import { StopCard } from './StopCard'
+import { TripOverview } from './TripOverview'
 import { TripHeader } from './TripHeader'
 import { buildAmapNavigationUrl } from '@/lib/amap'
 import { formatCurrency, formatDistance, formatDuration } from '@/lib/format'
@@ -143,6 +144,7 @@ export function PlanPage() {
   const [candidateId, setCandidateId] = useState<string | null>(null)
   const [editingStopId, setEditingStopId] = useState<string | null>(null)
   const [impactDetailsOpen, setImpactDetailsOpen] = useState(false)
+  const [overviewOpen, setOverviewOpen] = useState(false)
 
   const daySummaries = state.trip.days.map((item) => {
     const itemSchedule = state.derived.daySchedules.find((entry) => entry.dayId === item.id)
@@ -157,10 +159,12 @@ export function PlanPage() {
       driveDuration: itemSchedule ? formatDuration(itemSchedule.drivingMinutes) : '待计算',
       riskCount: itemSchedule?.warnings.filter((warning) => warning.severity !== 'info').length ?? 0,
       healthStatus: HEALTH_STATUS[itemSchedule?.health ?? 'data_unconfirmed'],
+      date: item.date,
+      stopCount: item.stops.length,
     }
   })
 
-  const routePoints = useMemo<FormalMapPoint[]>(() => {
+  const dayRoutePoints = useMemo<FormalMapPoint[]>(() => {
     const points: FormalMapPoint[] = []
     const dayIndex = state.trip.days.findIndex((item) => item.id === day.id)
     const previousStay = dayIndex > 0 ? state.trip.days[dayIndex - 1]?.overnightStay : undefined
@@ -187,6 +191,51 @@ export function PlanPage() {
     return points
   }, [day, state.trip])
 
+  const overviewRoutePoints = useMemo<FormalMapPoint[]>(() => {
+    const points: FormalMapPoint[] = []
+    const appendPoint = (
+      id: string,
+      name: string,
+      place?: { gcj02: { lon: number; lat: number } },
+    ) => {
+      if (!place) return
+      const previous = points.at(-1)
+      if (previous && previous.name === name && previous.lng === place.gcj02.lon && previous.lat === place.gcj02.lat) return
+      points.push({
+        id,
+        order: points.length + 1,
+        name,
+        lng: place.gcj02.lon,
+        lat: place.gcj02.lat,
+      })
+    }
+
+    appendPoint(
+      'overview-entry',
+      state.trip.intent.entryAnchor.label,
+      state.trip.placeRefs[state.trip.intent.entryAnchor.placeId],
+    )
+    state.trip.days.forEach((item) => {
+      item.stops.forEach((stop) => {
+        const place = state.trip.placeRefs[stop.placeId]
+        appendPoint(stop.id, place?.name ?? '未命名地点', place)
+      })
+      if (item.overnightStay?.kind === 'place') {
+        appendPoint(`overview-stay-${item.id}`, item.overnightStay.label, state.trip.placeRefs[item.overnightStay.placeId])
+      } else if (item.overnightStay?.kind === 'area') {
+        appendPoint(`overview-stay-${item.id}`, item.overnightStay.label, state.trip.stayAreaRefs[item.overnightStay.areaId])
+      }
+    })
+    appendPoint(
+      'overview-exit',
+      state.trip.intent.exitAnchor.label,
+      state.trip.placeRefs[state.trip.intent.exitAnchor.placeId],
+    )
+    return points
+  }, [state.trip])
+
+  const routePoints = overviewOpen ? overviewRoutePoints : dayRoutePoints
+
   const candidatePoints = state.candidates.map((place) => ({
     id: place.placeId,
     name: place.name,
@@ -202,8 +251,25 @@ export function PlanPage() {
   const editingPlace = editingStop ? state.trip.placeRefs[editingStop.placeId] : undefined
 
   const updateDay = (dayId: string) => {
+    setOverviewOpen(false)
     state.selectDay(dayId)
     state.selectStop(null)
+    setCandidateId(null)
+  }
+
+  const openOverview = () => {
+    setOverviewOpen(true)
+    state.setMobileView('plan')
+    state.selectStop(null)
+    setCandidateId(null)
+  }
+
+  const selectMapPoint = (id: string) => {
+    const ownerDay = state.trip.days.find((item) => item.stops.some((stop) => stop.id === id))
+    if (!ownerDay) return
+    setOverviewOpen(false)
+    state.selectDay(ownerDay.id)
+    state.selectStop(id)
     setCandidateId(null)
   }
 
@@ -332,15 +398,26 @@ export function PlanPage() {
     </div>
   )
 
+  const overview = (
+    <TripOverview
+      days={daySummaries}
+      totalDistance={formatDistance(state.derived.budget.totalDistanceMeters)}
+      totalDriving={formatDuration(state.derived.daySchedules.reduce((sum, item) => sum + item.drivingMinutes, 0))}
+      totalBudget={formatCurrency(state.derived.budget.total.expected)}
+      totalStops={state.trip.days.reduce((sum, item) => sum + item.stops.length, 0)}
+      onSelectDay={updateDay}
+    />
+  )
+
   return (
     <>
       <PlannerWorkspace
         activeMobileView={state.mobileView}
         header={<TripHeader title={state.trip.title} version={version.versionNo} saveStatus={state.saveStatus === 'failed' ? 'error' : state.saveStatus} onBack={() => navigate('/trips')} onImport={() => navigate(`/trips/${state.trip.tripId}/imports/demo-import`)} onHistory={() => navigate(`/trips/${state.trip.tripId}/versions`)} onShare={() => navigate(`/trips/${state.trip.tripId}/share`)} onSaveVersion={() => state.publishVersion()} onRetrySave={state.retrySave} />}
-        dayRail={<DayRail days={daySummaries} selectedDayId={day.id} onSelectDay={updateDay} />}
-        dayStrip={<MobileDayStrip days={daySummaries} selectedDayId={day.id} onSelectDay={updateDay} />}
-        timeline={timeline}
-        map={<MapCanvas routePoints={routePoints} candidatePoints={candidatePoints} selectedPointId={state.selectedStopId ?? candidateId ?? undefined} onSelectFormalPoint={(id) => { if (day.stops.some((stop) => stop.id === id)) { state.selectStop(id); setCandidateId(null) } }} onSelectCandidateCluster={(ids) => { setCandidateId(ids[0] ?? null); state.selectStop(null) }} />}
+        dayRail={<DayRail days={daySummaries} selectedDayId={day.id} overviewSelected={overviewOpen} onSelectOverview={openOverview} onSelectDay={updateDay} />}
+        dayStrip={<MobileDayStrip days={daySummaries} selectedDayId={day.id} overviewSelected={overviewOpen} onSelectOverview={openOverview} onSelectDay={updateDay} />}
+        timeline={overviewOpen ? overview : timeline}
+        map={<MapCanvas routePoints={routePoints} candidatePoints={candidatePoints} selectedPointId={state.selectedStopId ?? candidateId ?? undefined} onSelectFormalPoint={selectMapPoint} onSelectCandidateCluster={(ids) => { setCandidateId(ids[0] ?? null); state.selectStop(null) }} />}
         budget={budgetPanel}
         more={morePanel}
         inspector={inspectedPlace ? <PlaceInspector open name={inspectedPlace.name} openingHours={inspectedPlace.selectedVariant?.openingHours ? '以来源中的当日公告为准' : undefined} suggestedStay={selectedStop ? formatDuration(selectedStop.stayMinutes) : '建议 90 min'} price={selectedPrice ? `约 ${formatCurrency(selectedPrice)}` : undefined} parking={inspectedPlace.selectedVariant?.parkingNote} sourceSummary={sourceEvidence.map((source) => source.summary).join('；') || undefined} evidence={sourceEvidence.map((source) => ({ id: source.sourceId, source: source.title, statement: source.summary, statusLabel: source.commercialRelationship === 'yes' ? '商业关联' : '来源可追溯' }))} addLabel={selectedCandidate ? `加入 Day ${day.dayIndex}` : '已在行程'} onAdd={selectedCandidate ? () => { state.addCandidateStop(selectedCandidate.placeId, day.id); setCandidateId(null) } : undefined} onNavigate={() => openNavigation(inspectedPlace)} onOpenEvidence={(id) => { const source = state.trip.sourceRefs[id]; if (source) window.open(source.url, '_blank', 'noopener,noreferrer') }} onShowAllEvidence={() => navigate(`/trips/${state.trip.tripId}/sources`)} onClose={() => { state.selectStop(null); setCandidateId(null) }} /> : undefined}

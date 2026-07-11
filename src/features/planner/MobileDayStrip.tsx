@@ -1,3 +1,5 @@
+import { Route } from 'lucide-react'
+
 import type { DaySummary } from './types'
 import './planner.css'
 
@@ -5,14 +7,35 @@ export interface MobileDayStripProps {
   days: DaySummary[]
   selectedDayId: string
   onSelectDay: (dayId: string) => void
+  overviewSelected?: boolean
+  onSelectOverview?: () => void
 }
 
-export function MobileDayStrip({ days, selectedDayId, onSelectDay }: MobileDayStripProps) {
+export function MobileDayStrip({
+  days,
+  selectedDayId,
+  onSelectDay,
+  overviewSelected = false,
+  onSelectOverview,
+}: MobileDayStripProps) {
   return (
     <nav className="jovlo-mobile-day-strip" aria-label="选择行程日期">
       <div className="jovlo-mobile-day-strip__scroller">
+        {onSelectOverview ? (
+          <button
+            type="button"
+            className="jovlo-mobile-day-strip__day jovlo-mobile-day-strip__overview"
+            data-selected={overviewSelected || undefined}
+            aria-current={overviewSelected ? 'page' : undefined}
+            aria-label="全程总览"
+            onClick={onSelectOverview}
+          >
+            <Route aria-hidden="true" size={16} />
+            <strong>总览</strong>
+          </button>
+        ) : null}
         {days.map((day) => {
-          const selected = day.id === selectedDayId
+          const selected = !overviewSelected && day.id === selectedDayId
           return (
             <button
               key={day.id}

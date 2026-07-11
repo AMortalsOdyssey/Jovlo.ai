@@ -8,6 +8,7 @@ import { MobileDayStrip } from './MobileDayStrip'
 import { MobileNav } from './MobileNav'
 import { PlannerWorkspace } from './PlannerWorkspace'
 import { TripHeader } from './TripHeader'
+import { TripOverview } from './TripOverview'
 import type { DaySummary } from './types'
 
 afterEach(cleanup)
@@ -52,6 +53,7 @@ describe('planner navigation components', () => {
   it('offers equivalent desktop and compact day selection callbacks', async () => {
     const user = userEvent.setup()
     const onSelectDay = vi.fn()
+    const onSelectOverview = vi.fn()
     const { rerender } = render(
       <DayRail days={DAYS} selectedDayId="d1" onSelectDay={onSelectDay} />,
     )
@@ -59,13 +61,43 @@ describe('planner navigation components', () => {
     await user.click(screen.getByRole('button', { name: /Day 2/ }))
     expect(onSelectDay).toHaveBeenLastCalledWith('d2')
 
-    rerender(<MobileDayStrip days={DAYS} selectedDayId="d2" onSelectDay={onSelectDay} />)
+    rerender(
+      <MobileDayStrip
+        days={DAYS}
+        selectedDayId="d2"
+        onSelectDay={onSelectDay}
+        onSelectOverview={onSelectOverview}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: '全程总览' }))
+    expect(onSelectOverview).toHaveBeenCalledOnce()
     expect(screen.getByRole('button', { name: 'Day 2，一个非常长的万宁城市区域名称' })).toHaveAttribute(
       'aria-current',
       'date',
     )
     await user.click(screen.getByRole('button', { name: 'Day 1，海口' }))
     expect(onSelectDay).toHaveBeenLastCalledWith('d1')
+  })
+
+  it('shows complete trip metrics and opens a selected day from overview', async () => {
+    const user = userEvent.setup()
+    const onSelectDay = vi.fn()
+    render(
+      <TripOverview
+        days={DAYS.map((day) => ({ ...day, date: '2026-08-10', stopCount: 3 }))}
+        totalDistance="487 km"
+        totalDriving="10h 12m"
+        totalBudget="¥6,432"
+        totalStops={6}
+        onSelectDay={onSelectDay}
+      />,
+    )
+
+    expect(screen.getByRole('heading', { name: '全程总览' })).toBeInTheDocument()
+    expect(screen.getByText('487 km')).toBeInTheDocument()
+    expect(screen.getByText('10h 12m')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '打开 Day 2，一个非常长的万宁城市区域名称' }))
+    expect(onSelectDay).toHaveBeenCalledWith('d2')
   })
 
   it('switches the first mobile navigation label to Today during travel', async () => {
@@ -94,6 +126,7 @@ describe('planner navigation components', () => {
     )
 
     expect(container.firstElementChild).toHaveAttribute('data-mobile-view', 'budget')
+    expect(container.querySelector('.jovlo-planner-workspace__map')).toBeInTheDocument()
   })
 
   it('keeps empty states concise and actionable', async () => {
