@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { WorkspaceShell } from './WorkspaceShell'
 import { EmptyState, PageShell } from '@/features/trips/feature-ui'
+import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
 
 const TripsPage = lazy(() => import('@/features/trips/TripsPage').then((module) => ({ default: module.TripsPage })))
 const NewTripPage = lazy(() => import('@/features/trips/NewTripPage').then((module) => ({ default: module.NewTripPage })))
@@ -18,6 +19,7 @@ const VersionsPage = lazy(() => import('@/features/versions/VersionsPage').then(
 const SharePage = lazy(() => import('@/features/share/SharePage').then((module) => ({ default: module.SharePage })))
 const PublicTripPage = lazy(() => import('@/features/share/PublicTripPage').then((module) => ({ default: module.PublicTripPage })))
 const PublicReportPage = lazy(() => import('@/features/share/PublicReportPage').then((module) => ({ default: module.PublicReportPage })))
+const LoginPage = lazy(() => import('@/features/auth/LoginPage').then((module) => ({ default: module.LoginPage })))
 
 function NotFoundPage() {
   return (
@@ -36,20 +38,23 @@ export function App() {
   return (
     <Suspense fallback={<div className="app-route-loading" role="status">正在打开路书…</div>}>
       <Routes>
-        <Route path="/" element={<Navigate to="/trips" replace />} />
-        <Route path="/trips" element={<TripsPage />} />
-        <Route path="/trips/new" element={<NewTripPage />} />
-        <Route path="/trips/:tripId/plan" element={<PlanPage />} />
-        <Route path="/trips/:tripId" element={<WorkspaceShell />}>
-          <Route index element={<Navigate to="plan" replace />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="budget" element={<BudgetPage />} />
-          <Route path="sources" element={<SourcesPage />} />
-          <Route path="versions" element={<VersionsPage />} />
-          <Route path="imports/:changeSetId" element={<ChangeSetPage />} />
-          <Route path="today" element={<TodayPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="share" element={<SharePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/" element={<Navigate to="/trips" replace />} />
+          <Route path="/trips" element={<TripsPage />} />
+          <Route path="/trips/new" element={<NewTripPage />} />
+          <Route path="/trips/:tripId/plan" element={<PlanPage />} />
+          <Route path="/trips/:tripId" element={<WorkspaceShell />}>
+            <Route index element={<Navigate to="plan" replace />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="budget" element={<BudgetPage />} />
+            <Route path="sources" element={<SourcesPage />} />
+            <Route path="versions" element={<VersionsPage />} />
+            <Route path="imports/:changeSetId" element={<ChangeSetPage />} />
+            <Route path="today" element={<TodayPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="share" element={<SharePage />} />
+          </Route>
         </Route>
         <Route path="/s/:token" element={<PublicTripPage />} />
         <Route path="/r/:token" element={<PublicReportPage />} />

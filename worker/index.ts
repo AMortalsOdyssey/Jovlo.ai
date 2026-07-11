@@ -64,7 +64,7 @@ import {
   TripPublicationRequestSchema,
   TripCreateRequestSchema,
 } from './schemas'
-import { calculateRouteLegs } from './services/amap'
+import { calculateRouteLegs, proxyAmapJsApiRequest } from './services/amap'
 import {
   callSupabaseRpc,
   readSupabaseRow,
@@ -250,9 +250,17 @@ app.onError((error, context) => {
   )
 })
 
-app.notFound((context) =>
-  failure(context, new AppError('VALIDATION_FAILED', '接口不存在', 404)),
-)
+app.notFound((context) => {
+  const pathname = new URL(context.req.url).pathname
+  const isAssetRequest =
+    (context.req.method === 'GET' || context.req.method === 'HEAD') &&
+    !pathname.startsWith('/api/') &&
+    !pathname.startsWith('/_AMapService/')
+  if (isAssetRequest && context.env.ASSETS) {
+    return context.env.ASSETS.fetch(context.req.raw)
+  }
+  return failure(context, new AppError('VALIDATION_FAILED', '接口不存在', 404))
+})
 
 function validateUuid(value: string, label: string): string {
   const parsed = UuidSchema.safeParse(value)
@@ -377,7 +385,14 @@ const health = (context: AppContext) =>
 app.get('/api/health', health)
 app.get('/api/v1/health', health)
 
+app.all('/_AMapService/*', (context) =>
+  proxyAmapJsApiRequest(context.req.raw, context.env),
+)
+
 app.get('/api/v1/demo/bootstrap', (context) => {
+  if (context.get('mode') !== 'demo') {
+    throw new AppError('VALIDATION_FAILED', '接口不存在', 404)
+  }
   context.header('cache-control', 'public, max-age=60')
   return success(context, {
     snapshot: DEMO_TRIP,
@@ -610,7 +625,29 @@ app.post('/api/v1/trips/:tripId/publish', async (context) => {
     },
     user.token,
   )
-  return success(context, result, 201)
+  const versionId = String(result.versionId ?? result.version_id ?? '')
+  const versionNo = Number(result.versionNo ?? result.version_no)
+  const draftRevision = Number(result.draftRevision ?? result.draft_revision)
+  if (!versionId || !Number.isInteger(versionNo) || !Number.isInteger(draftRevision)) {
+    throw new AppError('DEPENDENCY_UNAVAILABLE', '数据库返回了无法识别的版本结果', 502, {
+      retryable: true,
+    })
+  }
+  const version = TripVersionSchema.parse({
+    id: versionId,
+    tripId,
+    versionNo,
+    parentVersionId: input.baseVersionId,
+    source: input.source,
+    message: input.message,
+    snapshot: input.snapshot,
+    snapshotHash: result.snapshotHash ?? result.snapshot_hash,
+    derivedSnapshot: input.derivedSnapshot,
+    derivedHash: result.derivedHash ?? result.derived_hash,
+    createdBy: user.id,
+    createdAt: new Date().toISOString(),
+  })
+  return success(context, { version, draftRevision }, 201, { currentVersionId: version.id })
 })
 
 app.get('/api/v1/trips/:tripId/versions', async (context) => {
@@ -624,10 +661,28 @@ app.get('/api/v1/trips/:tripId/versions', async (context) => {
   const versions = await readSupabaseRows<Record<string, unknown>>(
     context,
     'trip_versions',
-    `trip_id=eq.${tripId}&select=id,trip_id,version_no,parent_version_id,source,message,snapshot_hash,derived_hash,created_at&order=version_no.desc`,
+    `trip_id=eq.${tripId}&select=id,trip_id,version_no,parent_version_id,source,message,snapshot,snapshot_hash,derived_snapshot,derived_hash,created_by,created_at&order=version_no.desc`,
     user.token as string,
   )
-  return success(context, versions)
+  return success(
+    context,
+    versions.map((row) =>
+      TripVersionSchema.parse({
+        id: row.id,
+        tripId: row.trip_id,
+        versionNo: row.version_no,
+        parentVersionId: row.parent_version_id,
+        source: row.source,
+        message: row.message,
+        snapshot: row.snapshot,
+        snapshotHash: row.snapshot_hash,
+        derivedSnapshot: row.derived_snapshot,
+        derivedHash: row.derived_hash,
+        createdBy: row.created_by,
+        createdAt: row.created_at,
+      }),
+    ),
+  )
 })
 
 app.post('/api/v1/plans/generate', async (context) => {

@@ -12,6 +12,7 @@ afterEach(cleanup)
 describe('MapCanvas fallback', () => {
   beforeEach(() => {
     vi.mocked(loadAmap).mockReset()
+    delete window._AMapSecurityConfig
   })
 
   it('renders a non-empty local reference route without an AMap key', async () => {
@@ -128,6 +129,9 @@ describe('MapCanvas fallback', () => {
       key: 'amap-test-key',
       version: '2.0',
       plugins: ['AMap.MarkerCluster'],
+    })
+    expect(window._AMapSecurityConfig).toEqual({
+      serviceHost: `${window.location.origin}/_AMapService`,
     })
     expect(formalMarkerOptions).toHaveLength(2)
     expect(formalMarkerOptions.every(({ content }) => content.dataset.mapMarkerKind === 'formal')).toBe(true)

@@ -40,6 +40,9 @@ import type {
   LocalReportSnapshot,
   MobileView,
   PendingAction,
+  ProductionHydration,
+  ProductionPublishRequest,
+  ProductionSyncState,
   SaveStatus,
   SnackbarState,
 } from './store-types'
@@ -87,6 +90,8 @@ export type TripStore = {
   acceptedChangeSetGroups: string[]
   unassignedStops: TripStop[]
   undoStack: UndoEntry[]
+  productionSync: ProductionSyncState
+  productionPublishQueue: ProductionPublishRequest[]
   selectDay: (dayId: string) => void
   selectStop: (stopId: string | null) => void
   setMobileView: (view: MobileView) => void
@@ -117,6 +122,11 @@ export type TripStore = {
   createTripPublication: (config: DisclosureConfig) => LocalPublication
   createReportPublication: (reportId: string, config: DisclosureConfig) => LocalPublication | null
   revokePublication: (publicationId: string) => void
+  setProductionSync: (patch: Partial<ProductionSyncState>) => void
+  hydrateProduction: (payload: ProductionHydration) => void
+  acknowledgeProductionDraft: (draftRevision: number, localRevision: number) => void
+  completeProductionPublish: (requestId: string, version: TripVersion, draftRevision: number) => void
+  failProductionOperation: (message: string, requestId?: string) => void
   resetDemo: () => void
 }
 
@@ -272,7 +282,9 @@ export const useTripStore = create<TripStore>()(
             state.snackbar = { id: createId('snackbar'), message, actionLabel: '撤销' }
           }
         })
-        scheduleSaved(() => mutate((state) => void (state.saveStatus = 'saved')))
+        if (get().productionSync.mode !== 'production') {
+          scheduleSaved(() => mutate((state) => void (state.saveStatus = 'saved')))
+        }
       }
 
       const moveNow = (stopId: string, targetDayId: string, targetIndex?: number) => {
@@ -306,6 +318,14 @@ export const useTripStore = create<TripStore>()(
         acceptedChangeSetGroups: DEMO_CHANGESET.proposalGroups.map((group) => group.groupId),
         unassignedStops: [],
         undoStack: [],
+        productionSync: {
+          mode: 'demo',
+          hydrated: false,
+          draftRevision: null,
+          currentVersionId: null,
+          error: null,
+        },
+        productionPublishQueue: [],
 
         selectDay: (dayId) => mutate((state) => void (state.selectedDayId = dayId)),
         selectStop: (stopId) => mutate((state) => void (state.selectedStopId = stopId)),
@@ -461,13 +481,24 @@ export const useTripStore = create<TripStore>()(
             state.revision += 1
             state.saveStatus = 'saving'
           })
-          scheduleSaved(() => mutate((state) => void (state.saveStatus = 'saved')))
+          if (get().productionSync.mode !== 'production') {
+            scheduleSaved(() => mutate((state) => void (state.saveStatus = 'saved')))
+          }
         },
 
         dismissSnackbar: () => mutate((state) => void (state.snackbar = null)),
         retrySave: () => {
-          mutate((state) => void (state.saveStatus = 'saving'))
-          scheduleSaved(() => mutate((state) => void (state.saveStatus = 'saved')))
+          mutate((state) => {
+            state.saveStatus = 'saving'
+            if (state.productionSync.hydrated) {
+              state.productionSync.mode = 'production'
+              state.productionSync.error = null
+              state.revision += 1
+            }
+          })
+          if (get().productionSync.mode !== 'production') {
+            scheduleSaved(() => mutate((state) => void (state.saveStatus = 'saved')))
+          }
         },
 
         publishVersion: (message = '保存当前行程', source = 'manual') => {
@@ -489,10 +520,26 @@ export const useTripStore = create<TripStore>()(
           })
           mutate((draft) => {
             draft.versions.push(version)
-            draft.dirty = false
-            draft.saveStatus = 'saved'
+            if (draft.productionSync.mode === 'production') {
+              draft.productionPublishQueue.push({
+                id: crypto.randomUUID(),
+                optimisticVersionId: version.id,
+                localRevision: draft.revision,
+                message,
+                source,
+                snapshot: cloneJson(draft.trip),
+                derivedSnapshot: cloneJson(draft.derived),
+              })
+              draft.saveStatus = 'saving'
+            } else {
+              draft.dirty = false
+              draft.saveStatus = 'saved'
+            }
             draft.pendingAction = null
-            draft.snackbar = { id: createId('snackbar'), message: `已发布 v${version.versionNo}` }
+            draft.snackbar = {
+              id: createId('snackbar'),
+              message: draft.productionSync.mode === 'production' ? `正在发布 v${version.versionNo}` : `已发布 v${version.versionNo}`,
+            }
           })
           return version
         },
@@ -759,6 +806,88 @@ export const useTripStore = create<TripStore>()(
           })
         },
 
+        setProductionSync: (patch) => {
+          mutate((state) => {
+            Object.assign(state.productionSync, patch)
+          })
+        },
+
+        hydrateProduction: (payload) => {
+          const snapshot = TripSnapshotSchema.parse(payload.snapshot)
+          mutate((state) => {
+            state.trip = cloneJson(snapshot)
+            state.trips = [cloneJson(snapshot)]
+            state.derived = cloneJson(payload.derived)
+            state.versions = cloneJson(payload.versions)
+            state.selectedDayId = snapshot.days[0].id
+            state.selectedStopId = null
+            state.dirty = false
+            state.revision += 1
+            state.saveStatus = 'saved'
+            state.pendingAction = null
+            state.undoStack = []
+            state.productionPublishQueue = []
+            state.productionSync = {
+              mode: 'production',
+              hydrated: true,
+              draftRevision: payload.draftRevision,
+              currentVersionId: payload.currentVersionId,
+              error: null,
+            }
+          })
+        },
+
+        acknowledgeProductionDraft: (draftRevision, localRevision) => {
+          mutate((state) => {
+            state.productionSync.draftRevision = draftRevision
+            state.productionSync.error = null
+            if (state.revision === localRevision && state.productionPublishQueue.length === 0) {
+              state.saveStatus = 'saved'
+            }
+          })
+        },
+
+        completeProductionPublish: (requestId, version, draftRevision) => {
+          const validated = TripVersionSchema.parse(version)
+          mutate((state) => {
+            const request = state.productionPublishQueue.find((item) => item.id === requestId)
+            if (!request) return
+            const optimisticId = request.optimisticVersionId
+            const versionIndex = state.versions.findIndex((item) => item.id === optimisticId)
+            if (versionIndex >= 0) state.versions[versionIndex] = cloneJson(validated)
+            else state.versions.push(cloneJson(validated))
+            state.versions.forEach((item) => {
+              if (item.parentVersionId === optimisticId) item.parentVersionId = validated.id
+            })
+            state.productionPublishQueue = state.productionPublishQueue.filter((item) => item.id !== requestId)
+            state.productionSync.currentVersionId = validated.id
+            state.productionSync.draftRevision = draftRevision
+            state.productionSync.error = null
+            if (state.revision === request.localRevision) {
+              state.dirty = false
+              state.saveStatus = 'saved'
+            }
+            state.snackbar = { id: createId('snackbar'), message: `已发布 v${validated.versionNo}` }
+          })
+        },
+
+        failProductionOperation: (message, requestId) => {
+          mutate((state) => {
+            if (requestId) {
+              const request = state.productionPublishQueue.find((item) => item.id === requestId)
+              if (request) {
+                state.versions = state.versions.filter((item) => item.id !== request.optimisticVersionId)
+                state.productionPublishQueue = state.productionPublishQueue.filter((item) => item.id !== requestId)
+              }
+            }
+            state.productionSync.mode = 'error'
+            state.productionSync.error = message
+            state.saveStatus = 'failed'
+            state.dirty = true
+            state.snackbar = { id: createId('snackbar'), message: `同步失败：${message}`, actionLabel: '重试' }
+          })
+        },
+
         resetDemo: () => {
           const fresh = cloneDemo()
           mutate((state) => {
@@ -782,6 +911,14 @@ export const useTripStore = create<TripStore>()(
             state.acceptedChangeSetGroups = DEMO_CHANGESET.proposalGroups.map((group) => group.groupId)
             state.unassignedStops = []
             state.undoStack = []
+            state.productionSync = {
+              mode: 'demo',
+              hydrated: false,
+              draftRevision: null,
+              currentVersionId: null,
+              error: null,
+            }
+            state.productionPublishQueue = []
           })
         },
       }

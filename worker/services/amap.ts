@@ -4,6 +4,218 @@ import { AppError } from '../lib/errors'
 import type { Env } from '../types'
 import type { RouteDryRunRequest } from '../schemas'
 
+const AMAP_SERVICE_PREFIX = '/_AMapService'
+const AMAP_PROXY_TIMEOUT_MS = 8_000
+const AMAP_PROXY_MAX_RESPONSE_BYTES = 1_000_000
+const AMAP_PROXY_MAX_QUERY_BYTES = 2_048
+
+type AmapProxyRule = {
+  upstreamOrigin: 'https://restapi.amap.com' | 'https://webapi.amap.com'
+  queryParameters: ReadonlySet<string>
+}
+
+const COMMON_QUERY_PARAMETERS = ['key', 'output', 's', 'platform', 'sdkversion', 'logversion', 'appname', 'csid']
+
+function queryParameters(...parameters: string[]): ReadonlySet<string> {
+  return new Set([...COMMON_QUERY_PARAMETERS, ...parameters])
+}
+
+const AMAP_PROXY_RULES: ReadonlyMap<string, AmapProxyRule> = new Map([
+  [
+    '/v4/map/styles',
+    {
+      upstreamOrigin: 'https://webapi.amap.com',
+      queryParameters: queryParameters('styleid'),
+    },
+  ],
+  [
+    '/v3/config/district',
+    {
+      upstreamOrigin: 'https://restapi.amap.com',
+      queryParameters: queryParameters('keywords', 'subdistrict', 'showbiz', 'extensions', 'filter'),
+    },
+  ],
+  [
+    '/v3/geocode/geo',
+    {
+      upstreamOrigin: 'https://restapi.amap.com',
+      queryParameters: queryParameters('address', 'city', 'batch'),
+    },
+  ],
+  [
+    '/v3/geocode/regeo',
+    {
+      upstreamOrigin: 'https://restapi.amap.com',
+      queryParameters: queryParameters(
+        'location',
+        'poitype',
+        'radius',
+        'extensions',
+        'batch',
+        'roadlevel',
+        'homeorcorp',
+      ),
+    },
+  ],
+  [
+    '/v3/assistant/inputtips',
+    {
+      upstreamOrigin: 'https://restapi.amap.com',
+      queryParameters: queryParameters('keywords', 'type', 'location', 'city', 'citylimit', 'datatype'),
+    },
+  ],
+  [
+    '/v3/place/text',
+    {
+      upstreamOrigin: 'https://restapi.amap.com',
+      queryParameters: queryParameters(
+        'keywords',
+        'types',
+        'city',
+        'citylimit',
+        'children',
+        'offset',
+        'page',
+        'building',
+        'floor',
+        'extensions',
+      ),
+    },
+  ],
+  [
+    '/v3/place/around',
+    {
+      upstreamOrigin: 'https://restapi.amap.com',
+      queryParameters: queryParameters(
+        'location',
+        'keywords',
+        'types',
+        'city',
+        'radius',
+        'sortrule',
+        'offset',
+        'page',
+        'extensions',
+      ),
+    },
+  ],
+])
+
+function isSameOriginBrowserRequest(request: Request, requestUrl: URL): boolean {
+  const origin = request.headers.get('origin')
+  const referer = request.headers.get('referer')
+  const fetchSite = request.headers.get('sec-fetch-site')
+  if (fetchSite && fetchSite !== 'same-origin') return false
+  if (origin) return origin === requestUrl.origin
+  if (referer) {
+    try {
+      return new URL(referer).origin === requestUrl.origin
+    } catch {
+      return false
+    }
+  }
+  return fetchSite === 'same-origin'
+}
+
+function validateProxyQuery(requestUrl: URL, rule: AmapProxyRule): void {
+  if (requestUrl.search.length > AMAP_PROXY_MAX_QUERY_BYTES) {
+    throw new AppError('VALIDATION_FAILED', '高德代理查询参数过长', 400)
+  }
+  if (requestUrl.searchParams.has('jscode')) {
+    throw new AppError('FORBIDDEN', '安全密钥只能由服务端追加', 403)
+  }
+  for (const [name, value] of requestUrl.searchParams) {
+    if (!rule.queryParameters.has(name)) {
+      throw new AppError('FORBIDDEN', '高德代理包含未授权参数', 403, { details: { parameter: name } })
+    }
+    if (requestUrl.searchParams.getAll(name).length !== 1 || value.length > 512) {
+      throw new AppError('VALIDATION_FAILED', '高德代理参数格式无效', 400, {
+        details: { parameter: name },
+      })
+    }
+  }
+  const key = requestUrl.searchParams.get('key')
+  if (!key || !/^[A-Za-z0-9]{16,64}$/.test(key)) {
+    throw new AppError('VALIDATION_FAILED', '高德 JS Key 格式无效', 400)
+  }
+}
+
+function proxyRequestHeaders(request: Request): Headers {
+  const headers = new Headers({ accept: 'application/json,text/plain,*/*' })
+  for (const name of ['accept-language', 'referer', 'user-agent']) {
+    const value = request.headers.get(name)
+    if (value) headers.set(name, value)
+  }
+  return headers
+}
+
+export async function proxyAmapJsApiRequest(request: Request, env: Env): Promise<Response> {
+  if (request.method !== 'GET') {
+    throw new AppError('FORBIDDEN', '高德安全代理只允许 GET 请求', 405)
+  }
+  if (!env.AMAP_SECURITY_JSCODE) {
+    throw new AppError('DEPENDENCY_UNAVAILABLE', '高德 JS API 安全代理未配置', 503, {
+      retryable: false,
+      userAction: '请联系管理员检查 AMAP_SECURITY_JSCODE',
+    })
+  }
+
+  const requestUrl = new URL(request.url)
+  if (!isSameOriginBrowserRequest(request, requestUrl)) {
+    throw new AppError('FORBIDDEN', '高德安全代理只接受同域浏览器请求', 403)
+  }
+
+  const upstreamPath = requestUrl.pathname.slice(AMAP_SERVICE_PREFIX.length)
+  const rule = AMAP_PROXY_RULES.get(upstreamPath)
+  if (!rule) {
+    throw new AppError('FORBIDDEN', '高德代理路径不在固定白名单中', 403)
+  }
+  validateProxyQuery(requestUrl, rule)
+
+  const upstreamUrl = new URL(upstreamPath, rule.upstreamOrigin)
+  for (const [name, value] of requestUrl.searchParams) upstreamUrl.searchParams.set(name, value)
+  upstreamUrl.searchParams.set('jscode', env.AMAP_SECURITY_JSCODE)
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), AMAP_PROXY_TIMEOUT_MS)
+  try {
+    const response = await fetch(upstreamUrl, {
+      method: 'GET',
+      headers: proxyRequestHeaders(request),
+      redirect: 'manual',
+      signal: controller.signal,
+    })
+    if (response.status >= 300 && response.status < 400) {
+      throw new AppError('ROUTE_PROVIDER_UNAVAILABLE', '高德代理拒绝了上游重定向', 502, {
+        retryable: true,
+      })
+    }
+    const declaredSize = Number(response.headers.get('content-length') ?? '0')
+    if (Number.isFinite(declaredSize) && declaredSize > AMAP_PROXY_MAX_RESPONSE_BYTES) {
+      throw new AppError('ROUTE_PROVIDER_UNAVAILABLE', '高德代理响应超过大小限制', 502)
+    }
+    const body = await response.arrayBuffer()
+    if (body.byteLength > AMAP_PROXY_MAX_RESPONSE_BYTES) {
+      throw new AppError('ROUTE_PROVIDER_UNAVAILABLE', '高德代理响应超过大小限制', 502)
+    }
+    const contentType = response.headers.get('content-type') ?? 'application/json; charset=utf-8'
+    return new Response(body, {
+      status: response.status,
+      headers: {
+        'content-type': contentType,
+        'cache-control': 'no-store',
+      },
+    })
+  } catch (error) {
+    if (error instanceof AppError) throw error
+    throw new AppError('ROUTE_PROVIDER_UNAVAILABLE', '高德安全代理暂时不可用', 503, {
+      retryable: true,
+    })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 const AMapResponseSchema = z
   .object({
     status: z.string(),

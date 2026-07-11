@@ -3,6 +3,7 @@ import { load as loadAmap } from '@amap/amap-jsapi-loader'
 import { LocateFixed, Minus, Plus } from 'lucide-react'
 
 import { IconButton } from '../../components'
+import { configureAmapServiceHost } from '../../lib/amap'
 import type { CandidateMapPoint, FormalMapPoint } from './types'
 import './planner.css'
 
@@ -163,6 +164,7 @@ export function MapCanvas({
     let cancelled = false
     let candidateCluster: any
     setLoadState('loading')
+    configureAmapServiceHost()
 
     loadAmap({ key: apiKey, version: '2.0', plugins: ['AMap.MarkerCluster'] })
       .then((AMap: any) => {

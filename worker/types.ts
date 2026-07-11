@@ -24,11 +24,13 @@ export type ApiErrorCode =
 export type RuntimeMode = 'demo' | 'production'
 
 export type Env = {
+  ASSETS?: { fetch(request: Request): Promise<Response> }
   JOVLO_MODE?: RuntimeMode
   BUILD_SHA?: string
   SUPABASE_URL?: string
   SUPABASE_PUBLISHABLE_KEY?: string
   AMAP_WEB_SERVICE_KEY?: string
+  AMAP_SECURITY_JSCODE?: string
   SHARE_TOKEN_PEPPER?: string
 }
 

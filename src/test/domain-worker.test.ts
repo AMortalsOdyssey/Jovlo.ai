@@ -48,6 +48,15 @@ describe('Worker API contract', () => {
     expect(((await unverifiable.json()) as Envelope).error?.code).toBe('DEPENDENCY_UNAVAILABLE')
   })
 
+  it('does not expose the demo bootstrap in production', async () => {
+    const response = await app.request('/api/v1/demo/bootstrap', undefined, {
+      JOVLO_MODE: 'production',
+    })
+    const body = (await response.json()) as Envelope
+    expect(response.status).toBe(404)
+    expect(body.error?.code).toBe('VALIDATION_FAILED')
+  })
+
   it('returns an explicit reference provider when AMap secret is absent', async () => {
     const from = DEMO_TRIP.placeRefs[DEMO_IDS.places.meilan]
     const to = DEMO_TRIP.placeRefs[DEMO_IDS.places.qilou]

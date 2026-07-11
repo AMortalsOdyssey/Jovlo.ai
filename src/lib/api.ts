@@ -1,3 +1,5 @@
+import { getSupabaseAccessToken } from './supabase'
+
 export type ApiErrorCode =
   | 'AUTH_REQUIRED'
   | 'FORBIDDEN'
@@ -50,12 +52,17 @@ export class ApiError extends Error {
 }
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers)
+  if (!headers.has('content-type')) headers.set('content-type', 'application/json')
+
+  const accessToken = await getSupabaseAccessToken()
+  if (accessToken && !headers.has('authorization')) {
+    headers.set('authorization', `Bearer ${accessToken}`)
+  }
+
   const response = await fetch(path, {
     ...init,
-    headers: {
-      'content-type': 'application/json',
-      ...init?.headers,
-    },
+    headers,
   })
 
   const envelope = (await response.json()) as ApiEnvelope<T>

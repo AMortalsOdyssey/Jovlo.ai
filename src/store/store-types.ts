@@ -1,6 +1,34 @@
-import type { ActualRecord, DerivedSnapshot, Expense, TripSnapshot } from '@domain'
+import type { ActualRecord, DerivedSnapshot, Expense, TripSnapshot, TripVersion } from '@domain'
 
 export type SaveStatus = 'saving' | 'saved' | 'failed' | 'stale'
+
+export type ProductionSyncMode = 'demo' | 'connecting' | 'auth-required' | 'production' | 'error'
+
+export type ProductionSyncState = {
+  mode: ProductionSyncMode
+  hydrated: boolean
+  draftRevision: number | null
+  currentVersionId: string | null
+  error: string | null
+}
+
+export type ProductionPublishRequest = {
+  id: string
+  optimisticVersionId: string
+  localRevision: number
+  message: string
+  source: TripVersion['source']
+  snapshot: TripSnapshot
+  derivedSnapshot: DerivedSnapshot
+}
+
+export type ProductionHydration = {
+  snapshot: TripSnapshot
+  derived: DerivedSnapshot
+  versions: TripVersion[]
+  draftRevision: number
+  currentVersionId: string | null
+}
 
 export type MobileView = 'plan' | 'map' | 'budget' | 'more'
 
