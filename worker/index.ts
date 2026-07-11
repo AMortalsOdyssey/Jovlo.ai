@@ -167,9 +167,9 @@ const demoPublications = new Map<string, DemoPublication>([
 
 const app = new Hono<AppBindings>()
 
-// AMap JSAPI 2.0 uses an internal javascript: bootstrap for its WebGL base-map renderer.
+// AMap JSAPI 2.0 evaluates its vector-tile decoder at runtime; inline scripts stay blocked.
 const CONTENT_SECURITY_POLICY =
-  "default-src 'self'; script-src 'self' 'unsafe-inline' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://restapi.amap.com https://*.amap.com https://*.autonavi.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+  "default-src 'self'; script-src 'self' 'unsafe-eval' https://webapi.amap.com https://*.amap.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.amap.com https://*.autonavi.com; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://restapi.amap.com https://*.amap.com https://*.autonavi.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 function setSecurityHeaders(headers: Headers, currentRequestId: string) {
   const contentSecurityPolicy = CONTENT_SECURITY_POLICY
