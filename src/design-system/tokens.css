@@ -1,0 +1,112 @@
+:root {
+  color-scheme: light;
+
+  /* Core palette */
+  --canvas: #f4f5f0;
+  --surface: #ffffff;
+  --ink: #202024;
+  --muted: #6f7278;
+  --line: #d9dbd2;
+  --brand: #6857e5;
+  --sea: #168c78;
+  --sky: #397fbe;
+  --sun: #e99a2d;
+  --coral: #c94f45;
+
+  /* AA-safe semantic text and icon colors on --surface */
+  --sun-text: #9a6210;
+  --sea-text: #0e6b5c;
+  --sky-text: #2a639a;
+  --coral-text: #a93a31;
+
+  /* Semantic tints */
+  --brand-tint: rgb(104 87 229 / 12%);
+  --sea-tint: rgb(22 140 120 / 12%);
+  --sky-tint: rgb(57 127 190 / 12%);
+  --sun-tint: rgb(233 154 45 / 12%);
+  --coral-tint: rgb(201 79 69 / 12%);
+
+  /* 4px spacing scale: no intermediate spacing tokens. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --shadow-float: 0 12px 32px rgb(32 32 36 / 12%);
+
+  /* The only supported stacking layers. */
+  --z-content: 0;
+  --z-sticky: 10;
+  --z-sheet: 20;
+  --z-dialog: 30;
+  --z-toast: 40;
+
+  --font-ui: "Noto Sans SC", "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-numeric: "IBM Plex Sans", "Noto Sans SC", "PingFang SC", sans-serif;
+  --font-report: "Noto Serif SC", "Songti SC", serif;
+
+  --text-page-size: 24px;
+  --text-page-line: 32px;
+  --text-panel-size: 16px;
+  --text-panel-line: 24px;
+  --text-body-size: 14px;
+  --text-body-line: 22px;
+  --text-supporting-size: 12px;
+  --text-supporting-line: 18px;
+
+  --target-min: 44px;
+  --trip-header-height: 56px;
+  --day-rail-width: 216px;
+  --timeline-min-width: 480px;
+  --timeline-max-width: 560px;
+  --impact-bar-height: 52px;
+  --route-spine-width: 2px;
+
+  --motion-press: 120ms;
+  --motion-state: 160ms;
+  --motion-reorder: 180ms;
+  --motion-sheet: 180ms;
+  --motion-route: 240ms;
+  --ease-out: ease-out;
+}
+
+.jovlo-text-page-title {
+  font: 700 var(--text-page-size) / var(--text-page-line) var(--font-ui);
+  letter-spacing: 0;
+}
+
+.jovlo-text-panel-title {
+  font: 700 var(--text-panel-size) / var(--text-panel-line) var(--font-ui);
+  letter-spacing: 0;
+}
+
+.jovlo-text-body {
+  font: 400 var(--text-body-size) / var(--text-body-line) var(--font-ui);
+  letter-spacing: 0;
+}
+
+.jovlo-text-supporting {
+  font: 400 var(--text-supporting-size) / var(--text-supporting-line) var(--font-ui);
+  letter-spacing: 0;
+}
+
+.jovlo-numeric {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-press: 0ms;
+    --motion-state: 0ms;
+    --motion-reorder: 0ms;
+    --motion-sheet: 0ms;
+    --motion-route: 0ms;
+  }
+}

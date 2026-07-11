@@ -1,0 +1,68 @@
+import type { Context } from 'hono'
+
+export type ApiErrorCode =
+  | 'AUTH_REQUIRED'
+  | 'FORBIDDEN'
+  | 'VALIDATION_FAILED'
+  | 'DRAFT_REVISION_STALE'
+  | 'BASE_VERSION_STALE'
+  | 'DIRTY_DRAFT_REQUIRES_CHECKPOINT'
+  | 'IDEMPOTENCY_KEY_REUSED'
+  | 'CHANGESET_INVALID'
+  | 'CHANGESET_CONFLICT'
+  | 'CHANGESET_STALE'
+  | 'PLACE_PROPOSAL_UNRESOLVED'
+  | 'ROUTE_NO_DATA'
+  | 'ROUTE_PROVIDER_UNAVAILABLE'
+  | 'ROUTE_QUOTA_EXCEEDED'
+  | 'PUBLICATION_REVOKED'
+  | 'REPORT_GENERATION_FAILED'
+  | 'RATE_LIMITED'
+  | 'DEPENDENCY_UNAVAILABLE'
+  | 'INTERNAL_ERROR'
+
+export type RuntimeMode = 'demo' | 'production'
+
+export type Env = {
+  JOVLO_MODE?: RuntimeMode
+  BUILD_SHA?: string
+  SUPABASE_URL?: string
+  SUPABASE_PUBLISHABLE_KEY?: string
+  AMAP_WEB_SERVICE_KEY?: string
+  SHARE_TOKEN_PEPPER?: string
+}
+
+export type AppVariables = {
+  requestId: string
+  mode: RuntimeMode
+}
+
+export type AppBindings = {
+  Bindings: Env
+  Variables: AppVariables
+}
+
+export type AppContext = Context<AppBindings>
+
+export type ApiEnvelope<T> = {
+  data: T | null
+  meta: {
+    requestId: string
+    currentVersionId?: string
+    mode: RuntimeMode
+    [key: string]: unknown
+  }
+  error: null | {
+    code: ApiErrorCode
+    message: string
+    retryable: boolean
+    userAction?: string
+    details?: unknown
+  }
+}
+
+export type AuthenticatedUser = {
+  id: string
+  token: string | null
+  mode: RuntimeMode
+}

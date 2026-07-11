@@ -2,42 +2,35 @@
 
 ![Jovlo.ai](brand/current/jovlo-logo-preview.png)
 
-Jovlo.ai 是一个面向真实旅行决策的 AI 路书共创项目。本仓库当前展示海南自驾 Web MVP 的交互与技术蓝图。
+Jovlo.ai 是面向真实旅行决策的 AI 路书共创产品。当前 MVP 以海南东线自驾为完整样板，覆盖路线编辑、地图联动、预算、来源证据、Agent ChangeSet、版本恢复、今日调整、分享与行程报告。
 
-## 当前原型
-
-打开 [`hainan-roadtrip-blueprint.html`](hainan-roadtrip-blueprint.html) 可以查看五个交互视图：
-
-- 体验闭环：从模糊想法到可执行路书
-- 出发前：海南 Day 1-5 地图、时间轴、住宿与预算联动
-- 出发中：迟到、疲劳、下雨时的局部重排
-- 路线引擎：POI 校验、驾车矩阵、时间窗、酒店锚点与预算验算
-- 技术落地：Web MVP 架构、范围与实施顺序
-
-页面为单文件 HTML，不需要安装依赖或执行构建：
+## 本地运行
 
 ```bash
-open hainan-roadtrip-blueprint.html
+npm install
+npm run dev
 ```
 
-## MVP 原则
+打开 `http://127.0.0.1:5173/`。未配置外部密钥时，应用使用明确标注的本地演示数据与参考路线，不冒充真实 Supabase 或高德结果。
 
-- LLM 负责理解需求和解释变化
-- 地图与确定性算法负责路线可行性
-- 第一版聚焦海南东线样板和规划态、出行态两种体验
-- 先验证可生成、可编辑、可导航的路书，再扩展交易和平台能力
+## 验证
 
-## 仓库结构
-
-```text
-.
-├── hainan-roadtrip-blueprint.html
-└── brand
-    ├── current
-    ├── logo-concepts
-    └── logo-concepts-minimal
+```bash
+npm run typecheck
+npm test -- --run
+npm run build
+npm run test:e2e
 ```
 
-## 状态
+## 技术栈
 
-Visual blueprint / MVP definition in progress.
+- React 19、Vite 7、TypeScript、Zustand、TanStack Query
+- Cloudflare Workers、Hono
+- Supabase/Postgres/PostGIS migration、RLS、事务 RPC
+- Vitest、Testing Library、Playwright
+
+## 环境
+
+复制 `.env.example` 中的公开变量，并通过 `wrangler secret put` 配置服务端密钥。默认 `wrangler.jsonc` 不包含任何凭据。
+
+项目规划、架构、设计与实施记录统一保存在项目 Obsidian 文档库中，不在代码仓库重复维护。

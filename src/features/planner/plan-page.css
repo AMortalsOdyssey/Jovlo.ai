@@ -1,0 +1,235 @@
+.plan-timeline-shell {
+  min-height: 100%;
+  padding-bottom: var(--space-12);
+}
+
+.plan-day-heading {
+  display: flex;
+  padding: var(--space-4) var(--space-6) var(--space-3);
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.plan-day-heading span,
+.plan-day-heading small {
+  color: var(--muted);
+  font-size: var(--text-supporting-size);
+}
+
+.plan-day-heading h1 {
+  margin: var(--space-1) 0 0;
+  font: 760 var(--text-page-size) / var(--text-page-line) var(--font-ui);
+}
+
+.plan-warning-strip {
+  margin: 0 var(--space-6) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  color: var(--sun-text);
+  background: var(--sun-tint);
+  border-left: 3px solid var(--sun);
+  border-radius: var(--radius-control);
+  font-size: var(--text-supporting-size);
+}
+
+.plan-route-fragment {
+  display: contents;
+}
+
+.plan-mobile-panel {
+  min-height: 100%;
+  padding: var(--space-6) var(--space-4) calc(var(--space-12) + env(safe-area-inset-bottom));
+  background: var(--canvas);
+}
+
+.plan-mobile-panel > header {
+  display: flex;
+  margin-bottom: var(--space-4);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.plan-mobile-panel > header span,
+.plan-mobile-panel > p {
+  color: var(--muted);
+}
+
+.plan-mobile-panel > header strong {
+  font-size: var(--text-page-size);
+}
+
+.plan-budget-range {
+  display: flex;
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  justify-content: space-between;
+  color: var(--sea-text);
+  background: var(--sea-tint);
+  border-radius: var(--radius-card);
+}
+
+.plan-mobile-panel dl {
+  margin: 0 0 var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.plan-mobile-panel dl div {
+  display: flex;
+  padding: var(--space-3) var(--space-4);
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+
+.plan-mobile-panel dl div:last-child {
+  border-bottom: 0;
+}
+
+.plan-mobile-panel dt,
+.plan-mobile-panel dd {
+  margin: 0;
+}
+
+.plan-more-links {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.plan-more-links a {
+  display: flex;
+  min-height: 56px;
+  padding: 0 var(--space-4);
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.plan-more-links svg {
+  width: 20px;
+  color: var(--brand);
+}
+
+.plan-dialog-backdrop {
+  position: fixed;
+  z-index: var(--z-dialog);
+  inset: 0;
+  display: grid;
+  padding: var(--space-4);
+  place-items: center;
+  background: rgb(32 32 36 / 32%);
+}
+
+.plan-dialog {
+  width: min(480px, 100%);
+  padding: var(--space-6);
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+}
+
+.plan-dialog > header {
+  display: flex;
+  margin-bottom: var(--space-4);
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.plan-dialog header span {
+  color: var(--muted);
+  font-size: var(--text-supporting-size);
+}
+
+.plan-dialog h2 {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-panel-size);
+}
+
+.plan-dialog form,
+.plan-dialog label {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.plan-dialog form {
+  gap: var(--space-4);
+}
+
+.plan-dialog input,
+.plan-dialog textarea {
+  width: 100%;
+  padding: var(--space-3);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  font: inherit;
+}
+
+.plan-dialog__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.plan-impact-details {
+  position: fixed;
+  z-index: var(--z-dialog);
+  right: var(--space-6);
+  bottom: calc(var(--impact-bar-height) + var(--space-4));
+  display: grid;
+  width: min(360px, calc(100% - 32px));
+  padding: var(--space-4);
+  gap: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+}
+
+.plan-impact-details span,
+.plan-impact-details p {
+  margin: 0;
+  color: var(--muted);
+}
+
+@media (max-width: 767px) {
+  .plan-day-heading {
+    padding: var(--space-3) var(--space-4) var(--space-2);
+  }
+
+  .plan-day-heading h1 {
+    font-size: 20px;
+    line-height: 28px;
+  }
+
+  .plan-warning-strip {
+    margin-right: var(--space-4);
+    margin-left: var(--space-4);
+  }
+
+  .plan-dialog-backdrop {
+    padding: 0;
+    place-items: end stretch;
+  }
+
+  .plan-dialog {
+    width: 100%;
+    padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
+
+  .plan-impact-details {
+    right: var(--space-4);
+    bottom: calc(64px + env(safe-area-inset-bottom) + var(--impact-bar-height) + var(--space-2));
+    left: var(--space-4);
+    width: auto;
+  }
+}

@@ -1,0 +1,358 @@
+import { BedDouble, BookOpen, FileClock, ReceiptText, Settings, Sparkles } from 'lucide-react'
+import { useMemo, useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+
+import type { DayHealthStatus, EvidenceTone, FormalMapPoint } from './types'
+import { DayHealthBar } from './DayHealthBar'
+import { DayRail } from './DayRail'
+import { HotelAnchor } from './HotelAnchor'
+import { ImpactBar } from './ImpactBar'
+import { LegRow } from './LegRow'
+import { MapCanvas } from './MapCanvas'
+import { MobileDayStrip } from './MobileDayStrip'
+import { MobileNav } from './MobileNav'
+import { PlaceInspector } from './PlaceInspector'
+import { PlannerWorkspace } from './PlannerWorkspace'
+import { RouteTimeline } from './RouteTimeline'
+import { Snackbar } from './Snackbar'
+import { StopCard } from './StopCard'
+import { TripHeader } from './TripHeader'
+import { buildAmapNavigationUrl } from '@/lib/amap'
+import { formatCurrency, formatDistance, formatDuration } from '@/lib/format'
+import { currentVersion, selectedDay, useTripStore } from '@/store/useTripStore'
+import type { TripPlaceSnapshot, TripStop } from '@domain'
+import './plan-page.css'
+
+const HEALTH_STATUS: Record<string, DayHealthStatus> = {
+  comfortable: 'comfortable',
+  tight: 'tight',
+  overloaded: 'overloaded',
+  data_unconfirmed: 'unconfirmed',
+}
+
+const CATEGORY_LABEL: Record<string, string> = {
+  lodging: '住宿',
+  meals: '餐饮',
+  tickets: '门票活动',
+  energy: '油电',
+  rental: '租车',
+  insurance: '保险',
+  parking_tolls: '停车路费',
+  contingency: '机动预算',
+}
+
+function evidenceTone(place: TripPlaceSnapshot): EvidenceTone {
+  if (!place.verifiedAt) return 'pending'
+  if (place.sourceIds.length > 1) return 'consistent'
+  return place.sourceIds.length === 1 ? 'single-source' : 'pending'
+}
+
+function evidenceLabel(place: TripPlaceSnapshot) {
+  if (!place.verifiedAt) return '待核验'
+  return place.sourceIds.length > 1 ? `${place.sourceIds.length} 源一致` : '单一来源'
+}
+
+function placeCoordinate(place?: TripPlaceSnapshot) {
+  if (!place) return undefined
+  return { name: place.name, lon: place.gcj02.lon, lat: place.gcj02.lat }
+}
+
+function openNavigation(place?: TripPlaceSnapshot) {
+  const target = placeCoordinate(place)
+  if (target) window.open(buildAmapNavigationUrl(target), '_blank', 'noopener,noreferrer')
+}
+
+function StopEditor({
+  stop,
+  place,
+  onClose,
+  onSave,
+  onToggleLock,
+}: {
+  stop: TripStop
+  place: TripPlaceSnapshot
+  onClose: () => void
+  onSave: (stayMinutes: number, publicNote: string) => void
+  onToggleLock: () => void
+}) {
+  const [stayMinutes, setStayMinutes] = useState(stop.stayMinutes)
+  const [publicNote, setPublicNote] = useState(stop.publicNote ?? '')
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    onSave(Math.max(5, Math.min(720, stayMinutes)), publicNote.trim())
+  }
+
+  return (
+    <div className="plan-dialog-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="plan-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="stop-editor-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <span>编辑地点</span>
+            <h2 id="stop-editor-title">{place.name}</h2>
+          </div>
+          <button type="button" className="jovlo-button jovlo-button--secondary" onClick={onClose}>关闭</button>
+        </header>
+        <form onSubmit={submit}>
+          <label>
+            <span>停留时长（分钟）</span>
+            <input
+              type="number"
+              min="5"
+              max="720"
+              step="5"
+              value={stayMinutes}
+              onChange={(event) => setStayMinutes(Number(event.target.value))}
+            />
+          </label>
+          <label>
+            <span>公开备注</span>
+            <textarea
+              rows={4}
+              maxLength={1000}
+              value={publicNote}
+              onChange={(event) => setPublicNote(event.target.value)}
+              placeholder="例如停车、预约或游玩提醒"
+            />
+          </label>
+          <div className="plan-dialog__actions">
+            <button type="button" className="jovlo-button jovlo-button--secondary" onClick={onToggleLock}>
+              {stop.locked ? '解除锁定' : '锁定地点'}
+            </button>
+            <button type="submit" className="jovlo-button jovlo-button--primary">保存并重算</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  )
+}
+
+export function PlanPage() {
+  const navigate = useNavigate()
+  const state = useTripStore()
+  const day = selectedDay(state)
+  const version = currentVersion(state)
+  const schedule = state.derived.daySchedules.find((item) => item.dayId === day.id)
+  const dayLegs = state.derived.routeLegs.filter((leg) => leg.dayId === day.id)
+  const [candidateId, setCandidateId] = useState<string | null>(null)
+  const [editingStopId, setEditingStopId] = useState<string | null>(null)
+  const [impactDetailsOpen, setImpactDetailsOpen] = useState(false)
+
+  const daySummaries = state.trip.days.map((item) => {
+    const itemSchedule = state.derived.daySchedules.find((entry) => entry.dayId === item.id)
+    const finalPlace = state.trip.placeRefs[item.stops.at(-1)?.placeId ?? '']
+    const area = item.overnightStay?.label ?? finalPlace?.address?.split('市')[0] ?? '路线待定'
+    const hotel = item.overnightStay?.kind === 'place' ? item.overnightStay.label : undefined
+    return {
+      id: item.id,
+      dayNumber: item.dayIndex,
+      area,
+      hotel,
+      driveDuration: itemSchedule ? formatDuration(itemSchedule.drivingMinutes) : '待计算',
+      riskCount: itemSchedule?.warnings.filter((warning) => warning.severity !== 'info').length ?? 0,
+      healthStatus: HEALTH_STATUS[itemSchedule?.health ?? 'data_unconfirmed'],
+    }
+  })
+
+  const routePoints = useMemo<FormalMapPoint[]>(() => {
+    const points: FormalMapPoint[] = []
+    const dayIndex = state.trip.days.findIndex((item) => item.id === day.id)
+    const previousStay = dayIndex > 0 ? state.trip.days[dayIndex - 1]?.overnightStay : undefined
+    const startPlace = previousStay?.kind === 'place'
+      ? state.trip.placeRefs[previousStay.placeId]
+      : previousStay?.kind === 'area'
+        ? state.trip.stayAreaRefs[previousStay.areaId]
+        : state.trip.placeRefs[state.trip.intent.entryAnchor.placeId]
+    if (startPlace) {
+      points.push({ id: `start-${day.id}`, order: 1, name: previousStay?.label ?? state.trip.intent.entryAnchor.label, lng: startPlace.gcj02.lon, lat: startPlace.gcj02.lat })
+    }
+    day.stops.forEach((stop) => {
+      const place = state.trip.placeRefs[stop.placeId]
+      if (place) points.push({ id: stop.id, order: points.length + 1, name: place.name, lng: place.gcj02.lon, lat: place.gcj02.lat })
+    })
+    const endPlace = day.overnightStay?.kind === 'place'
+      ? state.trip.placeRefs[day.overnightStay.placeId]
+      : day.overnightStay?.kind === 'area'
+        ? state.trip.stayAreaRefs[day.overnightStay.areaId]
+        : state.trip.placeRefs[state.trip.intent.exitAnchor.placeId]
+    if (endPlace) {
+      points.push({ id: `end-${day.id}`, order: points.length + 1, name: day.overnightStay?.label ?? state.trip.intent.exitAnchor.label, lng: endPlace.gcj02.lon, lat: endPlace.gcj02.lat })
+    }
+    return points
+  }, [day, state.trip])
+
+  const candidatePoints = state.candidates.map((place) => ({
+    id: place.placeId,
+    name: place.name,
+    lng: place.gcj02.lon,
+    lat: place.gcj02.lat,
+    type: place.type === 'meal' ? ('food' as const) : place.type === 'hotel' ? ('hotel' as const) : ('other' as const),
+  }))
+
+  const selectedStop = state.trip.days.flatMap((item) => item.stops).find((stop) => stop.id === state.selectedStopId)
+  const selectedCandidate = state.candidates.find((place) => place.placeId === candidateId)
+  const inspectedPlace = selectedCandidate ?? (selectedStop ? state.trip.placeRefs[selectedStop.placeId] : undefined)
+  const editingStop = state.trip.days.flatMap((item) => item.stops).find((stop) => stop.id === editingStopId)
+  const editingPlace = editingStop ? state.trip.placeRefs[editingStop.placeId] : undefined
+
+  const updateDay = (dayId: string) => {
+    state.selectDay(dayId)
+    state.selectStop(null)
+    setCandidateId(null)
+  }
+
+  const moveStop = (stop: TripStop, delta: number) => {
+    const index = day.stops.findIndex((item) => item.id === stop.id)
+    state.moveStop(stop.id, day.id, Math.max(0, Math.min(day.stops.length - 1, index + delta)))
+  }
+
+  const moveToNextDay = (stop: TripStop) => {
+    const currentIndex = state.trip.days.findIndex((item) => item.id === day.id)
+    const target = state.trip.days[(currentIndex + 1) % state.trip.days.length]
+    if (target.id !== day.id) state.requestMoveStop(stop.id, target.id, target.stops.length)
+  }
+
+  const alternateStay = () => {
+    const stay = day.overnightStay
+    if (!stay) return
+    if (stay.kind === 'area') {
+      const hotel = Object.values(state.trip.placeRefs).find((place) => place.type === 'hotel')
+      if (hotel) state.requestStayUpdate(day.id, { kind: 'place', placeId: hotel.placeId, label: hotel.name })
+      return
+    }
+    const area = Object.values(state.trip.stayAreaRefs).find((item) => item.region === '万宁') ?? Object.values(state.trip.stayAreaRefs)[0]
+    if (area) state.requestStayUpdate(day.id, { kind: 'area', areaId: area.areaId, label: area.name })
+  }
+
+  const sourceEvidence = inspectedPlace?.sourceIds.map((sourceId) => state.trip.sourceRefs[sourceId]).filter(Boolean) ?? []
+  const selectedPrice = inspectedPlace?.selectedVariant?.priceRange?.expected
+  const totalSpent = state.expenses.reduce((sum, expense) => sum + expense.amount, 0)
+
+  const budgetPanel = (
+    <section className="plan-mobile-panel" aria-label="预算摘要">
+      <header><span>当前估算</span><strong>{formatCurrency(state.derived.budget.total.expected)}</strong></header>
+      <div className="plan-budget-range"><span>{formatCurrency(state.derived.budget.total.low)}</span><span>至</span><span>{formatCurrency(state.derived.budget.total.high)}</span></div>
+      <dl>{state.derived.budget.categories.map((item) => <div key={item.category}><dt>{CATEGORY_LABEL[item.category] ?? item.category}</dt><dd>{formatCurrency(item.amount.expected)}</dd></div>)}</dl>
+      <p>已记账 {formatCurrency(totalSpent)} · {formatDistance(state.derived.budget.totalDistanceMeters)}</p>
+      <Link className="jovlo-button jovlo-button--primary" to={`/trips/${state.trip.tripId}/budget`}>打开预算与记账</Link>
+    </section>
+  )
+
+  const morePanel = (
+    <nav className="plan-mobile-panel plan-more-links" aria-label="更多功能">
+      <Link to={`/trips/${state.trip.tripId}/sources`}><BookOpen aria-hidden="true" />来源与证据</Link>
+      <Link to={`/trips/${state.trip.tripId}/versions`}><FileClock aria-hidden="true" />版本历史</Link>
+      <Link to={`/trips/${state.trip.tripId}/imports/demo-import`}><Sparkles aria-hidden="true" />Agent 变更审阅</Link>
+      <Link to={`/trips/${state.trip.tripId}/reports`}><ReceiptText aria-hidden="true" />汇总报告</Link>
+      <Link to={`/trips/${state.trip.tripId}/settings`}><Settings aria-hidden="true" />行程设置</Link>
+    </nav>
+  )
+
+  const timeline = (
+    <div className="plan-timeline-shell">
+      <div className="plan-day-heading">
+        <div><span>{day.date ?? '日期待定'}</span><h1>Day {day.dayIndex} · {daySummaries.find((item) => item.id === day.id)?.area}</h1></div>
+        <small>预计 {schedule?.expectedEndTime ?? '--:--'} 结束</small>
+      </div>
+      <DayHealthBar
+        metrics={{
+          driving: formatDuration(schedule?.drivingMinutes ?? 0),
+          playing: formatDuration(schedule?.activityMinutes ?? 0),
+          buffer: schedule ? `${Math.max(0, schedule.freeMinutes)} min` : '待确认',
+          budget: formatCurrency(state.derived.budget.total.expected / state.trip.days.length),
+        }}
+        status={HEALTH_STATUS[schedule?.health ?? 'data_unconfirmed']}
+      />
+      {schedule?.warnings.length ? <div className="plan-warning-strip">{schedule.warnings[0].message}</div> : null}
+      <RouteTimeline>
+        {day.stops.map((stop, index) => {
+          const place = state.trip.placeRefs[stop.placeId]
+          const scheduled = schedule?.stops.find((item) => item.stopId === stop.id)
+          const leg = dayLegs[index]
+          const selected = stop.id === state.selectedStopId
+          const replacement = state.candidates.find((item) => !Object.hasOwn(state.trip.placeRefs, item.placeId)) ?? state.candidates[0]
+          return (
+            <div className="plan-route-fragment" key={stop.id}>
+              <LegRow
+                distance={leg ? formatDistance(leg.distanceMeters) : undefined}
+                duration={leg ? formatDuration(leg.durationSeconds / 60) : undefined}
+                eta={scheduled?.arrivalTime}
+                status={leg?.status === 'failed' ? 'error' : 'ready'}
+                estimated={leg?.provider === 'reference' || leg?.estimateKind !== 'road'}
+                onNavigate={() => openNavigation(place)}
+              />
+              <StopCard
+                order={index + 1}
+                name={place?.name ?? '地点待确认'}
+                plannedTime={scheduled?.arrivalTime ?? stop.plannedStart ?? '--:--'}
+                duration={formatDuration(stop.stayMinutes)}
+                evidenceLabel={place ? evidenceLabel(place) : '待核验'}
+                evidenceTone={place ? evidenceTone(place) : 'pending'}
+                tags={[...new Set([stop.locked ? '已锁定' : stop.kind, ...(place?.type ? [place.type] : [])])]}
+                selected={selected}
+                onSelect={() => { state.selectStop(stop.id); setCandidateId(null) }}
+                actions={{
+                  onEdit: () => setEditingStopId(stop.id),
+                  onReplace: () => replacement && state.replaceStop(stop.id, replacement.placeId),
+                  onMoveEarlier: () => moveStop(stop, -1),
+                  onMoveLater: () => moveStop(stop, 1),
+                  onMoveToDay: () => moveToNextDay(stop),
+                  onSkip: () => state.skipTodayStop(stop.id),
+                  onDelete: () => state.requestRemoveStop(stop.id),
+                }}
+              />
+            </div>
+          )
+        })}
+        {day.overnightStay ? (
+          <div className="plan-route-fragment">
+            <LegRow
+              distance={dayLegs.at(-1) ? formatDistance(dayLegs.at(-1)!.distanceMeters) : undefined}
+              duration={dayLegs.at(-1) ? formatDuration(dayLegs.at(-1)!.durationSeconds / 60) : undefined}
+              status={dayLegs.at(-1)?.status === 'failed' ? 'error' : 'ready'}
+              estimated={dayLegs.at(-1)?.provider === 'reference' || dayLegs.at(-1)?.estimateKind !== 'road'}
+            />
+            <HotelAnchor
+              kind={day.overnightStay.kind}
+              name={day.overnightStay.label}
+              relation="both"
+              impactPreview="变更后将先展示路线和预算影响"
+              onChooseHotel={alternateStay}
+              onChangeHotel={alternateStay}
+            />
+          </div>
+        ) : null}
+      </RouteTimeline>
+    </div>
+  )
+
+  return (
+    <>
+      <PlannerWorkspace
+        activeMobileView={state.mobileView}
+        header={<TripHeader title={state.trip.title} version={version.versionNo} saveStatus={state.saveStatus === 'failed' ? 'error' : state.saveStatus} onBack={() => navigate('/trips')} onImport={() => navigate(`/trips/${state.trip.tripId}/imports/demo-import`)} onHistory={() => navigate(`/trips/${state.trip.tripId}/versions`)} onShare={() => navigate(`/trips/${state.trip.tripId}/share`)} onSaveVersion={() => state.publishVersion()} onRetrySave={state.retrySave} />}
+        dayRail={<DayRail days={daySummaries} selectedDayId={day.id} onSelectDay={updateDay} />}
+        dayStrip={<MobileDayStrip days={daySummaries} selectedDayId={day.id} onSelectDay={updateDay} />}
+        timeline={timeline}
+        map={<MapCanvas routePoints={routePoints} candidatePoints={candidatePoints} selectedPointId={state.selectedStopId ?? candidateId ?? undefined} onSelectFormalPoint={(id) => { if (day.stops.some((stop) => stop.id === id)) { state.selectStop(id); setCandidateId(null) } }} onSelectCandidateCluster={(ids) => { setCandidateId(ids[0] ?? null); state.selectStop(null) }} />}
+        budget={budgetPanel}
+        more={morePanel}
+        inspector={inspectedPlace ? <PlaceInspector open name={inspectedPlace.name} openingHours={inspectedPlace.selectedVariant?.openingHours ? '以来源中的当日公告为准' : undefined} suggestedStay={selectedStop ? formatDuration(selectedStop.stayMinutes) : '建议 90 min'} price={selectedPrice ? `约 ${formatCurrency(selectedPrice)}` : undefined} parking={inspectedPlace.selectedVariant?.parkingNote} sourceSummary={sourceEvidence.map((source) => source.summary).join('；') || undefined} evidence={sourceEvidence.map((source) => ({ id: source.sourceId, source: source.title, statement: source.summary, statusLabel: source.commercialRelationship === 'yes' ? '商业关联' : '来源可追溯' }))} addLabel={selectedCandidate ? `加入 Day ${day.dayIndex}` : '已在行程'} onAdd={selectedCandidate ? () => { state.addCandidateStop(selectedCandidate.placeId, day.id); setCandidateId(null) } : undefined} onNavigate={() => openNavigation(inspectedPlace)} onOpenEvidence={(id) => { const source = state.trip.sourceRefs[id]; if (source) window.open(source.url, '_blank', 'noopener,noreferrer') }} onShowAllEvidence={() => navigate(`/trips/${state.trip.tripId}/sources`)} onClose={() => { state.selectStop(null); setCandidateId(null) }} /> : undefined}
+        mobileNav={<MobileNav activeView={state.mobileView} isTravelingToday={day.date === new Date().toISOString().slice(0, 10)} onSelectView={state.setMobileView} />}
+      />
+
+      {state.pendingAction ? <ImpactBar delayMinutes={state.pendingAction.impact.durationDeltaMinutes ?? 0} affectedPlaces={state.pendingAction.impact.affectedDayIds.length} budgetDelta={state.pendingAction.impact.budgetDelta} onViewDetails={() => setImpactDetailsOpen(true)} onApply={state.applyPending} onDiscard={state.discardPending} /> : null}
+      {impactDetailsOpen && state.pendingAction ? <div className="plan-impact-details" role="dialog" aria-modal="true" aria-label="影响详情"><span>{state.pendingAction.impact.title}</span><strong>{state.pendingAction.impact.description}</strong><p>{formatDistance(state.pendingAction.impact.distanceDeltaMeters ?? 0)} · {formatDuration(Math.abs(state.pendingAction.impact.durationDeltaMinutes ?? 0))} · {formatCurrency(state.pendingAction.impact.budgetDelta ?? 0)}</p><button type="button" className="jovlo-button jovlo-button--primary" onClick={() => setImpactDetailsOpen(false)}>知道了</button></div> : null}
+      <Snackbar open={Boolean(state.snackbar)} message={state.snackbar?.message ?? ''} actionLabel={state.snackbar?.actionLabel} onAction={state.snackbar?.actionLabel ? state.undo : undefined} onDismiss={state.dismissSnackbar} />
+      {editingStop && editingPlace ? <StopEditor stop={editingStop} place={editingPlace} onClose={() => setEditingStopId(null)} onToggleLock={() => state.toggleStopLock(editingStop.id)} onSave={(stayMinutes, publicNote) => { state.updateStop(editingStop.id, { stayMinutes, publicNote: publicNote || undefined }); setEditingStopId(null) }} /> : null}
+    </>
+  )
+}
+
+export default PlanPage

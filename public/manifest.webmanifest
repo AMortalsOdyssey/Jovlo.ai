@@ -1,0 +1,16 @@
+{
+  "name": "Jovlo.ai 海南自驾路书",
+  "short_name": "Jovlo",
+  "start_url": "/trips",
+  "display": "standalone",
+  "background_color": "#f4f5f0",
+  "theme_color": "#f4f5f0",
+  "icons": [
+    {
+      "src": "/jovlo-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

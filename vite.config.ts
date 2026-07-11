@@ -1,0 +1,21 @@
+import { cloudflare } from '@cloudflare/vite-plugin'
+import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [react(), cloudflare()],
+  resolve: {
+    alias: {
+      '@': new URL('./src', import.meta.url).pathname,
+      '@domain': new URL('./packages/domain/src', import.meta.url).pathname,
+    },
+  },
+  server: {
+    host: '127.0.0.1',
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+  },
+})

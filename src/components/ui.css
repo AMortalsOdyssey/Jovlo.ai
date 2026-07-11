@@ -1,0 +1,214 @@
+@import "../design-system/tokens.css";
+
+.jovlo-tooltip-root {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.jovlo-icon-button {
+  display: inline-grid;
+  width: var(--target-min);
+  min-width: var(--target-min);
+  height: var(--target-min);
+  min-height: var(--target-min);
+  padding: 0;
+  place-items: center;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  transition:
+    color var(--motion-press) var(--ease-out),
+    background-color var(--motion-press) var(--ease-out),
+    transform var(--motion-press) var(--ease-out);
+}
+
+.jovlo-icon-button--compact {
+  width: var(--target-min);
+  min-width: var(--target-min);
+}
+
+.jovlo-icon-button:hover:not(:disabled) {
+  color: var(--brand);
+  background: var(--brand-tint);
+}
+
+.jovlo-icon-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.jovlo-icon-button:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.jovlo-tooltip {
+  position: absolute;
+  z-index: var(--z-toast);
+  top: calc(100% + var(--space-1));
+  left: 50%;
+  width: max-content;
+  max-width: 216px;
+  padding: var(--space-1) var(--space-2);
+  color: var(--surface);
+  background: var(--ink);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-float);
+  font: 500 var(--text-supporting-size) / var(--text-supporting-line) var(--font-ui);
+  letter-spacing: 0;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, var(--space-1));
+  transition:
+    opacity var(--motion-state) var(--ease-out),
+    transform var(--motion-state) var(--ease-out);
+  white-space: normal;
+}
+
+.jovlo-tooltip-root:hover .jovlo-tooltip,
+.jovlo-tooltip-root:focus-within .jovlo-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jovlo-icon-button:active:not(:disabled) {
+    transform: none;
+  }
+
+  .jovlo-tooltip,
+  .jovlo-tooltip-root:hover .jovlo-tooltip,
+  .jovlo-tooltip-root:focus-within .jovlo-tooltip {
+    transform: translate(-50%, 0);
+  }
+}
+
+.jovlo-action-menu {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.jovlo-action-menu__trigger {
+  position: relative;
+  display: grid;
+  width: var(--target-min);
+  min-width: var(--target-min);
+  height: var(--target-min);
+  min-height: var(--target-min);
+  padding: 0;
+  place-items: center;
+  color: var(--ink);
+  list-style: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition:
+    color var(--motion-press) var(--ease-out),
+    background-color var(--motion-press) var(--ease-out),
+    transform var(--motion-press) var(--ease-out);
+}
+
+.jovlo-action-menu__trigger::-webkit-details-marker {
+  display: none;
+}
+
+.jovlo-action-menu__trigger:hover,
+.jovlo-action-menu[open] .jovlo-action-menu__trigger {
+  color: var(--brand);
+  background: var(--brand-tint);
+}
+
+.jovlo-action-menu__trigger:active {
+  transform: scale(0.98);
+}
+
+.jovlo-action-menu__tooltip {
+  position: absolute;
+  z-index: var(--z-toast);
+  top: calc(100% + var(--space-1));
+  left: 50%;
+  width: max-content;
+  max-width: 216px;
+  padding: var(--space-1) var(--space-2);
+  color: var(--surface);
+  background: var(--ink);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-float);
+  font: 500 var(--text-supporting-size) / var(--text-supporting-line) var(--font-ui);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, var(--space-1));
+  transition:
+    opacity var(--motion-state) var(--ease-out),
+    transform var(--motion-state) var(--ease-out);
+}
+
+.jovlo-action-menu:not([open]) .jovlo-action-menu__trigger:hover .jovlo-action-menu__tooltip,
+.jovlo-action-menu:not([open]) .jovlo-action-menu__trigger:focus-visible .jovlo-action-menu__tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.jovlo-action-menu__content {
+  position: absolute;
+  z-index: var(--z-toast);
+  top: calc(100% + var(--space-1));
+  display: grid;
+  width: max-content;
+  min-width: 168px;
+  max-width: 240px;
+  padding: var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+}
+
+.jovlo-action-menu--start .jovlo-action-menu__content {
+  left: 0;
+}
+
+.jovlo-action-menu--end .jovlo-action-menu__content {
+  right: 0;
+}
+
+.jovlo-action-menu__item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: center;
+  min-height: var(--target-min);
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+}
+
+.jovlo-action-menu__item:hover:not(:disabled) {
+  background: var(--canvas);
+}
+
+.jovlo-action-menu__item--danger {
+  color: var(--coral-text);
+}
+
+.jovlo-action-menu__item:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jovlo-action-menu__trigger:active,
+  .jovlo-action-menu__tooltip,
+  .jovlo-action-menu__trigger:hover .jovlo-action-menu__tooltip,
+  .jovlo-action-menu__trigger:focus-visible .jovlo-action-menu__tooltip {
+    transform: translate(-50%, 0);
+  }
+}

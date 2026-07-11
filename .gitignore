@@ -1,2 +1,12 @@
 .DS_Store
 AGENTS.md
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+playwright-report/
+test-results/
+coverage/
