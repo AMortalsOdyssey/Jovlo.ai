@@ -37,6 +37,16 @@ export type Env = {
   AMAP_SECURITY_JSCODE?: string
   SHARE_TOKEN_PEPPER?: string
   AGENT_BRIDGE_SECRET?: string
+  SUPABASE_SEND_EMAIL_HOOK_SECRET?: string
+  TENCENTCLOUD_SECRET_ID?: string
+  TENCENTCLOUD_SECRET_KEY?: string
+  TENCENT_SES_REGION?: string
+  TENCENT_SES_FROM?: string
+  TENCENT_SES_REPLY_TO?: string
+  TENCENT_SES_SIGNUP_TEMPLATE_ID?: string
+  TENCENT_SES_RECOVERY_TEMPLATE_ID?: string
+  TENCENT_SES_ALERT_TEMPLATE_ID?: string
+  ALERT_EMAIL_TO?: string
 }
 
 export type AppVariables = {

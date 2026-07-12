@@ -237,24 +237,20 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Cloudflare Email Service uses implicit TLS on port 465. The API token is
-# supplied only while running `npm run configure:email` and is never committed.
-[auth.email.smtp]
+# Supabase owns users and token generation. The signed HTTP hook delegates only
+# delivery to the Cloudflare Worker, which calls Tencent SES using its API.
+[auth.hook.send_email]
 enabled = true
-host = "smtp.mx.cloudflare.net"
-port = 465
-user = "api_token"
-pass = "env(CLOUDFLARE_EMAIL_API_TOKEN)"
-admin_email = "noreply@8xd.io"
-sender_name = "Jovlo.ai"
+uri = "https://jovlo.8xd.io/api/internal/auth/send-email"
+secrets = "env(SUPABASE_SEND_EMAIL_HOOK_SECRET)"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
-# These templates are ready for production. Supabase applies them after a custom
-# SMTP provider or Send Email Hook is enabled for the hosted project.
+# Local Supabase uses these templates. Production delivery uses the equivalent
+# reviewed Tencent SES templates under tencent/templates.
 [auth.email.template.confirmation]
 subject = "验证你的 Jovlo 邮箱"
 content_path = "./supabase/templates/confirmation.html"

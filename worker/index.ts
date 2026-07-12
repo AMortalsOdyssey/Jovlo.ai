@@ -77,7 +77,13 @@ import {
   TripCreateRequestSchema,
   WeatherDailyQuerySchema,
 } from './schemas'
-import { calculateRouteLegs, proxyAmapJsApiRequest } from './services/amap'
+import {
+  calculateRouteLegs,
+  proxyAmapJsApiRequest,
+  type RouteProviderNotice,
+} from './services/amap'
+import { reportProviderIssue } from './services/provider-alerts'
+import { handleSupabaseSendEmailHook } from './services/tencent-email'
 import { getDailyWeather } from './services/weather'
 import {
   callSupabaseRpc,
@@ -344,6 +350,10 @@ app.notFound(async (context) => {
 })
 
 app.all('/supabase/auth/v1/*', (context) => proxySupabaseAuthRequest(context))
+app.post('/api/internal/auth/send-email', (context) => handleSupabaseSendEmailHook(
+  context,
+  (issue) => reportProviderIssue(context, issue),
+))
 
 function validateUuid(value: string, label: string): string {
   const parsed = UuidSchema.safeParse(value)
@@ -770,6 +780,16 @@ function routeEndpointCoordinate(snapshot: TripSnapshot, endpoint: RouteEndpoint
   return coordinate
 }
 
+function reportRouteProviderNotice(context: AppContext, notice: RouteProviderNotice | null) {
+  if (!notice || !['quota_exceeded', 'rate_limited', 'configuration'].includes(notice.code)) return
+  reportProviderIssue(context, {
+    provider: 'amap',
+    code: notice.code,
+    message: notice.message,
+    impact: `${notice.failedLegs} 个路段已自动降级为参考估算`,
+  })
+}
+
 async function calculateSnapshotRouteLegs(snapshot: TripSnapshot, context: AppContext): Promise<RouteLeg[]> {
   const routeLegs: RouteLeg[] = []
   for (let dayPosition = 0; dayPosition < snapshot.days.length; dayPosition += 1) {
@@ -788,6 +808,7 @@ async function calculateSnapshotRouteLegs(snapshot: TripSnapshot, context: AppCo
       },
       context.env,
     )
+    reportRouteProviderNotice(context, result.providerNotice)
     routeLegs.push(...result.legs)
   }
   return routeLegs
@@ -1199,6 +1220,7 @@ app.post('/api/v1/routes/dry-run', async (context) => {
   await requireAuthenticatedUser(context)
   const input = await parseJson(context, RouteDryRunRequestSchema)
   const result = await calculateRouteLegs(input, context.env)
+  reportRouteProviderNotice(context, result.providerNotice)
   return success(context, { ...result, inputHash: input.inputHash })
 })
 
