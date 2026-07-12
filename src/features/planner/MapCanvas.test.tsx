@@ -67,14 +67,26 @@ describe('MapCanvas fallback', () => {
   })
 
   it('loads AMap when a key exists while keeping formal markers outside candidate clustering', async () => {
+    const user = userEvent.setup()
     const mapAdd = vi.fn()
     const mapDestroy = vi.fn()
+    const mapSetLayers = vi.fn()
+    const trafficOn = vi.fn()
+    const heatmapHide = vi.fn()
+    const heatmapShow = vi.fn()
+    const heatmapSetDataSet = vi.fn()
     const markerOptions: Array<{ content: HTMLElement }> = []
     const polylineOptions: Array<Record<string, unknown>> = []
+    const heatmapOptions: Array<Record<string, unknown>> = []
+    const standardLayer = { kind: 'standard' }
+    const satelliteLayer = { kind: 'satellite' }
+    const roadNetLayer = { kind: 'road-net' }
+    const trafficLayer = { kind: 'traffic', on: trafficOn }
 
     function FakeMap(this: Record<string, unknown>) {
       this.add = mapAdd
       this.setFitView = vi.fn()
+      this.setLayers = mapSetLayers
       this.destroy = mapDestroy
       this.zoomIn = vi.fn()
       this.zoomOut = vi.fn()
@@ -95,11 +107,41 @@ describe('MapCanvas fallback', () => {
       this.y = y
     }
 
+    function FakeSatellite() {
+      return satelliteLayer
+    }
+
+    function FakeRoadNet() {
+      return roadNetLayer
+    }
+
+    function FakeTraffic() {
+      return trafficLayer
+    }
+
+    function FakeHeatMap(
+      this: Record<string, unknown>,
+      _map: unknown,
+      options: Record<string, unknown>,
+    ) {
+      heatmapOptions.push(options)
+      this.hide = heatmapHide
+      this.show = heatmapShow
+      this.setDataSet = heatmapSetDataSet
+    }
+
     vi.mocked(loadAmap).mockResolvedValue({
+      createDefaultLayer: vi.fn(() => standardLayer),
       Map: FakeMap,
       Polyline: FakePolyline,
       Marker: FakeMarker,
       Pixel: FakePixel,
+      TileLayer: {
+        Satellite: FakeSatellite,
+        RoadNet: FakeRoadNet,
+        Traffic: FakeTraffic,
+      },
+      HeatMap: FakeHeatMap,
     })
 
     const onReady = vi.fn()
@@ -122,7 +164,7 @@ describe('MapCanvas fallback', () => {
     expect(loadAmap).toHaveBeenCalledWith({
       key: 'amap-test-key',
       version: '2.0',
-      plugins: ['AMap.MoveAnimation'],
+      plugins: ['AMap.MoveAnimation', 'AMap.HeatMap'],
     })
     expect(window._AMapSecurityConfig).toEqual({
       serviceHost: `${window.location.origin}/_AMapService`,
@@ -139,6 +181,31 @@ describe('MapCanvas fallback', () => {
     expect(polylineOptions).toEqual([
       expect.objectContaining({ strokeStyle: 'dashed', showDir: true }),
     ])
+    expect(heatmapOptions).toEqual([
+      expect.objectContaining({ radius: 28, opacity: [0, 0.72] }),
+    ])
+    expect(heatmapSetDataSet).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({ lng: 110.195, lat: 18.645, count: 4 }),
+      ]),
+      max: 4,
+    })
+    expect(heatmapHide).toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: '卫星' }))
+    await waitFor(() => expect(mapSetLayers).toHaveBeenLastCalledWith([satelliteLayer, roadNetLayer]))
+
+    await user.click(screen.getByRole('button', { name: '显示实时路况' }))
+    await waitFor(() => expect(mapSetLayers).toHaveBeenLastCalledWith([
+      satelliteLayer,
+      roadNetLayer,
+      trafficLayer,
+    ]))
+    expect(screen.getByLabelText('实时路况图例')).toHaveTextContent('畅通缓行拥堵')
+
+    await user.click(screen.getByRole('button', { name: '显示路书点位密度' }))
+    await waitFor(() => expect(heatmapShow).toHaveBeenCalled())
+    expect(screen.getByText('点位密度 · 非实时客流')).toBeInTheDocument()
     expect(onReady).toHaveBeenCalledWith('amap')
   })
 })

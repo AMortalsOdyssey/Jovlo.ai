@@ -1451,6 +1451,124 @@ button.jovlo-day-health:hover {
   margin: 0;
 }
 
+.jovlo-map-layer-panel {
+  position: absolute;
+  z-index: var(--z-sticky);
+  top: 50px;
+  left: var(--space-4);
+  display: flex;
+  max-width: calc(100% - 112px);
+  min-height: 34px;
+  padding: 3px;
+  gap: 2px;
+  align-items: stretch;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgb(93 64 28 / 12%);
+  backdrop-filter: blur(8px);
+}
+
+.jovlo-map-layer-panel__base {
+  display: flex;
+  min-width: 0;
+  padding-right: 2px;
+  gap: 2px;
+  border-right: 1px solid var(--line);
+}
+
+.jovlo-map-layer-panel button {
+  display: inline-flex;
+  min-width: 48px;
+  height: 28px;
+  padding: 0 7px;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: 650 12px / 1 var(--font-ui);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--motion-state) var(--ease-out),
+    background-color var(--motion-state) var(--ease-out),
+    transform var(--motion-state) var(--ease-spring);
+}
+
+.jovlo-map-layer-panel button:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--neutral-tint);
+}
+
+.jovlo-map-layer-panel button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.jovlo-map-layer-panel button[aria-pressed="true"] {
+  color: var(--brand-strong);
+  background: var(--brand-tint);
+}
+
+.jovlo-map-layer-panel button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.jovlo-map-layer-panel button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.jovlo-map-layer-status {
+  position: absolute;
+  z-index: var(--z-sticky);
+  top: 92px;
+  left: var(--space-4);
+  display: flex;
+  max-width: calc(100% - 112px);
+  min-height: 26px;
+  padding: 5px 8px;
+  gap: 8px;
+  align-items: center;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 3px 10px rgb(93 64 28 / 10%);
+  font: 600 11px / 1.35 var(--font-ui);
+  backdrop-filter: blur(8px);
+}
+
+.jovlo-map-traffic-legend {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.jovlo-map-traffic-legend i {
+  width: 12px;
+  height: 4px;
+  margin-left: 3px;
+  border-radius: 2px;
+  background: var(--sea);
+}
+
+.jovlo-map-traffic-legend i:first-child {
+  margin-left: 0;
+}
+
+.jovlo-map-traffic-legend i[data-level="slow"] {
+  background: var(--sun);
+}
+
+.jovlo-map-traffic-legend i[data-level="jam"] {
+  background: var(--brand);
+}
+
 .jovlo-reference-map__notice {
   top: var(--space-4);
   left: var(--space-4);
@@ -2193,6 +2311,29 @@ button.jovlo-day-health:hover {
   .jovlo-map-canvas__controls {
     right: var(--space-3);
     bottom: var(--space-3);
+  }
+
+  .jovlo-map-canvas__provider-notice {
+    top: var(--space-3);
+    left: var(--space-3);
+  }
+
+  .jovlo-map-layer-panel {
+    top: 46px;
+    left: var(--space-3);
+    max-width: calc(100% - 88px);
+  }
+
+  .jovlo-map-layer-panel button {
+    min-width: 44px;
+    padding: 0 5px;
+    gap: 3px;
+  }
+
+  .jovlo-map-layer-status {
+    top: 86px;
+    left: var(--space-3);
+    max-width: calc(100% - 88px);
   }
 
   .jovlo-reference-map__notice {

@@ -5,15 +5,19 @@ import {
   BedDouble,
   Coffee,
   ExternalLink,
+  Flame,
   Landmark,
   LocateFixed,
+  Map as MapIcon,
   MapPin,
   Minus,
   Mountain,
   Navigation2,
   Plane,
   Plus,
+  Satellite,
   ShoppingBag,
+  TrafficCone,
   Utensils,
   Waves,
   X,
@@ -41,6 +45,19 @@ export interface MapCanvasProps {
 }
 
 type MapLoadState = 'fallback' | 'loading' | 'ready' | 'error'
+type MapBaseLayer = 'standard' | 'satellite'
+
+interface DensityPoint {
+  lng: number
+  lat: number
+  count: number
+}
+
+interface MapLayerAvailability {
+  satellite: boolean
+  traffic: boolean
+  density: boolean
+}
 
 interface ProjectedPoint {
   id: string
@@ -190,6 +207,29 @@ function activateOnEnter(event: KeyboardEvent<SVGGElement>, action: () => void) 
   }
 }
 
+function buildDensityData(
+  routePoints: FormalMapPoint[],
+  candidatePoints: CandidateMapPoint[],
+): DensityPoint[] {
+  const densityByCoordinate = new Map<string, DensityPoint>()
+  const addPoint = (lng: number, lat: number, count: number) => {
+    const key = `${lng.toFixed(4)}:${lat.toFixed(4)}`
+    const existing = densityByCoordinate.get(key)
+    if (existing) existing.count += count
+    else densityByCoordinate.set(key, { lng, lat, count })
+  }
+
+  routePoints.forEach((point) => addPoint(point.lng, point.lat, 4))
+  candidatePoints.forEach((point) => addPoint(point.lng, point.lat, 1))
+  return Array.from(densityByCoordinate.values())
+}
+
+function setHeatmapVisibility(heatmap: any, visible: boolean) {
+  if (!heatmap) return
+  if (visible) heatmap.show?.()
+  else heatmap.hide?.()
+}
+
 export function MapCanvas({
   routePoints = EMPTY_FORMAL_POINTS,
   candidatePoints = EMPTY_CANDIDATE_POINTS,
@@ -214,9 +254,22 @@ export function MapCanvas({
   )
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
+  const standardLayerRef = useRef<any>(null)
+  const satelliteLayersRef = useRef<any[]>([])
+  const trafficLayerRef = useRef<any>(null)
+  const heatmapRef = useRef<any>(null)
   const [loadState, setLoadState] = useState<MapLoadState>(apiKey ? 'loading' : 'fallback')
   const [fallbackScale, setFallbackScale] = useState(1)
   const [focusedFormalPointId, setFocusedFormalPointId] = useState<string | null>(null)
+  const [baseLayer, setBaseLayer] = useState<MapBaseLayer>('standard')
+  const [trafficEnabled, setTrafficEnabled] = useState(false)
+  const [densityEnabled, setDensityEnabled] = useState(false)
+  const [layerNotice, setLayerNotice] = useState<string | null>(null)
+  const [layerAvailability, setLayerAvailability] = useState<MapLayerAvailability>({
+    satellite: true,
+    traffic: true,
+    density: true,
+  })
   const callbacksRef = useRef({
     onSelectFormalPoint,
     onSelectCandidateCluster,
@@ -240,6 +293,11 @@ export function MapCanvas({
     () => clusterCandidates(candidatePoints, projected),
     [candidatePoints, projected],
   )
+  const densityData = useMemo(
+    () => buildDensityData(visibleRoute, candidatePoints),
+    [candidatePoints, visibleRoute],
+  )
+  const canShowDensity = densityData.length >= 3
 
   useEffect(() => {
     const markerIconRoots: Root[] = []
@@ -251,19 +309,80 @@ export function MapCanvas({
 
     let cancelled = false
     setLoadState('loading')
+    setLayerAvailability({ satellite: true, traffic: true, density: true })
     configureAmapServiceHost()
 
-    loadAmap({ key: apiKey, version: '2.0', plugins: ['AMap.MoveAnimation'] })
+    loadAmap({ key: apiKey, version: '2.0', plugins: ['AMap.MoveAnimation', 'AMap.HeatMap'] })
       .then((AMap: any) => {
         if (cancelled || !hostRef.current) return
 
+        let standardLayer: any = null
+        let satelliteLayers: any[] = []
+        let trafficLayer: any = null
+        try {
+          standardLayer = AMap.createDefaultLayer?.({ zooms: [3, 20] }) ?? null
+        } catch {
+          standardLayer = null
+        }
+        try {
+          satelliteLayers = [
+            new AMap.TileLayer.Satellite({ zooms: [3, 20], zIndex: 1 }),
+            new AMap.TileLayer.RoadNet({ zooms: [3, 20], zIndex: 2 }),
+          ]
+        } catch {
+          setLayerAvailability((value) => ({ ...value, satellite: false }))
+          setLayerNotice('卫星图暂时不可用')
+        }
+        try {
+          trafficLayer = new AMap.TileLayer.Traffic({
+            autoRefresh: true,
+            interval: 180,
+            opacity: 0.78,
+            zIndex: 8,
+          })
+        } catch {
+          setLayerAvailability((value) => ({ ...value, traffic: false }))
+          setLayerNotice('实时路况暂时不可用，路线浏览不受影响')
+        }
         const map = new AMap.Map(hostRef.current, {
           zoom: 10,
           center: [visibleRoute[0].lng, visibleRoute[0].lat],
           resizeEnable: true,
           viewMode: '2D',
+          ...(standardLayer ? { layers: [standardLayer] } : {}),
         })
         mapRef.current = map
+        standardLayerRef.current = standardLayer
+        satelliteLayersRef.current = satelliteLayers
+        trafficLayerRef.current = trafficLayer
+
+        trafficLayer?.on?.('error', () => {
+          if (!cancelled) setLayerNotice('实时路况暂时不可用，路线浏览不受影响')
+        })
+
+        try {
+          const heatmap = new AMap.HeatMap(map, {
+            radius: 28,
+            opacity: [0, 0.72],
+            zooms: [3, 18],
+            gradient: {
+              0.25: '#65b8c5',
+              0.5: '#f0c45b',
+              0.76: '#de7449',
+              1: '#a63422',
+            },
+          })
+          heatmap.setDataSet({
+            data: densityData,
+            max: Math.max(4, ...densityData.map((point) => point.count)),
+          })
+          heatmap.hide?.()
+          heatmapRef.current = heatmap
+        } catch {
+          heatmapRef.current = null
+          setLayerAvailability((value) => ({ ...value, density: false }))
+          setLayerNotice('点位密度图层暂时不可用')
+        }
 
         const routeOverlays = visibleRoute.slice(0, -1).map((point, index) => {
           const next = visibleRoute[index + 1]
@@ -395,9 +514,40 @@ export function MapCanvas({
       cancelled = true
       mapRef.current?.destroy?.()
       mapRef.current = null
+      standardLayerRef.current = null
+      satelliteLayersRef.current = []
+      trafficLayerRef.current = null
+      heatmapRef.current = null
       queueMicrotask(() => markerIconRoots.forEach((root) => root.unmount()))
     }
-  }, [apiKey, candidateSignature, routeSignature, selectedLegIndex, selectedPointId])
+  }, [apiKey, candidateSignature, densityData, routeSignature, selectedLegIndex, selectedPointId])
+
+  useEffect(() => {
+    if (loadState !== 'ready' || !mapRef.current) return
+    const baseLayers = baseLayer === 'satellite' && satelliteLayersRef.current.length > 0
+      ? satelliteLayersRef.current
+      : standardLayerRef.current
+        ? [standardLayerRef.current]
+        : []
+    const layers = trafficEnabled && trafficLayerRef.current
+      ? [...baseLayers, trafficLayerRef.current]
+      : baseLayers
+
+    try {
+      mapRef.current.setLayers?.(layers)
+    } catch {
+      setLayerNotice(baseLayer === 'satellite' ? '卫星图暂时不可用，已保留当前地图' : '地图图层切换失败')
+    }
+  }, [baseLayer, loadState, trafficEnabled])
+
+  useEffect(() => {
+    if (loadState !== 'ready') return
+    if (densityEnabled && !heatmapRef.current) {
+      setLayerNotice('点位密度图层暂时不可用')
+      return
+    }
+    setHeatmapVisibility(heatmapRef.current, densityEnabled)
+  }, [densityEnabled, loadState])
 
   const zoomIn = () => {
     if (loadState === 'ready') mapRef.current?.zoomIn?.()
@@ -441,6 +591,85 @@ export function MapCanvas({
         <p className="jovlo-map-canvas__provider-notice">
           {usesBuiltInReference ? '高德地图底图 · 路线为本地参考' : '高德地图'}
         </p>
+      )}
+
+      {loadState === 'ready' && (
+        <div className="jovlo-map-layer-panel" aria-label="地图图层">
+          <div className="jovlo-map-layer-panel__base" role="group" aria-label="底图类型">
+            <button
+              type="button"
+              aria-pressed={baseLayer === 'standard'}
+              onClick={() => {
+                setLayerNotice(null)
+                setBaseLayer('standard')
+              }}
+            >
+              <MapIcon aria-hidden="true" size={15} />
+              普通
+            </button>
+            <button
+              type="button"
+              aria-pressed={baseLayer === 'satellite'}
+              disabled={!layerAvailability.satellite}
+              title={layerAvailability.satellite ? '切换卫星地图' : '卫星图暂时不可用'}
+              onClick={() => {
+                setLayerNotice(null)
+                setBaseLayer('satellite')
+              }}
+            >
+              <Satellite aria-hidden="true" size={15} />
+              卫星
+            </button>
+          </div>
+          <button
+            type="button"
+            aria-label="显示实时路况"
+            aria-pressed={trafficEnabled}
+            disabled={!layerAvailability.traffic}
+            title={layerAvailability.traffic ? '显示实时路况' : '实时路况暂时不可用'}
+            onClick={() => {
+              setLayerNotice(null)
+              setTrafficEnabled((value) => !value)
+            }}
+          >
+            <TrafficCone aria-hidden="true" size={15} />
+            路况
+          </button>
+          <button
+            type="button"
+            aria-label="显示路书点位密度"
+            aria-pressed={densityEnabled}
+            disabled={!canShowDensity || !layerAvailability.density}
+            title={
+              !layerAvailability.density
+                ? '点位密度图层暂时不可用'
+                : canShowDensity
+                  ? '显示路书点位密度'
+                  : '至少需要 3 个不同点位'
+            }
+            onClick={() => {
+              setLayerNotice(null)
+              setDensityEnabled((value) => !value)
+            }}
+          >
+            <Flame aria-hidden="true" size={15} />
+            密度
+          </button>
+        </div>
+      )}
+
+      {loadState === 'ready' && (trafficEnabled || densityEnabled || layerNotice) && (
+        <div className="jovlo-map-layer-status" role={layerNotice ? 'status' : undefined}>
+          {layerNotice ? <span>{layerNotice}</span> : null}
+          {!layerNotice && trafficEnabled ? (
+            <span className="jovlo-map-traffic-legend" aria-label="实时路况图例">
+              <i data-level="clear" />畅通
+              <i data-level="slow" />缓行
+              <i data-level="jam" />拥堵
+            </span>
+          ) : null}
+          {!layerNotice && densityEnabled ? <span>点位密度 · 非实时客流</span> : null}
+        </div>
       )}
 
       {loadState !== 'ready' && (
