@@ -44,7 +44,7 @@ export function DayHealthBar({
     <>
       <span className="jovlo-day-health__metrics">
         {METRIC_LABELS.map(([key, label, Icon]) => (
-          <span key={key} className="jovlo-day-health__metric" aria-label={`${label} ${metrics[key]}`} title={label}>
+          <span key={key} className="jovlo-day-health__metric" aria-label={`${label} ${metrics[key]}`}>
             <Icon className="jovlo-day-health__metric-icon" aria-hidden="true" size={15} strokeWidth={1.8} />
             {!compact && <span className="jovlo-day-health__metric-label">{label}</span>}
             {loading ? (

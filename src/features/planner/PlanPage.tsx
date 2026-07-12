@@ -2,6 +2,7 @@ import { BedDouble, BookOpen, ChevronDown, ChevronUp, Clock3, FileClock, Map as 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
+import { HoverTooltip } from '@/components'
 import type { DayHealthStatus, EvidenceTone, FormalMapPoint } from './types'
 import { DayHealthBar } from './DayHealthBar'
 import { DayWeatherStrip, type DailyWeatherResult } from './DayWeatherStrip'
@@ -610,17 +611,18 @@ export function PlanPage() {
           <TriangleAlert aria-hidden="true" size={15} />
           <span>{currentRouteResult?.providerNotice?.message ?? compactWarning(schedule!.warnings[0].message)}</span>
           {currentRouteResult?.providerNotice?.retryable ? (
-            <button
-              type="button"
-              aria-label="重新计算高德路线"
-              title="重新计算高德路线"
-              onClick={() => {
-                routeCache.current.delete(routeInputHash)
-                setRouteRetryNonce((value) => value + 1)
-              }}
-            >
-              <RefreshCcw aria-hidden="true" size={15} />
-            </button>
+            <HoverTooltip label="重新计算高德路线" side="top" align="end">
+              <button
+                type="button"
+                aria-label="重新计算高德路线"
+                onClick={() => {
+                  routeCache.current.delete(routeInputHash)
+                  setRouteRetryNonce((value) => value + 1)
+                }}
+              >
+                <RefreshCcw aria-hidden="true" size={15} />
+              </button>
+            </HoverTooltip>
           ) : null}
         </div>
       ) : null}

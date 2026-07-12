@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-import { ProductCopyright } from '@/components'
+import { HoverTooltip, ProductCopyright } from '@/components'
 import { useAuth } from '@/features/auth/AuthProvider'
 import './home.css'
 
@@ -42,9 +42,11 @@ export function HomePage() {
             <img src="/jovlo-mark.svg" alt="" />
             <span>Jovlo</span>
           </a>
-          <Link className="home-account" to={accountPath} aria-label={accountLabel} title={accountLabel}>
-            <UserRound aria-hidden="true" size={18} />
-          </Link>
+          <HoverTooltip label={accountLabel} align="end">
+            <Link className="home-account" to={accountPath} aria-label={accountLabel}>
+              <UserRound aria-hidden="true" size={18} />
+            </Link>
+          </HoverTooltip>
         </header>
 
         <div className="home-hero__content">

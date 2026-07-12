@@ -61,9 +61,9 @@ describe('MapCanvas fallback', () => {
 
   it('gives every icon-only map control an accessible name', () => {
     render(<MapCanvas amapKey="" />)
-    expect(screen.getByRole('button', { name: '放大地图' })).toHaveAttribute('title', '放大地图')
-    expect(screen.getByRole('button', { name: '缩小地图' })).toHaveAttribute('title', '缩小地图')
-    expect(screen.getByRole('button', { name: '适应路线' })).toHaveAttribute('title', '适应路线')
+    expect(screen.getByRole('button', { name: '放大地图' })).not.toHaveAttribute('title')
+    expect(screen.getByRole('button', { name: '缩小地图' })).not.toHaveAttribute('title')
+    expect(screen.getByRole('button', { name: '适应路线' })).not.toHaveAttribute('title')
   })
 
   it('loads AMap when a key exists while keeping formal markers outside candidate clustering', async () => {
@@ -195,7 +195,7 @@ describe('MapCanvas fallback', () => {
     await user.click(screen.getByRole('button', { name: '卫星' }))
     await waitFor(() => expect(mapSetLayers).toHaveBeenLastCalledWith([satelliteLayer, roadNetLayer]))
 
-    await user.click(screen.getByRole('button', { name: '显示实时路况' }))
+    await user.click(screen.getByRole('button', { name: '路况' }))
     await waitFor(() => expect(mapSetLayers).toHaveBeenLastCalledWith([
       satelliteLayer,
       roadNetLayer,
@@ -203,7 +203,7 @@ describe('MapCanvas fallback', () => {
     ]))
     expect(screen.getByLabelText('实时路况图例')).toHaveTextContent('畅通缓行拥堵')
 
-    await user.click(screen.getByRole('button', { name: '显示路书点位密度' }))
+    await user.click(screen.getByRole('button', { name: '密度' }))
     await waitFor(() => expect(heatmapShow).toHaveBeenCalled())
     expect(screen.getByText('点位密度 · 非实时客流')).toBeInTheDocument()
     expect(onReady).toHaveBeenCalledWith('amap')

@@ -58,7 +58,7 @@ export function DayRail({
                 </span>
                 <span className="jovlo-day-rail__meta">
                   {day.hotel && (
-                    <span title={day.hotel}>
+                    <span>
                       <BedDouble aria-hidden="true" size={14} />
                       <span>{day.hotel}</span>
                     </span>

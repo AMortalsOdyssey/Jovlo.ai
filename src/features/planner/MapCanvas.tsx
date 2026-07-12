@@ -126,7 +126,6 @@ function createAmapPlaceMarker({
   button.dataset.type = type
   button.dataset.selected = String(selected)
   button.setAttribute('aria-label', ariaLabel)
-  button.title = ariaLabel
 
   const pin = document.createElement('span')
   pin.className = 'jovlo-amap-place-marker__pin'
@@ -425,7 +424,6 @@ export function MapCanvas({
             position: [point.lng, point.lat],
             content: markerButton,
             offset: new AMap.Pixel(-18, -42),
-            title: point.name,
             zIndex: 20,
           })
         })
@@ -611,7 +609,7 @@ export function MapCanvas({
               type="button"
               aria-pressed={baseLayer === 'satellite'}
               disabled={!layerAvailability.satellite}
-              title={layerAvailability.satellite ? '切换卫星地图' : '卫星图暂时不可用'}
+              aria-label={layerAvailability.satellite ? '卫星' : '卫星，暂时不可用'}
               onClick={() => {
                 setLayerNotice(null)
                 setBaseLayer('satellite')
@@ -623,10 +621,9 @@ export function MapCanvas({
           </div>
           <button
             type="button"
-            aria-label="显示实时路况"
+            aria-label={layerAvailability.traffic ? '路况' : '路况，暂时不可用'}
             aria-pressed={trafficEnabled}
             disabled={!layerAvailability.traffic}
-            title={layerAvailability.traffic ? '显示实时路况' : '实时路况暂时不可用'}
             onClick={() => {
               setLayerNotice(null)
               setTrafficEnabled((value) => !value)
@@ -637,16 +634,15 @@ export function MapCanvas({
           </button>
           <button
             type="button"
-            aria-label="显示路书点位密度"
+            aria-label={
+              !layerAvailability.density
+                ? '密度，暂时不可用'
+                : canShowDensity
+                  ? '密度'
+                  : '密度，至少需要 3 个不同点位'
+            }
             aria-pressed={densityEnabled}
             disabled={!canShowDensity || !layerAvailability.density}
-            title={
-              !layerAvailability.density
-                ? '点位密度图层暂时不可用'
-                : canShowDensity
-                  ? '显示路书点位密度'
-                  : '至少需要 3 个不同点位'
-            }
             onClick={() => {
               setLayerNotice(null)
               setDensityEnabled((value) => !value)

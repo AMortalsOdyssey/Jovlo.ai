@@ -1,6 +1,8 @@
 import { Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react'
 import { useState } from 'react'
 
+import { HoverTooltip } from '@/components'
+
 type EmailFieldProps = {
   id: string
   value: string
@@ -53,16 +55,16 @@ export function PasswordField({ autoComplete, id, name = 'password', onChange, p
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
-      <button
-        className="auth-field-action"
-        type="button"
-        aria-label={visible ? '隐藏密码' : '显示密码'}
-        title={visible ? '隐藏密码' : '显示密码'}
-        onClick={() => setVisible((current) => !current)}
-      >
-        {visible ? <EyeOff aria-hidden="true" size={17} /> : <Eye aria-hidden="true" size={17} />}
-      </button>
+      <HoverTooltip label={visible ? '隐藏密码' : '显示密码'} align="end">
+        <button
+          className="auth-field-action"
+          type="button"
+          aria-label={visible ? '隐藏密码' : '显示密码'}
+          onClick={() => setVisible((current) => !current)}
+        >
+          {visible ? <EyeOff aria-hidden="true" size={17} /> : <Eye aria-hidden="true" size={17} />}
+        </button>
+      </HoverTooltip>
     </div>
   )
 }
-

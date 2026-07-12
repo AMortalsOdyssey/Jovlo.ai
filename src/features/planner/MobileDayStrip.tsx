@@ -107,7 +107,6 @@ export function MobileDayStrip({
               data-expanded={selected && compact ? true : undefined}
               aria-current={selected ? 'date' : undefined}
               aria-label={`Day ${day.dayNumber}，${day.area}`}
-              title={`Day ${day.dayNumber} · ${day.area}`}
               onClick={() => onSelectDay(day.id)}
             >
               <strong>D{day.dayNumber}</strong>

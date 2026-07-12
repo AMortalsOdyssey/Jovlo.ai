@@ -68,10 +68,10 @@ export function LegRow({
               <span className="jovlo-leg-row__error">{description}</span>
             ) : (
               <span className="jovlo-leg-row__metrics jovlo-numeric" aria-hidden="true">
-                <span title="路段距离"><Ruler size={14} />{distance ?? '待确认'}</span>
-                <span title="驾驶耗时"><Timer size={14} />{duration ?? '待确认'}</span>
-                {eta ? <span title="预计到达"><Clock3 size={14} />{eta}</span> : null}
-                {estimated ? <span className="jovlo-leg-row__estimate" title="参考估算">估</span> : null}
+                <span><Ruler size={14} />{distance ?? '待确认'}</span>
+                <span><Timer size={14} />{duration ?? '待确认'}</span>
+                {eta ? <span><Clock3 size={14} />{eta}</span> : null}
+                {estimated ? <span className="jovlo-leg-row__estimate">估</span> : null}
               </span>
             )
           )}

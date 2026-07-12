@@ -1,5 +1,7 @@
 export { IconButton } from './IconButton'
 export type { IconButtonProps } from './IconButton'
+export { HoverTooltip, HoverTooltipProvider } from './HoverTooltip'
+export type { HoverTooltipProps } from './HoverTooltip'
 export { ActionMenu } from './ActionMenu'
 export type { ActionMenuItem, ActionMenuProps } from './ActionMenu'
 export { ProductCopyright } from './ProductCopyright'

@@ -45,12 +45,9 @@
 }
 
 .jovlo-tooltip {
-  position: absolute;
   z-index: var(--z-toast);
-  top: calc(100% + var(--space-1));
-  left: 50%;
   width: max-content;
-  max-width: 216px;
+  max-width: min(216px, calc(100vw - 16px));
   padding: var(--space-1) var(--space-2);
   color: var(--surface);
   background: var(--ink);
@@ -59,18 +56,26 @@
   font: 500 var(--text-supporting-size) / var(--text-supporting-line) var(--font-ui);
   letter-spacing: 0;
   pointer-events: none;
-  opacity: 0;
-  transform: translate(-50%, var(--space-1));
-  transition:
-    opacity var(--motion-state) var(--ease-out),
-    transform var(--motion-state) var(--ease-out);
+  transform-origin: var(--radix-tooltip-content-transform-origin);
+  animation: jovlo-tooltip-in var(--motion-state) var(--ease-out) both;
+  overflow-wrap: anywhere;
   white-space: normal;
 }
 
-.jovlo-tooltip-root:hover .jovlo-tooltip,
-.jovlo-tooltip-root:focus-within .jovlo-tooltip {
-  opacity: 1;
-  transform: translate(-50%, 0);
+.jovlo-tooltip__arrow {
+  fill: var(--ink);
+}
+
+@keyframes jovlo-tooltip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -78,10 +83,8 @@
     transform: none;
   }
 
-  .jovlo-tooltip,
-  .jovlo-tooltip-root:hover .jovlo-tooltip,
-  .jovlo-tooltip-root:focus-within .jovlo-tooltip {
-    transform: translate(-50%, 0);
+  .jovlo-tooltip {
+    animation: none;
   }
 }
 
@@ -138,33 +141,6 @@
   transform: scale(0.98);
 }
 
-.jovlo-action-menu__tooltip {
-  position: absolute;
-  z-index: var(--z-toast);
-  top: calc(100% + var(--space-1));
-  left: 50%;
-  width: max-content;
-  max-width: 216px;
-  padding: var(--space-1) var(--space-2);
-  color: var(--surface);
-  background: var(--ink);
-  border-radius: var(--radius-control);
-  box-shadow: var(--shadow-float);
-  font: 500 var(--text-supporting-size) / var(--text-supporting-line) var(--font-ui);
-  pointer-events: none;
-  opacity: 0;
-  transform: translate(-50%, var(--space-1));
-  transition:
-    opacity var(--motion-state) var(--ease-out),
-    transform var(--motion-state) var(--ease-out);
-}
-
-.jovlo-action-menu:not([open]) .jovlo-action-menu__trigger:hover .jovlo-action-menu__tooltip,
-.jovlo-action-menu:not([open]) .jovlo-action-menu__trigger:focus-visible .jovlo-action-menu__tooltip {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
-
 .jovlo-action-menu__content {
   position: absolute;
   z-index: var(--z-toast);
@@ -217,10 +193,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .jovlo-action-menu__trigger:active,
-  .jovlo-action-menu__tooltip,
-  .jovlo-action-menu__trigger:hover .jovlo-action-menu__tooltip,
-  .jovlo-action-menu__trigger:focus-visible .jovlo-action-menu__tooltip {
-    transform: translate(-50%, 0);
+  .jovlo-action-menu__trigger:active {
+    transform: none;
   }
 }

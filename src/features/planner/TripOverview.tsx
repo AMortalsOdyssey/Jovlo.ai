@@ -60,7 +60,7 @@ export function TripOverview({
               <span className="trip-overview__day-meta">
                 <span><MapPinned aria-hidden="true" size={14} />{day.stopCount} 站</span>
                 <span><CarFront aria-hidden="true" size={14} />{day.driveDuration}</span>
-                {day.hotel ? <span title={day.hotel}><BedDouble aria-hidden="true" size={14} />{day.hotel}</span> : null}
+                {day.hotel ? <span><BedDouble aria-hidden="true" size={14} />{day.hotel}</span> : null}
                 {day.riskCount ? <span className="trip-overview__risk"><AlertTriangle aria-hidden="true" size={14} />{day.riskCount} 处提示</span> : null}
               </span>
             </span>

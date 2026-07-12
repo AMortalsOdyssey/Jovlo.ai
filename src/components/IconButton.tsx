@@ -1,6 +1,7 @@
-import { useId, type ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes } from 'react'
 import type { LucideIcon } from 'lucide-react'
 
+import { HoverTooltip } from './HoverTooltip'
 import './ui.css'
 
 export interface IconButtonProps
@@ -18,23 +19,18 @@ export function IconButton({
   type = 'button',
   ...buttonProps
 }: IconButtonProps) {
-  const tooltipId = useId()
-
   return (
     <span className={`jovlo-tooltip-root ${className}`.trim()}>
-      <button
-        {...buttonProps}
-        type={type}
-        className={`jovlo-icon-button jovlo-icon-button--${size}`}
-        aria-label={label}
-        aria-describedby={tooltipId}
-        title={label}
-      >
-        <Icon aria-hidden="true" size={20} strokeWidth={1.8} />
-      </button>
-      <span id={tooltipId} className="jovlo-tooltip" role="tooltip">
-        {label}
-      </span>
+      <HoverTooltip label={label}>
+        <button
+          {...buttonProps}
+          type={type}
+          className={`jovlo-icon-button jovlo-icon-button--${size}`}
+          aria-label={label}
+        >
+          <Icon aria-hidden="true" size={20} strokeWidth={1.8} />
+        </button>
+      </HoverTooltip>
     </span>
   )
 }

@@ -1,6 +1,7 @@
 import { useRef, type FocusEvent } from 'react'
 import { MoreHorizontal, type LucideIcon } from 'lucide-react'
 
+import { HoverTooltip } from './HoverTooltip'
 import './ui.css'
 
 export interface ActionMenuItem {
@@ -46,19 +47,17 @@ export function ActionMenu({
       className={`jovlo-action-menu jovlo-action-menu--${align} ${className}`.trim()}
       onBlur={handleBlur}
     >
-      <summary
-        ref={triggerRef}
-        className="jovlo-action-menu__trigger"
-        role="button"
-        aria-label={label}
-        aria-haspopup="menu"
-        title={label}
-      >
-        <TriggerIcon aria-hidden="true" size={20} strokeWidth={1.8} />
-        <span className="jovlo-action-menu__tooltip" role="tooltip">
-          {label}
-        </span>
-      </summary>
+      <HoverTooltip label={label}>
+        <summary
+          ref={triggerRef}
+          className="jovlo-action-menu__trigger"
+          role="button"
+          aria-label={label}
+          aria-haspopup="menu"
+        >
+          <TriggerIcon aria-hidden="true" size={20} strokeWidth={1.8} />
+        </summary>
+      </HoverTooltip>
       <div className="jovlo-action-menu__content" role="menu" aria-label={label}>
         {items.map(({ label: itemLabel, icon: ItemIcon, onSelect, disabled, tone = 'default' }) => (
           <button

@@ -90,8 +90,8 @@ export function StopCard({
           >
             <strong className="jovlo-stop-card__name">{name}</strong>
             <span className="jovlo-stop-card__time jovlo-numeric">
-              <span title="到达时间"><Clock3 aria-hidden="true" size={14} />{plannedTime}</span>
-              <span title="停留时长"><Hourglass aria-hidden="true" size={14} />{duration}</span>
+              <span><Clock3 aria-hidden="true" size={14} />{plannedTime}</span>
+              <span><Hourglass aria-hidden="true" size={14} />{duration}</span>
             </span>
             <span className="jovlo-stop-card__summary">
               <span className={`jovlo-evidence jovlo-evidence--${evidenceTone}`}>{evidenceLabel}</span>

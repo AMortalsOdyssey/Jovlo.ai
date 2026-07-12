@@ -978,19 +978,6 @@ button.jovlo-day-health:hover {
   background: rgb(255 255 255 / 12%);
 }
 
-.jovlo-snackbar .jovlo-tooltip {
-  top: auto;
-  right: 0;
-  bottom: calc(100% + var(--space-1));
-  left: auto;
-  transform: translateY(var(--space-1));
-}
-
-.jovlo-snackbar .jovlo-tooltip-root:hover .jovlo-tooltip,
-.jovlo-snackbar .jovlo-tooltip-root:focus-within .jovlo-tooltip {
-  transform: translateY(0);
-}
-
 /* Mobile day strip */
 .jovlo-mobile-day-strip {
   position: relative;

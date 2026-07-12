@@ -12,7 +12,7 @@ import {
   Share2,
 } from 'lucide-react'
 
-import { ActionMenu, IconButton, type ActionMenuItem } from '../../components'
+import { ActionMenu, HoverTooltip, IconButton, type ActionMenuItem } from '../../components'
 import type { SaveStatus } from './types'
 import './planner.css'
 
@@ -77,33 +77,33 @@ export function TripHeader({
           <img src={logoSrc} alt="" />
         </span>
         <span className="jovlo-trip-header__trip">
-          <strong title={title}>{title}</strong>
+          <strong>{title}</strong>
           <span className="jovlo-trip-header__version jovlo-numeric">v{version}</span>
         </span>
       </div>
 
       <div className="jovlo-trip-header__commands">
-        {saveStatus === 'error' && onRetrySave ? (
-          <button
-            type="button"
-            className={`jovlo-trip-header__status jovlo-trip-header__status--${saveStatus}`}
-            onClick={onRetrySave}
-            aria-label={status.label}
-            aria-live="polite"
-            title={status.label}
-          >
-            {statusContent}
-          </button>
-        ) : (
-          <span
-            className={`jovlo-trip-header__status jovlo-trip-header__status--${saveStatus}`}
-            aria-label={status.label}
-            aria-live={saveStatus === 'error' || saveStatus === 'stale' ? 'assertive' : 'polite'}
-            title={status.label}
-          >
-            {statusContent}
-          </span>
-        )}
+        <HoverTooltip label={status.label}>
+          {saveStatus === 'error' && onRetrySave ? (
+            <button
+              type="button"
+              className={`jovlo-trip-header__status jovlo-trip-header__status--${saveStatus}`}
+              onClick={onRetrySave}
+              aria-label={status.label}
+              aria-live="polite"
+            >
+              {statusContent}
+            </button>
+          ) : (
+            <span
+              className={`jovlo-trip-header__status jovlo-trip-header__status--${saveStatus}`}
+              aria-label={status.label}
+              aria-live={saveStatus === 'error' || saveStatus === 'stale' ? 'assertive' : 'polite'}
+            >
+              {statusContent}
+            </span>
+          )}
+        </HoverTooltip>
 
         <span className="jovlo-trip-header__desktop-actions">
           <IconButton icon={Download} label="导入变更" onClick={onImport} disabled={!onImport} />
