@@ -51,7 +51,7 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
         <div className="workspace-actions">
           <Link className="workspace-import-link" to={`${base}/imports/demo-import`}>
             <Sparkles aria-hidden="true" size={17} />
-            导入资料
+            Codex 协作
           </Link>
           <IconButton
             icon={Menu}

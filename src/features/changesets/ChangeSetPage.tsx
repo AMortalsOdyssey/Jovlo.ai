@@ -1,14 +1,16 @@
 import {
   AlertTriangle,
+  ArrowRight,
   Bot,
   CheckCircle2,
   Clock3,
   ClipboardPaste,
   Copy,
+  ExternalLink,
   FileJson2,
   GitPullRequestArrow,
-  Link2,
   LoaderCircle,
+  PencilLine,
   ShieldCheck,
   ShieldAlert,
   Upload,
@@ -30,6 +32,7 @@ import { useTripStore } from '@/store/useTripStore'
 
 import {
   Button,
+  ButtonLink,
   EmptyState,
   MetricStrip,
   PageHeader,
@@ -73,7 +76,10 @@ function idempotencyHeaders(key: string = crypto.randomUUID()) {
 
 async function copyTextWithFallback(value: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(value)
+    await Promise.race([
+      navigator.clipboard.writeText(value),
+      new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('clipboard timeout')), 1_200)),
+    ])
     return true
   } catch {
     const textarea = document.createElement('textarea')
@@ -178,10 +184,26 @@ function buildAgentPrompt(
   ticket: AgentTicketResponse,
   trip: TripSnapshot,
   currentVersionId: string,
-  sourceBrief: string,
 ) {
   const context = agentTripContext(trip, currentVersionId)
+  const sourceBrief = ''
   return `你正在为 Jovlo.ai 生成一个待人工审阅的 TripChangeSet v1。\n\n资料链接或任务说明：\n${sourceBrief.trim() || '我会在下一条消息提供小红书、B站或文章内容。'}\n\n工作要求：\n1. 阅读来源，提取地点、价格、营业时间、停车、口味、路况、适合人群等可验证事实。\n2. 对关键事实尽量寻找第二来源交叉验证；商业合作、单一来源、冲突或过期信息必须在 rationale/summary 中明确，不得伪装成已确认事实。\n3. 只能生成下面允许的领域操作，不得修改代码、数据库、部署或绕过人工审阅。\n4. 已有实体必须使用下方 context 的稳定 ID；未知地点使用 PROPOSE_PLACE，不得虚构 placeId。\n5. 每个可独立接受/拒绝的建议放入一个 atomic proposalGroup。删除、换酒店、跨日移动必须单独成组并解释理由。\n6. 每条事实必须关联 sources 中的 sourceRef。不要大段复制原文，只写摘要。\n\n允许的操作：\n- ADD_STOP(dayId,newStopId,placeId|proposalRef,afterStopId,stayMinutes,kind,sourceRefs)\n- REMOVE_STOP(stopId,reason)\n- MOVE_STOP(stopId,targetDayId,afterStopId)\n- UPDATE_STOP(stopId,patch)\n- SET_HOTEL(nightAfterDayId,anchor)\n- UPDATE_TRIP_SETTING(path,value)\n- UPDATE_BUDGET_ASSUMPTION(field,value)\n- LINK_SOURCE(sourceRef,placeId|stopId,fields?)\n- UPSERT_PLACE_CLAIM(placeId,field,value,sourceRefs)\n- PROPOSE_PLACE(proposalRef,name,address?,sourceRefs,coordinate?)\n\n输出必须是严格 JSON，顶层结构：\n{\n  "schemaVersion": 1,\n  "changeSetId": "新 UUID",\n  "tripId": "${trip.tripId}",\n  "baseVersionId": "${currentVersionId}",\n  "idempotencyKey": "至少 8 字符且本次唯一",\n  "createdAt": "ISO 8601",\n  "producer": {"type":"external-agent","name":"Codex","conversationRef":"可选"},\n  "sources": [{"sourceRef":"稳定短标识","platform":"平台","url":"https://...","title":"标题","summary":"摘要","commercialRelationship":"yes|no|unknown"}],\n  "proposalGroups": [{"groupId":"稳定短标识","title":"标题","rationale":"证据和取舍","atomic":true,"operations":[]}]\n}\n\n当前行程 context：\n${JSON.stringify(context, null, 2)}\n\n完成 JSON 后，把它保存为 changeset.json，并执行：\ncurl --fail-with-body -X POST '${ticket.deliveryEndpoint}' \\\n  -H 'Authorization: Jovlo-Agent ${ticket.ticket}' \\\n  -H 'Content-Type: application/json' \\\n  --data-binary @changeset.json\n\n投递成功后，读取响应中的 reviewUrl 并打开。这个口令在 ${ticket.expiresAt} 过期，只能投递待审 ChangeSet，不能直接应用。`
+}
+
+function operationLabel(type: TripChangeSet['proposalGroups'][number]['operations'][number]['type']) {
+  const labels: Record<typeof type, string> = {
+    ADD_STOP: '加入行程',
+    REMOVE_STOP: '移除地点',
+    MOVE_STOP: '调整顺序',
+    UPDATE_STOP: '修改停留',
+    SET_HOTEL: '调整住宿',
+    UPDATE_TRIP_SETTING: '修改行程设置',
+    UPDATE_BUDGET_ASSUMPTION: '调整预算',
+    LINK_SOURCE: '关联来源',
+    UPSERT_PLACE_CLAIM: '补充地点信息',
+    PROPOSE_PLACE: '建议新地点',
+  }
+  return labels[type]
 }
 
 export function ChangeSetPage() {
@@ -192,14 +214,11 @@ export function ChangeSetPage() {
   const loadsStoredChangeSet = Boolean(routeChangeSetId && routeChangeSetId !== 'demo-import')
   const productionMode = state.productionSync.mode === 'production'
   const fileRef = useRef<HTMLInputElement>(null)
-  const [raw, setRaw] = useState(() => loadsStoredChangeSet ? '' : JSON.stringify(DEMO_CHANGESET, null, 2))
-  const [changeSet, setChangeSet] = useState<TripChangeSet | null>(() => loadsStoredChangeSet ? null : DEMO_CHANGESET)
+  const [raw, setRaw] = useState('')
+  const [changeSet, setChangeSet] = useState<TripChangeSet | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [selection, setSelection] = useState<Record<string, 'accept' | 'reject'>>(() => loadsStoredChangeSet
-    ? {}
-    : Object.fromEntries(DEMO_CHANGESET.proposalGroups.map((group) => [group.groupId, 'accept'])))
+  const [selection, setSelection] = useState<Record<string, 'accept' | 'reject'>>({})
   const [proposalResolutions, setProposalResolutions] = useState<Record<string, string>>({})
-  const [sourceBrief, setSourceBrief] = useState('')
   const [bridgeStatus, setBridgeStatus] = useState<string | null>(null)
   const [taskPrompt, setTaskPrompt] = useState<string | null>(null)
   const [storedStatus, setStoredStatus] = useState<string | null>(null)
@@ -320,12 +339,14 @@ export function ChangeSetPage() {
         method: 'POST',
         body: '{}',
       })
-      const prompt = buildAgentPrompt(ticket, state.trip, currentVersionId, sourceBrief)
+      const prompt = buildAgentPrompt(ticket, state.trip, currentVersionId)
       setTaskPrompt(prompt)
       const copied = await copyTextWithFallback(prompt)
       const expiry = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' })
         .format(new Date(ticket.expiresAt))
-      setBridgeStatus(copied ? `任务包已复制 · ${expiry} 前可投递一次` : `任务包已生成 · ${expiry} 前可投递一次`)
+      setBridgeStatus(copied
+        ? `连接指令已复制。现在去 Codex 粘贴，再发送攻略链接或文字；${expiry} 前可投递一次。`
+        : `连接指令已生成。展开下方内容手动复制；${expiry} 前可投递一次。`)
     } catch (taskError) {
       setError(taskError instanceof Error ? taskError.message : '暂时无法生成 Codex 任务包。')
     } finally {
@@ -388,82 +409,98 @@ export function ChangeSetPage() {
   }
 
   return (
-    <PageShell width="wide">
+    <PageShell width={changeSet ? 'wide' : 'reading'} className="changeset-page">
       <PageHeader
         eyebrow={getTripTitle(state.trip)}
-        title="审阅 ChangeSet"
-        description="先校验基线和草稿，再按提案组决定接受或拒绝；应用时只提交选中的原子组。"
+        title={changeSet ? '确认这次修改' : '让 Codex 帮你改路书'}
+        description={changeSet
+          ? 'Agent 已提交建议。先看整体影响，再逐项决定，最后保存为一个可回退的新版本。'
+          : '攻略和要求发在 Codex 对话里；这里仅创建一条安全、临时的连接。'}
         backTo={`/trips/${tripId}/plan`}
-        meta={applied ? <StatusBadge tone="sea">已提交应用</StatusBadge> : changeSet ? <StatusBadge tone={preview?.canApply ? 'sky' : 'sun'}>{preview?.canApply ? '待确认' : '有待解决项'}</StatusBadge> : undefined}
+        meta={applied
+          ? <StatusBadge tone="sea">已应用</StatusBadge>
+          : changeSet
+            ? <StatusBadge tone={preview?.canApply ? 'sky' : 'sun'}>{preview?.canApply ? '等待你的确认' : '有待解决项'}</StatusBadge>
+            : <StatusBadge tone="neutral">尚未连接</StatusBadge>}
       />
 
       {state.dirty ? (
         <section className="feature-section changeset-gate">
           <div className="feature-notice feature-notice--warning">
             <ShieldAlert aria-hidden="true" size={22} />
-            <div><strong>先处理当前未发布草稿</strong><span>ChangeSet 只基于已发布 HEAD 试算，不会与手工草稿隐式合并。保存检查点后再导入。</span></div>
+            <div><strong>先保存当前手工修改</strong><span>Agent 建议以最近发布的版本为基线。先保存检查点，才能准确计算路线、时间和预算变化。</span></div>
           </div>
-          <Button variant="primary" icon={CheckCircle2} onClick={() => state.publishVersion('导入 ChangeSet 前检查点')}>保存草稿为版本</Button>
+          <Button variant="primary" icon={CheckCircle2} onClick={() => state.publishVersion('Agent 修改前检查点')}>保存为检查点</Button>
         </section>
       ) : null}
 
-      <section className="feature-section agent-bridge">
-        <div className="agent-bridge__heading">
-          <div className="agent-bridge__mark"><Bot aria-hidden="true" size={24} /></div>
-          <div>
-            <SectionHeading title="交给 Codex 整理资料" description="一次性连接包只允许提交建议；地点匹配、试算和应用仍由你确认。" />
-            <div className="agent-bridge__trust">
-              <span><ShieldCheck aria-hidden="true" size={15} />15 分钟</span>
-              <span><Clock3 aria-hidden="true" size={15} />成功后失效</span>
-              <span><Link2 aria-hidden="true" size={15} />保留来源</span>
+      {!changeSet && busy !== 'load' ? (
+        <>
+          <section className="feature-section agent-handoff">
+            <div className="agent-handoff__lead">
+              <div className="agent-handoff__mark"><Bot aria-hidden="true" size={25} /></div>
+              <div>
+                <p className="agent-handoff__kicker">Agent 协作</p>
+                <h2>攻略发给 Codex，修改回到这里确认</h2>
+                <p>连接指令会带上当前路书的稳定编号和一次性投递口令。Codex 只能提交建议，不能直接改动你的行程。</p>
+              </div>
             </div>
-          </div>
-        </div>
-        <div className="agent-bridge__compose">
-          <label className="feature-field">
-            <span className="feature-field-label">资料链接或补充要求</span>
-            <textarea
-              value={sourceBrief}
-              onChange={(event) => setSourceBrief(event.target.value)}
-              disabled={state.dirty || busy === 'ticket'}
-              placeholder="粘贴小红书、B站、文章链接；也可以留空，稍后在 Codex 对话里补充。"
-              rows={3}
-            />
-          </label>
-          <Button
-            variant="primary"
-            icon={busy === 'ticket' ? LoaderCircle : Copy}
-            onClick={createAgentTask}
-            disabled={state.dirty || !currentVersionId || busy !== null}
-          >
-            {busy === 'ticket' ? '正在生成' : '复制 Codex 任务包'}
-          </Button>
-        </div>
-        {bridgeStatus ? <p className="agent-bridge__status" role="status"><CheckCircle2 aria-hidden="true" size={17} />{bridgeStatus}</p> : null}
-        {taskPrompt ? (
-          <details className="agent-bridge__package">
-            <summary>查看任务包</summary>
-            <textarea aria-label="Codex 任务包" readOnly value={taskPrompt} rows={8} onFocus={(event) => event.currentTarget.select()} />
-            <Button icon={Copy} onClick={async () => setBridgeStatus(await copyTextWithFallback(taskPrompt) ? '任务包已复制' : '请点选文本框后手动复制')}>再次复制</Button>
-          </details>
-        ) : null}
-      </section>
 
-      <section className="feature-section">
-        <SectionHeading title="粘贴或上传" description="接受 UTF-8 JSON，或只含一个 JSON 代码块的 Markdown；最大 256KB。" />
-        <div className="changeset-input-layout">
-          <label className="feature-field">
-            <span className="feature-field-label">TripChangeSet v1</span>
-            <textarea className="changeset-editor" value={raw} onChange={(event) => { setRaw(event.target.value); setError(null); setChangeSet(null) }} disabled={state.dirty} spellCheck={false} placeholder={'{\n  "schemaVersion": 1,\n  "proposalGroups": […]\n}'} />
-          </label>
-          <div className="changeset-input-actions">
-            <input ref={fileRef} className="jovlo-sr-only" type="file" accept="application/json,.json,.md,text/markdown" onChange={upload} disabled={state.dirty} />
-            <Button icon={Upload} onClick={() => fileRef.current?.click()} disabled={state.dirty}>上传文件</Button>
-            <Button variant="primary" icon={ClipboardPaste} onClick={() => parse()} disabled={state.dirty || !raw.trim()}>校验并预览</Button>
-          </div>
-        </div>
-        {error ? <div className="feature-notice feature-notice--danger changeset-error" role="alert"><AlertTriangle aria-hidden="true" size={20} /><div><strong>未完成</strong><span>{error}</span></div></div> : null}
-      </section>
+            <ol className="agent-handoff__steps" aria-label="Agent 修改流程">
+              <li className="is-current"><span>1</span><div><strong>创建连接</strong><small>复制一次性指令</small></div></li>
+              <li><span>2</span><div><strong>在 Codex 发攻略</strong><small>链接、正文或修改要求</small></div></li>
+              <li><span>3</span><div><strong>回来确认</strong><small>看影响，逐项接受或拒绝</small></div></li>
+            </ol>
+
+            <div className="agent-handoff__action">
+              <Button
+                variant="primary"
+                icon={busy === 'ticket' ? LoaderCircle : Copy}
+                onClick={createAgentTask}
+                disabled={state.dirty || !currentVersionId || busy !== null}
+              >
+                {busy === 'ticket' ? '正在创建连接' : '复制 Codex 连接指令'}
+              </Button>
+              <p><ShieldCheck aria-hidden="true" size={16} />15 分钟有效 · 成功投递后失效 · 不含直接写入权限</p>
+            </div>
+
+            {bridgeStatus ? <p className="agent-handoff__status" role="status"><CheckCircle2 aria-hidden="true" size={18} />{bridgeStatus}</p> : null}
+            {taskPrompt ? (
+              <details className="agent-handoff__package">
+                <summary>连接指令详情</summary>
+                <textarea aria-label="Codex 连接指令" readOnly value={taskPrompt} rows={8} onFocus={(event) => event.currentTarget.select()} />
+                <Button icon={Copy} onClick={async () => setBridgeStatus(await copyTextWithFallback(taskPrompt) ? '连接指令已复制。现在去 Codex 粘贴。' : '请点选文本框后手动复制')}>再次复制</Button>
+              </details>
+            ) : null}
+          </section>
+
+          <section className="feature-section changeset-manual-path">
+            <PencilLine aria-hidden="true" size={24} />
+            <div><h2>只是微调时间、顺序或预算？</h2><p>直接在行程页修改更快，路线、耗时和预算会随之重新计算。</p></div>
+            <ButtonLink to={`/trips/${tripId}/plan`} icon={ArrowRight}>回到行程编辑</ButtonLink>
+          </section>
+
+          <details className="feature-section changeset-developer">
+            <summary><FileJson2 aria-hidden="true" size={19} />开发者工具 · 手动导入变更文件</summary>
+            <div className="changeset-developer__body">
+              <p>仅用于调试或兼容其他 Agent。接受 UTF-8 JSON 或单个 JSON 代码块，最大 256KB。</p>
+              <div className="changeset-input-layout">
+                <label className="feature-field">
+                  <span className="feature-field-label">TripChangeSet v1</span>
+                  <textarea className="changeset-editor" value={raw} onChange={(event) => { setRaw(event.target.value); setError(null) }} disabled={state.dirty} spellCheck={false} placeholder={'{\n  "schemaVersion": 1,\n  "proposalGroups": […]\n}'} />
+                </label>
+                <div className="changeset-input-actions">
+                  <input ref={fileRef} className="jovlo-sr-only" type="file" accept="application/json,.json,.md,text/markdown" onChange={upload} disabled={state.dirty} />
+                  <Button icon={Upload} onClick={() => fileRef.current?.click()} disabled={state.dirty}>上传文件</Button>
+                  <Button variant="primary" icon={ClipboardPaste} onClick={() => parse()} disabled={state.dirty || !raw.trim()}>校验并预览</Button>
+                </div>
+              </div>
+            </div>
+          </details>
+        </>
+      ) : null}
+
+      {error ? <div className="feature-notice feature-notice--danger changeset-error" role="alert"><AlertTriangle aria-hidden="true" size={20} /><div><strong>未完成</strong><span>{error}</span></div></div> : null}
 
       {busy === 'load' ? (
         <section className="feature-section changeset-loading" aria-live="polite">
@@ -473,20 +510,42 @@ export function ChangeSetPage() {
 
       {changeSet ? (
         <>
+          <nav className="changeset-review-steps" aria-label="修改确认流程">
+            <span className="is-active"><b>1</b>看整体影响</span>
+            <span><b>2</b>逐项决定</span>
+            <span><b>3</b>保存新版本</span>
+          </nav>
+
           <section className="feature-section">
-            <SectionHeading title="变更总览" description={changeSet.producer.name ? `由 ${changeSet.producer.name} 生成 · ${changeSet.proposalGroups.length} 个提案组` : undefined} />
+            <SectionHeading title="先看整体影响" description={changeSet.producer.name ? `${changeSet.producer.name} 提交了 ${changeSet.proposalGroups.length} 组建议` : undefined} />
             <MetricStrip
               metrics={[
-                { label: '改了什么', value: `${operationCount} 项`, note: `${preview?.counts.added ?? 0} 新增 · ${preview?.counts.changed ?? 0} 调整 · ${preview?.counts.removed ?? 0} 移除`, tone: 'brand' },
-                { label: '代价', value: impactText, note: scheduleRiskCount ? `${scheduleRiskCount} 项日程风险需确认` : '按当前选择重新试算', tone: scheduleRiskCount ? 'sun' : 'neutral' },
-                { label: '影响哪几天', value: affectedLabels.length ? affectedLabels.join(' / ') : '无日程变化', note: `${preview?.impact.hotelChanges.length ?? 0} 处住宿变化` },
-                { label: '阻断冲突', value: conflictCount, note: conflictCount ? '解决后才能应用' : preview?.canApply ? '可应用当前选择' : '当前无技术阻断', tone: conflictCount ? 'coral' : 'sea' },
+                { label: '建议内容', value: `${operationCount} 项`, note: `${preview?.counts.added ?? 0} 新增 · ${preview?.counts.changed ?? 0} 调整 · ${preview?.counts.removed ?? 0} 移除`, tone: 'brand' },
+                { label: '路线影响', value: impactText, note: scheduleRiskCount ? `${scheduleRiskCount} 项日程风险需确认` : '会随你的选择重新计算', tone: scheduleRiskCount ? 'sun' : 'neutral' },
+                { label: '涉及日期', value: affectedLabels.length ? affectedLabels.join(' / ') : '无日程变化', note: `${preview?.impact.hotelChanges.length ?? 0} 处住宿变化` },
+                { label: '需要处理', value: conflictCount, note: conflictCount ? '解决后才能应用' : preview?.canApply ? '当前选择可以应用' : '没有技术阻断', tone: conflictCount ? 'coral' : 'sea' },
               ]}
             />
           </section>
 
+          {changeSet.sources.length ? (
+            <section className="feature-section changeset-sources">
+              <SectionHeading title="这次建议依据的资料" description="打开原文核对 Agent 的摘要和判断。" />
+              <div className="changeset-source-list">
+                {changeSet.sources.map((source) => (
+                  <a href={source.url} target="_blank" rel="noreferrer" key={source.sourceRef}>
+                    <span>{source.platform}</span>
+                    <strong>{source.title}</strong>
+                    <small>{source.summary}</small>
+                    <ExternalLink aria-hidden="true" size={17} />
+                  </a>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <section className="feature-section">
-            <SectionHeading title="提案组" description="每组要么整体接受，要么整体拒绝；选择变化会重新 dry-run。" />
+            <SectionHeading title="逐项决定" description="每组建议可以独立接受或拒绝，路线、时间和预算会随选择重新计算。" />
             <div className="changeset-groups">
               {changeSet.proposalGroups.map((group) => {
                 const groupPreview = preview?.proposalGroups.find((item) => item.groupId === group.groupId)
@@ -495,7 +554,7 @@ export function ChangeSetPage() {
                   <article className={`feature-card changeset-group ${groupPreview?.status === 'conflict' ? 'changeset-group--conflict' : ''}`} key={group.groupId}>
                     <div className="feature-card-header">
                       <div className="feature-card-title">
-                        <div className="changeset-group-meta"><StatusBadge tone={group.atomic ? 'brand' : 'neutral'}>{group.atomic ? '原子组' : '提案组'}</StatusBadge><span>{group.operations.length} 项操作</span></div>
+                        <div className="changeset-group-meta"><StatusBadge tone={group.atomic ? 'brand' : 'neutral'}>建议</StatusBadge><span>{group.operations.length} 项修改</span></div>
                         <h3>{group.title}</h3>
                         <p>{group.rationale}</p>
                       </div>
@@ -507,7 +566,7 @@ export function ChangeSetPage() {
                       />
                     </div>
                     <div className="changeset-operation-summary">
-                      {group.operations.map((operation, index) => <span key={`${operation.type}-${index}`}>{operation.type.replaceAll('_', ' ')}</span>)}
+                      {group.operations.map((operation, index) => <span key={`${operation.type}-${index}`}>{operationLabel(operation.type)}</span>)}
                     </div>
                     {groupPreview?.conflicts.length ? <div className="feature-notice feature-notice--danger"><AlertTriangle aria-hidden="true" size={18} /><div><strong>该组有冲突</strong><span>{groupPreview.conflicts.join('；')}</span></div></div> : null}
                   </article>
@@ -543,14 +602,14 @@ export function ChangeSetPage() {
 
           <section className="feature-section changeset-apply-section">
             <div>
-              <h2>应用 {selectedGroupIds.length} 个提案组</h2>
-              <p>{preview?.canApply ? '应用会原子创建新版本，并把活动草稿重置为干净副本。' : '当前选择存在阻断、未解析地点或过期基线，不能应用。'}</p>
+              <h2>把已接受的建议保存为新版本</h2>
+              <p>{preview?.canApply ? '历史版本会保留，之后仍可查看差异或回退。' : '当前选择还有冲突、未匹配地点或版本已过期，暂时不能应用。'}</p>
             </div>
-            <Button variant="primary" icon={busy === 'apply' ? LoaderCircle : GitPullRequestArrow} onClick={apply} disabled={!preview?.canApply || state.dirty || selectedGroupIds.length === 0 || busy !== null || storedStatus === 'applied'}>{busy === 'apply' ? '正在试算并应用' : storedStatus === 'applied' ? '已应用' : '应用并创建新版本'}</Button>
+            <Button variant="primary" icon={busy === 'apply' ? LoaderCircle : GitPullRequestArrow} onClick={apply} disabled={!preview?.canApply || state.dirty || selectedGroupIds.length === 0 || busy !== null || storedStatus === 'applied'}>{busy === 'apply' ? '正在重新计算' : storedStatus === 'applied' ? '已应用' : `确认应用 ${selectedGroupIds.length} 组建议`}</Button>
           </section>
 
           <details className="feature-technical">
-            <summary>技术详情 · 原始 JSON</summary>
+            <summary>开发者信息 · 原始 ChangeSet</summary>
             <pre>{JSON.stringify(changeSet, null, 2)}</pre>
           </details>
         </>

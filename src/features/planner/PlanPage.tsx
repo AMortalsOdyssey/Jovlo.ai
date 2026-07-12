@@ -576,7 +576,7 @@ export function PlanPage() {
     <nav className="plan-mobile-panel plan-more-links" aria-label="更多功能">
       <Link to={`/trips/${state.trip.tripId}/sources`}><BookOpen aria-hidden="true" />来源与证据</Link>
       <Link to={`/trips/${state.trip.tripId}/versions`}><FileClock aria-hidden="true" />版本历史</Link>
-      <Link to={`/trips/${state.trip.tripId}/imports/demo-import`}><Sparkles aria-hidden="true" />Agent 变更审阅</Link>
+      <Link to={`/trips/${state.trip.tripId}/imports/demo-import`}><Sparkles aria-hidden="true" />让 Codex 帮我改</Link>
       <Link to={`/trips/${state.trip.tripId}/reports`}><ReceiptText aria-hidden="true" />汇总报告</Link>
       <Link to={`/trips/${state.trip.tripId}/settings`}><Settings aria-hidden="true" />行程设置</Link>
     </nav>

@@ -18,26 +18,25 @@ describe('ChangeSetPage', () => {
     useTripStore.getState().resetDemo()
   })
 
-  it('shows the four-part dry-run overview and keeps raw JSON collapsed', () => {
+  it('keeps the Agent handoff simple and moves manual JSON into developer tools', () => {
     render(<MemoryRouter><ChangeSetPage /></MemoryRouter>)
 
-    expect(screen.getByText('改了什么')).toBeInTheDocument()
-    expect(screen.getByText('代价')).toBeInTheDocument()
-    expect(screen.getByText('影响哪几天')).toBeInTheDocument()
-    expect(screen.getByText('阻断冲突')).toBeInTheDocument()
-    expect(screen.getByText('阻断冲突').closest('.feature-metric')).toHaveTextContent('0可应用当前选择')
-    expect(screen.getByRole('button', { name: '应用并创建新版本' })).toBeEnabled()
-    expect(screen.getByText(/项日程风险需确认/)).toBeInTheDocument()
-    expect(screen.getByText(/技术详情 · 原始 JSON/).closest('details')).not.toHaveAttribute('open')
+    expect(screen.getByRole('heading', { name: '让 Codex 帮你改路书' })).toBeInTheDocument()
+    expect(screen.getByText('创建连接')).toBeInTheDocument()
+    expect(screen.getByText('在 Codex 发攻略')).toBeInTheDocument()
+    expect(screen.getByText('回来确认')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '复制 Codex 连接指令' })).toBeEnabled()
+    expect(screen.getByText('开发者工具 · 手动导入变更文件').closest('details')).not.toHaveAttribute('open')
+    expect(screen.queryByText('建议内容')).not.toBeInTheDocument()
   })
 
   it('gates review when the active draft is dirty', () => {
     useTripStore.setState({ dirty: true })
     render(<MemoryRouter><ChangeSetPage /></MemoryRouter>)
 
-    expect(screen.getByText('先处理当前未发布草稿')).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'TripChangeSet v1' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: '保存草稿为版本' })).toBeEnabled()
+    expect(screen.getByText('先保存当前手工修改')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '保存为检查点' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '复制 Codex 连接指令' })).toBeDisabled()
   })
 
   it('loads the ChangeSet referenced by a real review URL', async () => {
@@ -56,9 +55,14 @@ describe('ChangeSetPage', () => {
       </MemoryRouter>,
     )
 
-    await waitFor(() => expect((screen.getByRole('textbox', { name: 'TripChangeSet v1' }) as HTMLTextAreaElement).value).toContain(stored.changeSetId))
-    expect(screen.getByText('由 Codex 导入 生成 · 2 个提案组')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Codex 导入 提交了 2 组建议')).toBeInTheDocument())
+    expect(screen.getByText('建议内容')).toBeInTheDocument()
+    expect(screen.getByText('路线影响')).toBeInTheDocument()
+    expect(screen.getByText('涉及日期')).toBeInTheDocument()
+    expect(screen.getByText('需要处理')).toBeInTheDocument()
     expect(screen.getByText(stored.proposalGroups[0].title)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '确认应用 2 组建议' })).toBeEnabled()
+    expect(screen.getByText('开发者信息 · 原始 ChangeSet').closest('details')).not.toHaveAttribute('open')
   })
 
   it('copies a scoped Codex task package without applying any change', async () => {
@@ -83,13 +87,13 @@ describe('ChangeSetPage', () => {
     }), { status: 201, headers: { 'content-type': 'application/json' } })))
 
     render(<MemoryRouter><ChangeSetPage /></MemoryRouter>)
-    await userEvent.click(screen.getByRole('button', { name: '复制 Codex 任务包' }))
+    await userEvent.click(screen.getByRole('button', { name: '复制 Codex 连接指令' }))
 
     await waitFor(() => expect(writeText).toHaveBeenCalledOnce())
     const prompt = String(writeText.mock.calls[0][0])
     expect(prompt).toContain('Jovlo-Agent')
     expect(prompt).toContain('/api/v1/agent-imports')
     expect(prompt).toContain('不能直接应用')
-    expect(screen.getByText(/任务包已复制/)).toBeInTheDocument()
+    expect(screen.getByText(/连接指令已复制/)).toBeInTheDocument()
   })
 })
