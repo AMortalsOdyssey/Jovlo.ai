@@ -187,7 +187,7 @@ function buildAgentPrompt(
 ) {
   const context = agentTripContext(trip, currentVersionId)
   const sourceBrief = ''
-  return `你正在为 Jovlo.ai 生成一个待人工审阅的 TripChangeSet v1。\n\n资料链接或任务说明：\n${sourceBrief.trim() || '我会在下一条消息提供小红书、B站或文章内容。'}\n\n工作要求：\n1. 阅读来源，提取地点、价格、营业时间、停车、口味、路况、适合人群等可验证事实。\n2. 对关键事实尽量寻找第二来源交叉验证；商业合作、单一来源、冲突或过期信息必须在 rationale/summary 中明确，不得伪装成已确认事实。\n3. 只能生成下面允许的领域操作，不得修改代码、数据库、部署或绕过人工审阅。\n4. 已有实体必须使用下方 context 的稳定 ID；未知地点使用 PROPOSE_PLACE，不得虚构 placeId。\n5. 每个可独立接受/拒绝的建议放入一个 atomic proposalGroup。删除、换酒店、跨日移动必须单独成组并解释理由。\n6. 每条事实必须关联 sources 中的 sourceRef。不要大段复制原文，只写摘要。\n\n允许的操作：\n- ADD_STOP(dayId,newStopId,placeId|proposalRef,afterStopId,stayMinutes,kind,sourceRefs)\n- REMOVE_STOP(stopId,reason)\n- MOVE_STOP(stopId,targetDayId,afterStopId)\n- UPDATE_STOP(stopId,patch)\n- SET_HOTEL(nightAfterDayId,anchor)\n- UPDATE_TRIP_SETTING(path,value)\n- UPDATE_BUDGET_ASSUMPTION(field,value)\n- LINK_SOURCE(sourceRef,placeId|stopId,fields?)\n- UPSERT_PLACE_CLAIM(placeId,field,value,sourceRefs)\n- PROPOSE_PLACE(proposalRef,name,address?,sourceRefs,coordinate?)\n\n输出必须是严格 JSON，顶层结构：\n{\n  "schemaVersion": 1,\n  "changeSetId": "新 UUID",\n  "tripId": "${trip.tripId}",\n  "baseVersionId": "${currentVersionId}",\n  "idempotencyKey": "至少 8 字符且本次唯一",\n  "createdAt": "ISO 8601",\n  "producer": {"type":"external-agent","name":"Codex","conversationRef":"可选"},\n  "sources": [{"sourceRef":"稳定短标识","platform":"平台","url":"https://...","title":"标题","summary":"摘要","commercialRelationship":"yes|no|unknown"}],\n  "proposalGroups": [{"groupId":"稳定短标识","title":"标题","rationale":"证据和取舍","atomic":true,"operations":[]}]\n}\n\n当前行程 context：\n${JSON.stringify(context, null, 2)}\n\n完成 JSON 后，把它保存为 changeset.json，并执行：\ncurl --fail-with-body -X POST '${ticket.deliveryEndpoint}' \\\n  -H 'Authorization: Jovlo-Agent ${ticket.ticket}' \\\n  -H 'Content-Type: application/json' \\\n  --data-binary @changeset.json\n\n投递成功后，读取响应中的 reviewUrl 并打开。这个口令在 ${ticket.expiresAt} 过期，只能投递待审 ChangeSet，不能直接应用。`
+  return `你正在为 Jovlo.ai 生成一个待人工审阅的 TripChangeSet v1。\n\n资料链接或任务说明：\n${sourceBrief.trim() || '我会在下一条消息提供小红书、B站或文章内容。'}\n\n工作要求：\n1. 阅读来源，提取地点、价格、营业时间、停车、口味、路况、适合人群等可验证事实。\n2. 对关键事实尽量寻找第二来源交叉验证；商业合作、单一来源、冲突或过期信息必须在 rationale/summary 中明确，不得伪装成已确认事实。\n3. 只能生成下面允许的领域操作，不得修改代码、数据库、部署或绕过人工审阅。\n4. 已有实体必须使用下方 context 的稳定 ID；未知地点使用 PROPOSE_PLACE，不得虚构 placeId。\n5. 每个可独立接受/拒绝的建议放入一个 atomic proposalGroup。删除、换酒店、跨日移动必须单独成组并解释理由。\n6. 每条事实必须关联 sources 中的 sourceRef。不要大段复制原文，只写摘要。\n\n允许的操作：\n- ADD_STOP(dayId,newStopId,placeId|proposalRef,afterStopId,stayMinutes,kind,sourceRefs)\n- REMOVE_STOP(stopId,reason)\n- MOVE_STOP(stopId,targetDayId,afterStopId)\n- UPDATE_STOP(stopId,patch)\n- SET_HOTEL(nightAfterDayId,anchor)\n- UPDATE_TRIP_SETTING(path,value)\n- UPDATE_BUDGET_ASSUMPTION(field,value)\n- LINK_SOURCE(sourceRef,placeId|stopId,fields?)\n- UPSERT_PLACE_CLAIM(placeId,field,value,sourceRefs)\n- PROPOSE_PLACE(proposalRef,name,address?,sourceRefs,coordinate?)\n\n输出必须是严格 JSON，顶层结构：\n{\n  "schemaVersion": 1,\n  "changeSetId": "新 UUID",\n  "tripId": "${trip.tripId}",\n  "baseVersionId": "${currentVersionId}",\n  "idempotencyKey": "至少 8 字符且本次唯一",\n  "createdAt": "ISO 8601",\n  "producer": {"type":"external-agent","name":"Agent","conversationRef":"可选"},\n  "sources": [{"sourceRef":"稳定短标识","platform":"平台","url":"https://...","title":"标题","summary":"摘要","commercialRelationship":"yes|no|unknown"}],\n  "proposalGroups": [{"groupId":"稳定短标识","title":"标题","rationale":"证据和取舍","atomic":true,"operations":[]}]\n}\n\n当前行程 context：\n${JSON.stringify(context, null, 2)}\n\n完成 JSON 后，把它保存为 changeset.json，并执行：\ncurl --fail-with-body -X POST '${ticket.deliveryEndpoint}' \\\n  -H 'Authorization: Jovlo-Agent ${ticket.ticket}' \\\n  -H 'Content-Type: application/json' \\\n  --data-binary @changeset.json\n\n投递成功后，读取响应中的 reviewUrl 并打开。这个口令在 ${ticket.expiresAt} 过期，只能投递待审 ChangeSet，不能直接应用。`
 }
 
 function operationLabel(type: TripChangeSet['proposalGroups'][number]['operations'][number]['type']) {
@@ -220,7 +220,6 @@ export function ChangeSetPage() {
   const [selection, setSelection] = useState<Record<string, 'accept' | 'reject'>>({})
   const [proposalResolutions, setProposalResolutions] = useState<Record<string, string>>({})
   const [bridgeStatus, setBridgeStatus] = useState<string | null>(null)
-  const [taskPrompt, setTaskPrompt] = useState<string | null>(null)
   const [storedStatus, setStoredStatus] = useState<string | null>(null)
   const [busy, setBusy] = useState<'load' | 'ticket' | 'apply' | null>(loadsStoredChangeSet ? 'load' : null)
   const [applied, setApplied] = useState(false)
@@ -340,15 +339,14 @@ export function ChangeSetPage() {
         body: '{}',
       })
       const prompt = buildAgentPrompt(ticket, state.trip, currentVersionId)
-      setTaskPrompt(prompt)
       const copied = await copyTextWithFallback(prompt)
       const expiry = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit' })
         .format(new Date(ticket.expiresAt))
       setBridgeStatus(copied
-        ? `连接指令已复制。现在去 Codex 粘贴，再发送攻略链接或文字；${expiry} 前可投递一次。`
-        : `连接指令已生成。展开下方内容手动复制；${expiry} 前可投递一次。`)
+        ? `连接指令已复制。现在粘贴给 Agent，再发送攻略链接或文字；${expiry} 前可投递一次。`
+        : '浏览器没有允许自动复制，请再次点击重试。')
     } catch (taskError) {
-      setError(taskError instanceof Error ? taskError.message : '暂时无法生成 Codex 任务包。')
+      setError(taskError instanceof Error ? taskError.message : '暂时无法创建 Agent 连接。')
     } finally {
       setBusy(null)
     }
@@ -412,10 +410,10 @@ export function ChangeSetPage() {
     <PageShell width={changeSet ? 'wide' : 'reading'} className="changeset-page">
       <PageHeader
         eyebrow={getTripTitle(state.trip)}
-        title={changeSet ? '确认这次修改' : '让 Codex 帮你改路书'}
+        title={changeSet ? '确认这次修改' : '让 Agent 帮你改路书'}
         description={changeSet
           ? 'Agent 已提交建议。先看整体影响，再逐项决定，最后保存为一个可回退的新版本。'
-          : '攻略和要求发在 Codex 对话里；这里仅创建一条安全、临时的连接。'}
+          : '攻略和要求发在 Agent 对话里；这里仅创建一条安全、临时的连接。'}
         backTo={`/trips/${tripId}/plan`}
         meta={applied
           ? <StatusBadge tone="sea">已应用</StatusBadge>
@@ -441,37 +439,36 @@ export function ChangeSetPage() {
               <div className="agent-handoff__mark"><Bot aria-hidden="true" size={25} /></div>
               <div>
                 <p className="agent-handoff__kicker">Agent 协作</p>
-                <h2>攻略发给 Codex，修改回到这里确认</h2>
-                <p>连接指令会带上当前路书的稳定编号和一次性投递口令。Codex 只能提交建议，不能直接改动你的行程。</p>
+                <h2>把攻略交给 Agent，把决定留给自己</h2>
+                <p>Agent 可以整理资料并提交修改建议；路线、时间和预算是否改变，最后都由你在 Jovlo 确认。</p>
               </div>
             </div>
 
             <ol className="agent-handoff__steps" aria-label="Agent 修改流程">
-              <li className="is-current"><span>1</span><div><strong>创建连接</strong><small>复制一次性指令</small></div></li>
-              <li><span>2</span><div><strong>在 Codex 发攻略</strong><small>链接、正文或修改要求</small></div></li>
-              <li><span>3</span><div><strong>回来确认</strong><small>看影响，逐项接受或拒绝</small></div></li>
+              <li className="is-current"><span>1</span><div><em>当前页面</em><strong>建立安全连接</strong><small>复制一次性连接指令</small></div></li>
+              <li><span>2</span><div><em>Agent 对话</em><strong>发送攻略资料</strong><small>链接、正文或修改要求</small></div></li>
+              <li><span>3</span><div><em>回到 Jovlo</em><strong>确认修改建议</strong><small>查看影响，逐项接受或拒绝</small></div></li>
             </ol>
 
-            <div className="agent-handoff__action">
-              <Button
-                variant="primary"
-                icon={busy === 'ticket' ? LoaderCircle : Copy}
-                onClick={createAgentTask}
-                disabled={state.dirty || !currentVersionId || busy !== null}
-              >
-                {busy === 'ticket' ? '正在创建连接' : '复制 Codex 连接指令'}
-              </Button>
-              <p><ShieldCheck aria-hidden="true" size={16} />15 分钟有效 · 成功投递后失效 · 不含直接写入权限</p>
+            <div className="agent-handoff__command">
+              <div className="agent-handoff__command-copy">
+                <span>从这里开始</span>
+                <strong>创建这次协作的临时入口</strong>
+              </div>
+              <div className="agent-handoff__action">
+                <Button
+                  variant="primary"
+                  icon={busy === 'ticket' ? LoaderCircle : Copy}
+                  onClick={createAgentTask}
+                  disabled={state.dirty || !currentVersionId || busy !== null}
+                >
+                  {busy === 'ticket' ? '正在创建连接' : '复制 Agent 连接指令'}
+                </Button>
+                <p><ShieldCheck aria-hidden="true" size={16} />15 分钟有效 · 成功投递后失效 · 只能提交待审建议</p>
+              </div>
             </div>
 
             {bridgeStatus ? <p className="agent-handoff__status" role="status"><CheckCircle2 aria-hidden="true" size={18} />{bridgeStatus}</p> : null}
-            {taskPrompt ? (
-              <details className="agent-handoff__package">
-                <summary>连接指令详情</summary>
-                <textarea aria-label="Codex 连接指令" readOnly value={taskPrompt} rows={8} onFocus={(event) => event.currentTarget.select()} />
-                <Button icon={Copy} onClick={async () => setBridgeStatus(await copyTextWithFallback(taskPrompt) ? '连接指令已复制。现在去 Codex 粘贴。' : '请点选文本框后手动复制')}>再次复制</Button>
-              </details>
-            ) : null}
           </section>
 
           <section className="feature-section changeset-manual-path">

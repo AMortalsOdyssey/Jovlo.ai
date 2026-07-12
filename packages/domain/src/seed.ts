@@ -794,7 +794,7 @@ export const DEMO_CHANGESET = TripChangeSetSchema.parse({
   createdAt: '2026-07-11T13:00:00+08:00',
   producer: {
     type: 'external-agent',
-    name: 'Codex',
+    name: 'Agent',
     conversationRef: 'demo-hainan-review',
   },
   sources: [
