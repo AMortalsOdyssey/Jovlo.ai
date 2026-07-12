@@ -7,7 +7,7 @@ export type ProductCopyrightProps = {
 export function ProductCopyright({ className = '' }: ProductCopyrightProps) {
   return (
     <footer className={`jovlo-copyright ${className}`.trim()}>
-      <span>© 2026 Jovlo.ai</span>
+      <span>© 2026 jovlo.8xd.io</span>
       <span aria-hidden="true">·</span>
       <span>AI 路书共创</span>
     </footer>

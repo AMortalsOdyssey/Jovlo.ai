@@ -75,8 +75,10 @@ import {
   StoredChangeSetDryRunRequestSchema,
   TripPublicationRequestSchema,
   TripCreateRequestSchema,
+  WeatherDailyQuerySchema,
 } from './schemas'
 import { calculateRouteLegs, proxyAmapJsApiRequest } from './services/amap'
+import { getDailyWeather } from './services/weather'
 import {
   callSupabaseRpc,
   readSupabaseRow,
@@ -1198,6 +1200,17 @@ app.post('/api/v1/routes/dry-run', async (context) => {
   const input = await parseJson(context, RouteDryRunRequestSchema)
   const result = await calculateRouteLegs(input, context.env)
   return success(context, { ...result, inputHash: input.inputHash })
+})
+
+app.get('/api/v1/weather/daily', async (context) => {
+  await requireAuthenticatedUser(context)
+  const parsed = WeatherDailyQuerySchema.safeParse(context.req.query())
+  if (!parsed.success) {
+    throw new AppError('VALIDATION_FAILED', '天气查询参数无效', 400)
+  }
+  const result = await getDailyWeather(parsed.data, context.env)
+  context.header('cache-control', 'private, max-age=21600')
+  return success(context, result)
 })
 
 app.post('/api/v1/budgets/calculate', async (context) => {

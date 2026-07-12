@@ -1,5 +1,6 @@
 import type { PropsWithChildren, ReactNode } from 'react'
 
+import { ProductCopyright } from '@/components'
 import './auth.css'
 
 type AuthPageLayoutProps = PropsWithChildren<{
@@ -7,6 +8,7 @@ type AuthPageLayoutProps = PropsWithChildren<{
   title: string
   description: ReactNode
   footer?: ReactNode
+  showCopyright?: boolean
 }>
 
 export function AuthPageLayout({
@@ -14,15 +16,19 @@ export function AuthPageLayout({
   description,
   eyebrow = 'AI 路书共创',
   footer,
+  showCopyright = false,
   title,
 }: AuthPageLayoutProps) {
   return (
     <main className="auth-page">
       <section className="auth-panel" aria-labelledby="auth-title">
-        <a className="auth-brand" href="/" aria-label="Jovlo 首页">
-          <img src="/jovlo-mark.svg" alt="" />
-          <span>Jovlo</span>
-        </a>
+        <div className="auth-brand-row">
+          <a className="auth-brand" href="/" aria-label="Jovlo 首页">
+            <img src="/jovlo-mark.svg" alt="" />
+            <span>Jovlo</span>
+          </a>
+          {showCopyright ? <ProductCopyright className="auth-copyright" /> : null}
+        </div>
 
         <div className="auth-copy">
           <p className="auth-eyebrow">{eyebrow}</p>

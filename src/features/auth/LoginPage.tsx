@@ -67,6 +67,7 @@ export function LoginPage() {
     <AuthPageLayout
       title="继续规划你的旅程"
       description="使用邮箱和密码，回到你的路书。"
+      showCopyright
       footer={<p className="auth-privacy">还没有账号？ <Link to={`${AUTH_ROUTES.register}${returnToQuery}`}>创建账号</Link></p>}
     >
       <form className="auth-form" onSubmit={handleSubmit} noValidate>

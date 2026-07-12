@@ -1,6 +1,9 @@
 export { DayHealthBar } from './DayHealthBar'
 export type { DayHealthBarProps, DayHealthMetrics } from './DayHealthBar'
 
+export { DayWeatherStrip } from './DayWeatherStrip'
+export type { DailyWeatherResult, DayWeatherStripProps } from './DayWeatherStrip'
+
 export { DayRail } from './DayRail'
 export type { DayRailProps } from './DayRail'
 

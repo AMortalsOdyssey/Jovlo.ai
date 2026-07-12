@@ -127,6 +127,82 @@ describe('Worker API contract', () => {
     expect(body.data.legs[0].provider).toBe('reference')
   })
 
+  it('returns location-matched AMap weather and reuses the six-hour cache', async () => {
+    const date = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date())
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: '1',
+        infocode: '10000',
+        regeocode: {
+          addressComponent: { adcode: '469005', city: '文昌市', district: '龙楼镇', province: '海南省' },
+        },
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: '1',
+        infocode: '10000',
+        forecasts: [{
+          city: '文昌市',
+          adcode: '469005',
+          reporttime: `${date} 11:00:00`,
+          casts: [{
+            date,
+            dayweather: '雷阵雨',
+            nightweather: '多云',
+            daytemp: '32',
+            nighttemp: '26',
+            daywind: '东南',
+            nightwind: '东南',
+            daypower: '3',
+            nightpower: '3',
+          }],
+        }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const path = `/api/v1/weather/daily?date=${date}&lat=19.6501&lon=110.9901`
+    try {
+      const first = await app.request(path, undefined, { JOVLO_MODE: 'demo', AMAP_WEB_SERVICE_KEY: 'test-secret' })
+      const firstBody = (await first.json()) as Envelope & {
+        data: { status: string; location: { name: string }; forecast: { dayTempC: number }; fetchedAt: string; nextRefreshAt: string }
+      }
+      expect(first.status).toBe(200)
+      expect(firstBody.data).toMatchObject({
+        status: 'forecast',
+        location: { name: '文昌市' },
+        forecast: { dayTempC: 32 },
+      })
+      expect(Date.parse(firstBody.data.nextRefreshAt) - Date.parse(firstBody.data.fetchedAt)).toBe(21_600_000)
+
+      const second = await app.request(path, undefined, { JOVLO_MODE: 'demo', AMAP_WEB_SERVICE_KEY: 'test-secret' })
+      expect(second.status).toBe(200)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('does not invent a precise forecast outside AMap weather range', async () => {
+    const future = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10)
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    try {
+      const response = await app.request(
+        `/api/v1/weather/daily?date=${future}&lat=18.6502&lon=110.2202`,
+        undefined,
+        { JOVLO_MODE: 'demo', AMAP_WEB_SERVICE_KEY: 'test-secret' },
+      )
+      const body = (await response.json()) as Envelope & { data: { status: string; notice: string } }
+      expect(response.status).toBe(200)
+      expect(body.data.status).toBe('outside-window')
+      expect(body.data.notice).toContain('临近出发 3 天自动更新')
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
   it('normalizes the AMap v5 cost object when a secret is configured', async () => {
     const from = DEMO_TRIP.placeRefs[DEMO_IDS.places.meilan]
     const to = DEMO_TRIP.placeRefs[DEMO_IDS.places.qilou]

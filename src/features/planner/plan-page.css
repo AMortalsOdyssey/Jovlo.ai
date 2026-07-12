@@ -230,6 +230,90 @@
   font: 760 var(--text-page-size) / var(--text-page-line) var(--font-ui);
 }
 
+.plan-weather-strip {
+  display: grid;
+  min-width: 0;
+  min-height: 52px;
+  margin: 0 var(--space-6) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  gap: var(--space-2);
+  color: var(--sea-text);
+  background: var(--sea-tint);
+  border: 1px solid rgb(22 140 120 / 16%);
+  border-radius: 8px;
+}
+
+.plan-weather-strip > svg {
+  flex: 0 0 auto;
+}
+
+.plan-weather-strip__copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.plan-weather-strip__copy strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.plan-weather-strip__copy small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 15px;
+  overflow-wrap: anywhere;
+}
+
+.plan-weather-strip__temperature {
+  color: var(--ink);
+  font-family: var(--font-numeric);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.plan-weather-strip__temperature b {
+  color: var(--brand-text);
+  font-size: 15px;
+}
+
+.plan-weather-strip__wind {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.plan-weather-strip__advice {
+  padding: 3px 6px;
+  color: var(--sky-text);
+  background: var(--sky-tint);
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.plan-weather-strip--muted {
+  color: var(--muted);
+  background: var(--neutral-tint);
+  border-color: var(--line);
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.plan-weather-strip__skeleton {
+  width: 72px;
+  height: 12px;
+  background: var(--neutral-tint);
+  border-radius: var(--radius-pill);
+  animation: jovlo-skeleton-pulse 1.2s ease-in-out infinite alternate;
+}
+
 .plan-warning-strip {
   display: flex;
   margin: 0 var(--space-6) var(--space-2);
@@ -549,6 +633,24 @@
     font-size: 20px;
     line-height: 28px;
     overflow-wrap: anywhere;
+  }
+
+  .plan-weather-strip {
+    margin-right: var(--space-4);
+    margin-left: var(--space-4);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .plan-weather-strip__wind {
+    grid-column: 2;
+  }
+
+  .plan-weather-strip__advice {
+    grid-column: 3;
+  }
+
+  .plan-weather-strip__skeleton {
+    width: 56px;
   }
 
   .plan-warning-strip {

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { DayHealthBar } from './DayHealthBar'
+import { DayWeatherStrip } from './DayWeatherStrip'
 import { HotelAnchor } from './HotelAnchor'
 import { ImpactBar } from './ImpactBar'
 import { LegRow } from './LegRow'
@@ -82,6 +83,55 @@ describe('planner editing components', () => {
     )
     expect(screen.getByText('重算中')).toBeInTheDocument()
     expect(screen.queryByText('偏紧')).not.toBeInTheDocument()
+  })
+
+  it('shows weather for the matching day and keeps long-range forecasts honest', () => {
+    const { rerender } = render(
+      <DayWeatherStrip
+        date="2026-07-13"
+        placeName="文昌龙楼住宿区"
+        weather={{
+          status: 'forecast',
+          date: '2026-07-13',
+          provider: 'amap',
+          location: { name: '文昌市', adcode: '469005' },
+          forecast: {
+            dayWeather: '雷阵雨',
+            nightWeather: '多云',
+            dayTempC: 32,
+            nightTempC: 26,
+            dayWind: '东南',
+            nightWind: '东南',
+            dayPower: '3',
+            nightPower: '3',
+          },
+          fetchedAt: '2026-07-12T03:00:00.000Z',
+          nextRefreshAt: '2026-07-12T09:00:00.000Z',
+        }}
+      />,
+    )
+
+    expect(screen.getByLabelText('文昌龙楼住宿区 2026-07-13 天气：雷阵雨转多云')).toBeInTheDocument()
+    expect(screen.getByLabelText('最低 26 度，最高 32 度')).toBeInTheDocument()
+    expect(screen.getByText('带伞')).toBeInTheDocument()
+
+    rerender(
+      <DayWeatherStrip
+        date="2026-08-11"
+        placeName="文昌龙楼住宿区"
+        weather={{
+          status: 'outside-window',
+          date: '2026-08-11',
+          provider: 'amap',
+          location: { name: '当前地点' },
+          notice: '距出发 30 天，临近出发 3 天自动更新',
+          fetchedAt: '2026-07-12T03:00:00.000Z',
+          nextRefreshAt: '2026-07-12T09:00:00.000Z',
+        }}
+      />,
+    )
+    expect(screen.getByText('距出发 30 天，临近出发 3 天自动更新')).toBeInTheDocument()
+    expect(screen.queryByText('32°')).not.toBeInTheDocument()
   })
 
   it('renders place and area hotel anchors as different decisions', async () => {

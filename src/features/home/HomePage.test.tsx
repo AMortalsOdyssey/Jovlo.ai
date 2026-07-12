@@ -34,7 +34,7 @@ describe('Jovlo homepage', () => {
       'href',
       '/login?returnTo=%2Ftrips',
     )
-    expect(screen.getAllByText('© 2026 Jovlo.ai')).toHaveLength(1)
+    expect(screen.getAllByText('© 2026 jovlo.8xd.io')).toHaveLength(1)
   })
 
   it('opens the workspace and account directly for authenticated users', () => {
@@ -46,15 +46,22 @@ describe('Jovlo homepage', () => {
     expect(screen.getByRole('link', { name: '账号：traveler@example.com' })).toHaveAttribute('href', '/account')
   })
 
-  it('does not leak copyright into shared page shells or authentication pages', () => {
+  it('keeps copyright out of shared shells and optional on authentication layouts', () => {
     const { rerender } = render(<PageShell><p>路书内容</p></PageShell>)
-    expect(screen.queryByText('© 2026 Jovlo.ai')).not.toBeInTheDocument()
+    expect(screen.queryByText('© 2026 jovlo.8xd.io')).not.toBeInTheDocument()
 
     rerender(
       <AuthPageLayout title="登录" description="回到路书">
         <p>账号表单</p>
       </AuthPageLayout>,
     )
-    expect(screen.queryByText('© 2026 Jovlo.ai')).not.toBeInTheDocument()
+    expect(screen.queryByText('© 2026 jovlo.8xd.io')).not.toBeInTheDocument()
+
+    rerender(
+      <AuthPageLayout title="登录" description="回到路书" showCopyright>
+        <p>账号表单</p>
+      </AuthPageLayout>,
+    )
+    expect(screen.getByText('© 2026 jovlo.8xd.io')).toBeInTheDocument()
   })
 })

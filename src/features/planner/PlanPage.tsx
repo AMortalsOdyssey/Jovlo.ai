@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import type { DayHealthStatus, EvidenceTone, FormalMapPoint } from './types'
 import { DayHealthBar } from './DayHealthBar'
+import { DayWeatherStrip, type DailyWeatherResult } from './DayWeatherStrip'
 import { DayRail } from './DayRail'
 import { HotelAnchor } from './HotelAnchor'
 import { ImpactBar } from './ImpactBar'
@@ -197,7 +198,14 @@ export function PlanPage() {
   const [mobileMapCollapsed, setMobileMapCollapsed] = useState(false)
   const [routeRetryNonce, setRouteRetryNonce] = useState(0)
   const [liveRoutes, setLiveRoutes] = useState<Record<string, LiveRouteResult>>({})
+  const [weatherRefreshNonce, setWeatherRefreshNonce] = useState(0)
+  const [weatherState, setWeatherState] = useState<{
+    key: string
+    status: 'loading' | 'ready' | 'error'
+    value?: DailyWeatherResult
+  } | null>(null)
   const routeCache = useRef(new Map<string, RouteDryRunResponse>())
+  const weatherCache = useRef(new Map<string, DailyWeatherResult>())
 
   const dayRoutePoints = useMemo<FormalMapPoint[]>(() => {
     const points: FormalMapPoint[] = []
@@ -282,6 +290,66 @@ export function PlanPage() {
     }
     return points
   }, [day, state.trip])
+
+  const weatherTarget = useMemo(() => {
+    if (!day.date) return undefined
+    if (day.overnightStay?.kind === 'place') {
+      const place = state.trip.placeRefs[day.overnightStay.placeId]
+      if (place) return { date: day.date, name: day.overnightStay.label, lon: place.gcj02.lon, lat: place.gcj02.lat }
+    }
+    if (day.overnightStay?.kind === 'area') {
+      const area = state.trip.stayAreaRefs[day.overnightStay.areaId]
+      if (area) return { date: day.date, name: day.overnightStay.label, lon: area.gcj02.lon, lat: area.gcj02.lat }
+    }
+    const finalStop = day.stops.at(-1)
+    const place = finalStop ? state.trip.placeRefs[finalStop.placeId] : undefined
+    if (place) return { date: day.date, name: place.name, lon: place.gcj02.lon, lat: place.gcj02.lat }
+    return undefined
+  }, [day, state.trip.placeRefs, state.trip.stayAreaRefs])
+
+  const weatherKey = weatherTarget
+    ? `${weatherTarget.date}:${weatherTarget.lon.toFixed(3)}:${weatherTarget.lat.toFixed(3)}`
+    : ''
+
+  useEffect(() => {
+    if (!weatherTarget || !weatherKey) {
+      setWeatherState(null)
+      return
+    }
+    const cached = weatherCache.current.get(weatherKey)
+    if (cached && Date.parse(cached.nextRefreshAt) > Date.now()) {
+      setWeatherState({ key: weatherKey, status: 'ready', value: cached })
+      return
+    }
+
+    const controller = new AbortController()
+    setWeatherState({ key: weatherKey, status: 'loading' })
+    const query = new URLSearchParams({
+      date: weatherTarget.date,
+      lon: String(weatherTarget.lon),
+      lat: String(weatherTarget.lat),
+    })
+    apiRequest<DailyWeatherResult>(`/api/v1/weather/daily?${query}`, { signal: controller.signal })
+      .then((result) => {
+        weatherCache.current.set(weatherKey, result)
+        setWeatherState({ key: weatherKey, status: 'ready', value: result })
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setWeatherState({ key: weatherKey, status: 'error' })
+      })
+    return () => controller.abort()
+  }, [weatherKey, weatherRefreshNonce, weatherTarget])
+
+  useEffect(() => {
+    const value = weatherState?.key === weatherKey ? weatherState.value : undefined
+    if (!value?.nextRefreshAt) return
+    const delay = Math.max(1_000, Date.parse(value.nextRefreshAt) - Date.now())
+    const timer = window.setTimeout(() => {
+      weatherCache.current.delete(weatherKey)
+      setWeatherRefreshNonce((nonce) => nonce + 1)
+    }, Math.min(delay, 2_147_000_000))
+    return () => window.clearTimeout(timer)
+  }, [weatherKey, weatherState])
 
   const tripHash = useMemo(() => stableHash(state.trip), [state.trip])
   const routeInputHash = useMemo(
@@ -519,6 +587,15 @@ export function PlanPage() {
         <div><span>{day.date ?? '日期待定'}</span><h1>Day {day.dayIndex} · {daySummaries.find((item) => item.id === day.id)?.area}</h1></div>
         <small aria-label={`预计 ${schedule?.expectedEndTime ?? '--:--'} 结束`}><Clock3 aria-hidden="true" size={14} />{schedule?.expectedEndTime ?? '--:--'}</small>
       </div>
+      {weatherTarget ? (
+        <DayWeatherStrip
+          date={weatherTarget.date}
+          placeName={weatherTarget.name}
+          weather={weatherState?.key === weatherKey ? weatherState.value : undefined}
+          loading={!weatherState || weatherState.key !== weatherKey || weatherState.status === 'loading'}
+          error={weatherState?.key === weatherKey && weatherState.status === 'error'}
+        />
+      ) : null}
       <DayHealthBar
         metrics={{
           driving: formatDuration(schedule?.drivingMinutes ?? 0),

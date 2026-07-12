@@ -15,6 +15,14 @@
   flex-direction: column;
 }
 
+.auth-brand-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
 .auth-brand {
   display: inline-flex;
   width: fit-content;
@@ -365,6 +373,19 @@
   color: var(--muted);
   font-size: 11px;
   line-height: 1.6;
+}
+
+.auth-copyright {
+  min-height: 24px;
+  padding: 0;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  line-height: 14px;
+  text-align: right;
+}
+
+.auth-copyright span:last-child {
+  display: none;
 }
 
 .auth-journey {
