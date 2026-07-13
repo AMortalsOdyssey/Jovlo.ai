@@ -27,7 +27,6 @@ export function AuthPageLayout({
             <img src="/jovlo-mark.svg" alt="" />
             <span>Jovlo</span>
           </a>
-          {showCopyright ? <ProductCopyright className="auth-copyright" /> : null}
         </div>
 
         <div className="auth-copy">
@@ -38,6 +37,7 @@ export function AuthPageLayout({
 
         {children}
         {footer ?? <p className="auth-privacy">账户信息仅用于登录与同步你的行程。</p>}
+        {showCopyright ? <ProductCopyright className="auth-copyright" /> : null}
       </section>
 
       <aside className="auth-journey" aria-hidden="true">

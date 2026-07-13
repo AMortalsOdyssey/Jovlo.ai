@@ -378,14 +378,11 @@
 .auth-copyright {
   min-height: 24px;
   padding: 0;
-  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: var(--space-6);
+  justify-content: flex-start;
   flex-wrap: wrap;
   line-height: 14px;
-  text-align: right;
-}
-
-.auth-copyright span:last-child {
-  display: none;
 }
 
 .auth-journey {
