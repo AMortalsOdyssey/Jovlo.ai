@@ -51,7 +51,7 @@ export function HomePage() {
 
         <div className="home-hero__content">
           <p className="home-hero__eyebrow"><Compass aria-hidden="true" size={16} />我的海南自驾，从一条能改的路线开始</p>
-          <h1 id="home-title">Jovlo.ai</h1>
+          <h1 id="home-title">Jovlo</h1>
           <p className="home-hero__lead">我把想去的地方放进来，再一站站改成每天都开得动的路。</p>
           <div className="home-hero__actions">
             <Link className="home-action home-action--primary" to={workspacePath}>

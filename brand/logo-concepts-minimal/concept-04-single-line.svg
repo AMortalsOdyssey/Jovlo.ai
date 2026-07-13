@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
-  <title id="title">Jovlo.ai minimal logo concept 04 - Single Line</title>
-  <desc id="desc">A minimal abstract line mark with one origin point and a clean Jovlo.ai wordmark.</desc>
+  <title id="title">Jovlo minimal logo concept 04 - Single Line</title>
+  <desc id="desc">A minimal abstract line mark with one origin point and a clean Jovlo wordmark.</desc>
   <defs>
     <linearGradient id="line" x1="105" y1="94" x2="252" y2="272" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#111827"/>
@@ -14,6 +14,6 @@
     <circle cx="135" cy="272" r="11" fill="#111827"/>
   </g>
   <g transform="translate(346 122)">
-    <text x="0" y="78" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', sans-serif" font-size="96" font-weight="720" fill="#111827">Jovlo.ai</text>
+    <text x="0" y="78" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', sans-serif" font-size="96" font-weight="720" fill="#111827">Jovlo</text>
   </g>
 </svg>

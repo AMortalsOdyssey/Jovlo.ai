@@ -106,7 +106,7 @@ export function PublicReportPage() {
   return (
     <main className="public-page public-report-page">
       <header className="report-cover">
-        <div className="public-brand public-brand--light"><img src="/jovlo-mark.svg" alt="" /><span>Jovlo.ai</span></div>
+        <div className="public-brand public-brand--light"><img src="/jovlo-mark.svg" alt="" /><span>Jovlo</span></div>
         <div className="report-cover-copy">
           <p>{isActual ? '实际旅行报告' : '计划路书报告'} · 第 {report.generationNo} 版</p>
           <h1>{getTripTitle(trip)}</h1>

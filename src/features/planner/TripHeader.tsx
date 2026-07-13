@@ -73,7 +73,7 @@ export function TripHeader({
     <header className="jovlo-trip-header">
       <div className="jovlo-trip-header__identity">
         <IconButton icon={ArrowLeft} label="返回路书列表" onClick={onBack} disabled={!onBack} />
-        <span className="jovlo-trip-header__brand" aria-label="Jovlo.ai">
+        <span className="jovlo-trip-header__brand" aria-label="Jovlo">
           <img src={logoSrc} alt="" />
         </span>
         <span className="jovlo-trip-header__trip">

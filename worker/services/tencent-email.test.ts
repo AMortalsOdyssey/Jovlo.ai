@@ -59,7 +59,7 @@ describe('Tencent email delivery', () => {
     const env: Env = {
       TENCENTCLOUD_SECRET_ID: 'AKIDTEST',
       TENCENTCLOUD_SECRET_KEY: 'test-secret-key',
-      TENCENT_SES_FROM: 'Jovlo.ai <no-reply@auth.8xd.io>',
+      TENCENT_SES_FROM: 'Jovlo <no-reply@auth.8xd.io>',
       TENCENT_SES_REPLY_TO: 'founder@8xd.io',
     }
 
@@ -90,7 +90,7 @@ describe('Tencent email delivery', () => {
     const env: Env = {
       TENCENTCLOUD_SECRET_ID: 'AKIDTEST',
       TENCENTCLOUD_SECRET_KEY: 'test-secret-key',
-      TENCENT_SES_FROM: 'Jovlo.ai <no-reply@auth.8xd.io>',
+      TENCENT_SES_FROM: 'Jovlo <no-reply@auth.8xd.io>',
     }
 
     await expect(sendTencentTemplateEmail(env, {

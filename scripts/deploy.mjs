@@ -75,7 +75,7 @@ try {
   process.env.VITE_TURNSTILE_SITE_KEY =
     process.env.VITE_TURNSTILE_SITE_KEY?.trim() || DEFAULT_TURNSTILE_SITE_KEY;
 
-  process.stdout.write("已加载 Jovlo.ai 生产配置，开始构建与部署。\n");
+  process.stdout.write("已加载 Jovlo 生产配置，开始构建与部署。\n");
   run("npm", ["run", "build"]);
   run("npx", ["wrangler", "deploy"]);
 } catch (error) {

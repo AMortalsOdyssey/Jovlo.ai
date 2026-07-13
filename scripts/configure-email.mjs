@@ -82,6 +82,10 @@ try {
     config.SUPABASE_SEND_EMAIL_HOOK_SECRET?.trim() ||
     `v1,whsec_${randomBytes(32).toString("base64")}`;
   persistLocalValue("SUPABASE_SEND_EMAIL_HOOK_SECRET", hookSecret);
+  const senderFrom =
+    config.TENCENT_SES_FROM?.trim() ||
+    "Jovlo <no-reply@auth.8xd.io>";
+  persistLocalValue("TENCENT_SES_FROM", senderFrom);
   const secrets = {
     SUPABASE_SERVICE_ROLE_KEY: supabaseServiceRoleKey(),
     SUPABASE_SEND_EMAIL_HOOK_SECRET: hookSecret,
@@ -91,9 +95,7 @@ try {
     TENCENT_SES_RECOVERY_TEMPLATE_ID: required("TENCENT_SES_RECOVERY_TEMPLATE_ID"),
     TENCENT_SES_ALERT_TEMPLATE_ID: required("TENCENT_SES_ALERT_TEMPLATE_ID"),
     TENCENT_SES_REGION: config.TENCENT_SES_REGION?.trim() || "ap-hongkong",
-    TENCENT_SES_FROM:
-      config.TENCENT_SES_FROM?.trim() ||
-      "Jovlo.ai <no-reply@auth.8xd.io>",
+    TENCENT_SES_FROM: senderFrom,
     TENCENT_SES_REPLY_TO:
       config.TENCENT_SES_REPLY_TO?.trim() || "founder@8xd.io",
     ALERT_EMAIL_TO: config.ALERT_EMAIL_TO?.trim() || "founder@8xd.io",

@@ -36,7 +36,7 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
       <header className="workspace-topbar">
         <Link to="/trips" className="workspace-brand" aria-label="返回我的路书">
           <img src="/jovlo-mark.svg" alt="" />
-          <span>Jovlo.ai</span>
+          <span>Jovlo</span>
         </Link>
 
         <nav className="workspace-nav" aria-label="行程功能">

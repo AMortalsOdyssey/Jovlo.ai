@@ -133,7 +133,7 @@ export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProp
   return (
     <main className="public-page public-trip-page">
       <header className="public-trip-hero">
-        <div className="public-brand"><img src="/jovlo-mark.svg" alt="" /><span>Jovlo.ai</span></div>
+        <div className="public-brand"><img src="/jovlo-mark.svg" alt="" /><span>Jovlo</span></div>
         <div className="public-hero-grid">
           <div className="public-hero-copy">
             <p>{view.scope === 'day' ? '海南自驾 · 单天路书' : '海南自驾路书'}</p>
@@ -219,7 +219,7 @@ export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProp
       </article>
 
       <footer className="public-footer">
-        <a href="/" aria-label="访问 Jovlo.ai"><img src="/jovlo-mark.svg" alt="" />用 Jovlo 制作 <ExternalLink aria-hidden="true" size={13} /></a>
+        <a href="/" aria-label="访问 Jovlo"><img src="/jovlo-mark.svg" alt="" />用 Jovlo 制作 <ExternalLink aria-hidden="true" size={13} /></a>
       </footer>
     </main>
   )

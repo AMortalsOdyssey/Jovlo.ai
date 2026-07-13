@@ -28,7 +28,7 @@ export function buildAmapNavigationUrl(target: NavTarget, origin?: NavTarget): s
   url.searchParams.set('to', `${target.lon},${target.lat},${target.name}`)
   url.searchParams.set('mode', 'car')
   url.searchParams.set('policy', '1')
-  url.searchParams.set('src', 'Jovlo.ai')
+  url.searchParams.set('src', 'Jovlo')
   url.searchParams.set('callnative', '1')
   return url.toString()
 }
@@ -37,7 +37,7 @@ export function buildAmapMarkerUrl(target: NavTarget): string {
   const url = new URL('https://uri.amap.com/marker')
   url.searchParams.set('position', `${target.lon},${target.lat}`)
   url.searchParams.set('name', target.name)
-  url.searchParams.set('src', 'Jovlo.ai')
+  url.searchParams.set('src', 'Jovlo')
   url.searchParams.set('coordinate', 'gaode')
   url.searchParams.set('callnative', '1')
   return url.toString()

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
-  <title id="title">Jovlo.ai logo concept 01 - Neural Route</title>
-  <desc id="desc">A route shaped like a soft J, with AI-like nodes and a clean Jovlo.ai wordmark.</desc>
+  <title id="title">Jovlo logo concept 01 - Neural Route</title>
+  <desc id="desc">A route shaped like a soft J, with AI-like nodes and a clean Jovlo wordmark.</desc>
   <defs>
     <linearGradient id="routeGradient" x1="80" y1="70" x2="280" y2="292" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#5E7BFF"/>
@@ -29,7 +29,7 @@
     <circle cx="258" cy="224" r="7" fill="#20C7B8"/>
   </g>
   <g transform="translate(344 128)">
-    <text x="0" y="77" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', sans-serif" font-size="98" font-weight="760" fill="#14213D">Jovlo.ai</text>
+    <text x="0" y="77" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', sans-serif" font-size="98" font-weight="760" fill="#14213D">Jovlo</text>
     <path d="M5 116 H474" stroke="#DDE9E7" stroke-width="4" stroke-linecap="round"/>
     <path d="M5 116 H162" stroke="#20C7B8" stroke-width="4" stroke-linecap="round"/>
   </g>

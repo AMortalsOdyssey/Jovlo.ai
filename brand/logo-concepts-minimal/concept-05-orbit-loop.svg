@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
-  <title id="title">Jovlo.ai minimal logo concept 05 - Orbit Loop</title>
-  <desc id="desc">A spare orbit-like abstract loop beside a clean Jovlo.ai wordmark.</desc>
+  <title id="title">Jovlo minimal logo concept 05 - Orbit Loop</title>
+  <desc id="desc">A spare orbit-like abstract loop beside a clean Jovlo wordmark.</desc>
   <g transform="translate(34 0)">
     <ellipse cx="180" cy="180" rx="116" ry="58" transform="rotate(-28 180 180)"
       fill="none" stroke="#111827" stroke-width="24" stroke-linecap="round" stroke-dasharray="248 96"/>
@@ -9,6 +9,6 @@
     <circle cx="254" cy="123" r="14" fill="#22C7B8"/>
   </g>
   <g transform="translate(346 122)">
-    <text x="0" y="78" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', sans-serif" font-size="96" font-weight="720" fill="#111827">Jovlo.ai</text>
+    <text x="0" y="78" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', sans-serif" font-size="96" font-weight="720" fill="#111827">Jovlo</text>
   </g>
 </svg>

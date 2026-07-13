@@ -25,7 +25,7 @@ describe('Jovlo homepage', () => {
   it('keeps the homepage concise and sends anonymous users through login', () => {
     render(<MemoryRouter><HomePage /></MemoryRouter>)
 
-    expect(screen.getByRole('heading', { name: 'Jovlo.ai' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Jovlo' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '开始我的路书' })).toHaveAttribute(
       'href',
       '/login?returnTo=%2Ftrips',

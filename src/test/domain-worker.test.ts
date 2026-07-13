@@ -753,7 +753,7 @@ describe('Worker API contract', () => {
           TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
           TENCENTCLOUD_SECRET_ID: 'AKIDTEST',
           TENCENTCLOUD_SECRET_KEY: 'tencent-secret',
-          TENCENT_SES_FROM: 'Jovlo.ai <no-reply@auth.8xd.io>',
+          TENCENT_SES_FROM: 'Jovlo <no-reply@auth.8xd.io>',
           TENCENT_SES_SIGNUP_TEMPLATE_ID: '123',
         },
       )
@@ -833,7 +833,7 @@ describe('Worker API contract', () => {
           TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
           TENCENTCLOUD_SECRET_ID: 'AKIDTEST',
           TENCENTCLOUD_SECRET_KEY: 'tencent-secret',
-          TENCENT_SES_FROM: 'Jovlo.ai <no-reply@auth.8xd.io>',
+          TENCENT_SES_FROM: 'Jovlo <no-reply@auth.8xd.io>',
           TENCENT_SES_SIGNUP_TEMPLATE_ID: '123',
         })
         statuses.push(response.status)
@@ -939,7 +939,7 @@ describe('Worker API contract', () => {
         TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
         TENCENTCLOUD_SECRET_ID: 'AKIDTEST',
         TENCENTCLOUD_SECRET_KEY: 'tencent-secret',
-        TENCENT_SES_FROM: 'Jovlo.ai <no-reply@auth.8xd.io>',
+        TENCENT_SES_FROM: 'Jovlo <no-reply@auth.8xd.io>',
         TENCENT_SES_SIGNUP_TEMPLATE_ID: '123',
       })
       const body = (await response.json()) as { message: string }

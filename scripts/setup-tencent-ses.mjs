@@ -7,6 +7,8 @@ const SERVICE = "ses";
 const VERSION = "2020-10-02";
 const IDENTITY = "auth.8xd.io";
 const SENDER = "no-reply@auth.8xd.io";
+const SENDER_NAME = "Jovlo";
+const BRAND_TEMPLATE_SUFFIX = "202607";
 const ENV_PATH = resolve(".env.tencent.local");
 
 const templates = [
@@ -167,12 +169,54 @@ async function ensureTemplates({ readOnly = false, resubmitRejected = false } = 
   return list.TemplatesMetadata || [];
 }
 
-async function ensureSender(identity) {
+async function ensureBrandTemplates() {
+  const list = await call("ListEmailTemplates", { Limit: 100, Offset: 0 });
+  const replacements = {};
+  let allApproved = true;
+
+  for (const definition of templates) {
+    const replacementName = `${definition.name} ${BRAND_TEMPLATE_SUFFIX}`;
+    let found = list.TemplatesMetadata?.find(
+      (item) => item.TemplateName === replacementName,
+    );
+    if (!found) {
+      const html = readFileSync(definition.path);
+      const created = await call("CreateEmailTemplate", {
+        TemplateName: replacementName,
+        TemplateContent: { Html: html.toString("base64") },
+      });
+      found = { TemplateID: created.TemplateID, TemplateStatus: 1 };
+      process.stdout.write(`已提交新品牌模板：${replacementName}（审核中）。\n`);
+    } else {
+      process.stdout.write(
+        `新品牌模板已存在：${replacementName}（${templateStatusLabel(found.TemplateStatus)}）。\n`,
+      );
+    }
+    replacements[definition.envName] = String(found.TemplateID);
+    if (found.TemplateStatus !== 0) allApproved = false;
+  }
+
+  if (allApproved) {
+    updateEnv(replacements);
+    process.stdout.write("新品牌模板均已通过，已切换本地模板 ID。\n");
+  } else {
+    process.stdout.write(
+      "新品牌模板仍在审核，继续使用现有已通过模板，避免注册邮件中断。\n",
+    );
+  }
+}
+
+async function ensureSender(identity, { refreshAlias = false } = {}) {
   const senders = await call("ListEmailAddress", {});
-  const exists = senders.EmailSenders?.some((item) => item.EmailAddress === SENDER);
-  if (exists) {
-    process.stdout.write(`发信地址 ${SENDER} 已存在。\n`);
-    return;
+  const found = senders.EmailSenders?.find((item) => item.EmailAddress === SENDER);
+  if (found) {
+    const currentName = found.EmailSenderName?.trim() || "未设置";
+    if (!refreshAlias || currentName === SENDER_NAME) {
+      process.stdout.write(`发信地址 ${SENDER} 已存在，显示名：${currentName}。\n`);
+      return;
+    }
+    await call("DeleteEmailAddress", { EmailAddress: SENDER });
+    process.stdout.write(`已移除旧发信地址别名：${currentName}。\n`);
   }
   if (!identity.VerifiedForSendingStatus) {
     process.stdout.write("发信域名尚未验证，暂不创建发信地址。\n");
@@ -180,9 +224,9 @@ async function ensureSender(identity) {
   }
   await call("CreateEmailAddress", {
     EmailAddress: SENDER,
-    EmailSenderName: "Jovlo.ai",
+    EmailSenderName: SENDER_NAME,
   });
-  process.stdout.write(`已创建发信地址 ${SENDER}。\n`);
+  process.stdout.write(`已创建发信地址 ${SENDER}，显示名：${SENDER_NAME}。\n`);
 }
 
 function printIdentity(identity) {
@@ -207,8 +251,9 @@ async function main() {
     readOnly: command === "status",
     resubmitRejected: command === "resubmit-rejected",
   });
+  if (command === "refresh-brand") await ensureBrandTemplates();
   printIdentity(identity);
-  await ensureSender(identity);
+  await ensureSender(identity, { refreshAlias: command === "refresh-brand" });
 }
 
 main().catch((error) => {
