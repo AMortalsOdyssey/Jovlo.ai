@@ -129,12 +129,16 @@ async function ensureIdentity() {
   return call("GetEmailIdentity", { EmailIdentity: IDENTITY });
 }
 
-async function ensureTemplates() {
+async function ensureTemplates({ readOnly = false, resubmitRejected = false } = {}) {
   const list = await call("ListEmailTemplates", { Limit: 100, Offset: 0 });
   const ids = {};
   for (const definition of templates) {
     let found = list.TemplatesMetadata?.find((item) => item.TemplateName === definition.name);
     if (!found) {
+      if (readOnly) {
+        process.stdout.write(`模板不存在：${definition.name}。\n`);
+        continue;
+      }
       const html = readFileSync(definition.path);
       const created = await call("CreateEmailTemplate", {
         TemplateName: definition.name,
@@ -142,14 +146,24 @@ async function ensureTemplates() {
       });
       found = { TemplateID: created.TemplateID, TemplateStatus: 1 };
       process.stdout.write(`已提交模板：${definition.name}（审核中）。\n`);
+    } else if (resubmitRejected && found.TemplateStatus === 2) {
+      const html = readFileSync(definition.path);
+      await call("UpdateEmailTemplate", {
+        TemplateID: found.TemplateID,
+        TemplateName: definition.name,
+        TemplateContent: { Html: html.toString("base64") },
+      });
+      found = { ...found, TemplateStatus: 1, ReviewReason: "" };
+      process.stdout.write(`已修改并重新提交模板：${definition.name}（审核中）。\n`);
     } else {
+      const review = found.ReviewReason?.trim();
       process.stdout.write(
-        `模板已存在：${definition.name}（${templateStatusLabel(found.TemplateStatus)}）。\n`,
+        `模板已存在：${definition.name}（${templateStatusLabel(found.TemplateStatus)}）${review ? `；审核意见：${review}` : ""}。\n`,
       );
     }
     ids[definition.envName] = String(found.TemplateID);
   }
-  updateEnv({ TENCENT_SES_REGION: REGION, ...ids });
+  if (!readOnly) updateEnv({ TENCENT_SES_REGION: REGION, ...ids });
   return list.TemplatesMetadata || [];
 }
 
@@ -189,7 +203,10 @@ async function main() {
     await call("UpdateEmailIdentity", { EmailIdentity: IDENTITY });
     identity = await call("GetEmailIdentity", { EmailIdentity: IDENTITY });
   }
-  if (command !== "status") await ensureTemplates();
+  await ensureTemplates({
+    readOnly: command === "status",
+    resubmitRejected: command === "resubmit-rejected",
+  });
   printIdentity(identity);
   await ensureSender(identity);
 }

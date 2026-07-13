@@ -57,12 +57,6 @@ function run(command, args, options = {}) {
   return result.stdout;
 }
 
-function putWorkerSecret(name, value) {
-  run("npx", ["wrangler", "secret", "put", name], {
-    input: `${value}\n`,
-  });
-}
-
 try {
   const hookSecret =
     config.SUPABASE_SEND_EMAIL_HOOK_SECRET?.trim() ||
@@ -85,7 +79,9 @@ try {
   };
 
   process.stdout.write("写入 Jovlo Worker 邮件密钥与配置。\n");
-  for (const [name, value] of Object.entries(secrets)) putWorkerSecret(name, value);
+  run("npx", ["wrangler", "secret", "bulk"], {
+    input: `${JSON.stringify(secrets)}\n`,
+  });
 
   if (!process.argv.includes("--secrets-only")) {
     process.stdout.write("启用 Supabase Send Email Hook。\n");

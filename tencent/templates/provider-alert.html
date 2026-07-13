@@ -6,9 +6,9 @@
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#fff;border:1px solid #ddd8d0">
           <tr><td style="padding:30px">
             <div style="font-size:18px;font-weight:700;color:#c25518">Jovlo.ai 运行告警</div>
-            <p style="margin:22px 0 10px;line-height:1.8">系统检测到外部服务的额度、权限或频率异常。用户请求已尽量使用本地数据或参考估算继续完成。</p>
-            <p style="margin:0;padding:16px;background:#f8f2e9;line-height:1.8">{{detail}}</p>
-            <p style="margin:18px 0 0;color:#80756a;font-size:13px;line-height:1.7">相同类型的告警在六小时内只发送一次，完整请求记录请在 Cloudflare 日志中查看。</p>
+            <p style="margin:22px 0 10px;line-height:1.8">系统检测到外部服务的额度、权限或频率异常。告警类别已经写在邮件主题中，用户请求已尽量使用本地数据或参考估算继续完成。</p>
+            <p style="margin:0;padding:16px;background:#f8f2e9;line-height:1.8">请登录 Jovlo 对应的 Cloudflare Dashboard 查看结构化日志和服务状态。本邮件不会包含请求正文、用户资料、密钥或原始错误堆栈。</p>
+            <p style="margin:18px 0 0;color:#80756a;font-size:13px;line-height:1.7">相同类型的告警在六小时内只发送一次，避免重复提醒。</p>
           </td></tr>
         </table>
       </td></tr>

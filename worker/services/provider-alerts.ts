@@ -68,9 +68,7 @@ async function deliverProviderAlert(context: AppContext, issue: ProviderIssue): 
       to,
       subject: `[Jovlo 告警] ${issue.provider} ${issue.code}`,
       templateId,
-      templateData: {
-        detail: `${issue.message}；影响：${issue.impact}；时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`.slice(0, 400),
-      },
+      templateData: {},
     })
     await markAlertSent(context, issue)
   } catch (error) {
