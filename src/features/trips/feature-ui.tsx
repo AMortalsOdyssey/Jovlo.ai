@@ -7,6 +7,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import {
+  Fragment,
   type ButtonHTMLAttributes,
   type FormEventHandler,
   type PropsWithChildren,
@@ -17,6 +18,32 @@ import { Link } from 'react-router-dom'
 import './feature-pages.css'
 
 export type Tone = 'neutral' | 'brand' | 'sea' | 'sky' | 'sun' | 'coral'
+
+export type TrailStop = { label: string; to: string }
+
+/**
+ * 航迹路径：品牌位（回首页）+ 上级站点，用路线短横串联，
+ * 呼应首页英雄区「海口 —— 文昌 —— 三亚」的路书语言。
+ */
+export function PageTrail({ stops }: { stops: TrailStop[] }) {
+  return (
+    <nav className="feature-trail" aria-label="页面路径">
+      <Link className="feature-trail__brand" to="/">
+        <img src="/jovlo-mark.svg" alt="" />
+        <span>Jovlo</span>
+      </Link>
+      {stops.map((stop) => (
+        <Fragment key={stop.to}>
+          <i className="feature-trail__leg" aria-hidden="true" />
+          <Link className="feature-trail__stop" to={stop.to}>
+            {stop.label}
+          </Link>
+        </Fragment>
+      ))}
+      <i className="feature-trail__leg feature-trail__leg--here" aria-hidden="true" />
+    </nav>
+  )
+}
 
 type PageShellProps = PropsWithChildren<{
   className?: string
@@ -36,6 +63,7 @@ type PageHeaderProps = {
   description?: string
   eyebrow?: string
   backTo?: string
+  trail?: TrailStop[]
   actions?: ReactNode
   meta?: ReactNode
 }
@@ -45,6 +73,7 @@ export function PageHeader({
   description,
   eyebrow,
   backTo,
+  trail,
   actions,
   meta,
 }: PageHeaderProps) {
@@ -57,7 +86,7 @@ export function PageHeader({
           </Link>
         ) : null}
         <div className="feature-page-heading-copy">
-          {eyebrow ? <p className="feature-eyebrow">{eyebrow}</p> : null}
+          {trail ? <PageTrail stops={trail} /> : eyebrow ? <p className="feature-eyebrow">{eyebrow}</p> : null}
           <h1>{title}</h1>
           {description ? <p className="feature-page-description">{description}</p> : null}
           {meta ? <div className="feature-page-meta">{meta}</div> : null}

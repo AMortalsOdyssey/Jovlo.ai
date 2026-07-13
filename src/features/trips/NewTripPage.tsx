@@ -168,6 +168,7 @@ export function NewTripPage() {
       <PageHeader
         title="创建海南自驾路书"
         description="先确定会牵动整条路线的条件，地点细节进入编辑台后再慢慢共创。"
+        trail={[{ label: '我的路书', to: '/trips' }]}
         backTo="/trips"
       />
       <Stepper current={step} labels={['基础条件', '路线倾向', '草案预览']} />

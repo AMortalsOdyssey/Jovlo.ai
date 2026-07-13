@@ -52,6 +52,70 @@
   letter-spacing: 0;
 }
 
+/* 航迹路径：品牌位 + 上级站点，用路线短横串联 */
+.feature-trail {
+  display: flex;
+  min-height: 28px;
+  margin-bottom: var(--space-2);
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-supporting-size);
+  line-height: var(--text-supporting-line);
+}
+
+.feature-trail__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-weight: 760;
+  text-decoration: none;
+}
+
+.feature-trail__brand img {
+  width: 20px;
+  height: 20px;
+  transition: transform var(--motion-hover) var(--ease-magnetic);
+}
+
+.feature-trail__brand:hover img {
+  transform: scale(1.12) rotate(-4deg);
+}
+
+.feature-trail__brand:hover span {
+  color: var(--gold-text);
+}
+
+.feature-trail__leg {
+  width: 16px;
+  height: 1px;
+  background: rgb(93 64 28 / 30%);
+  transition: background-color var(--motion-hover) var(--ease-magnetic);
+}
+
+.feature-trail__leg--here {
+  width: 10px;
+  background: var(--gold);
+}
+
+.feature-trail__stop {
+  color: var(--muted);
+  background-image: linear-gradient(var(--gold), var(--gold));
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0% 1.5px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    color var(--motion-state) var(--ease-out),
+    background-size var(--motion-hover) var(--ease-magnetic);
+}
+
+.feature-trail__stop:hover {
+  color: var(--gold-text);
+  background-size: 100% 1.5px;
+}
+
 .feature-eyebrow {
   margin-bottom: var(--space-1) !important;
   color: var(--brand-text);
@@ -292,9 +356,9 @@
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
   transition:
-    border-color var(--motion-state) var(--ease-out),
-    box-shadow var(--motion-state) var(--ease-out),
-    transform var(--motion-state) var(--ease-out);
+    border-color var(--motion-hover) var(--ease-magnetic),
+    box-shadow var(--motion-hover) var(--ease-magnetic),
+    transform var(--motion-hover) var(--ease-magnetic);
 }
 
 .feature-card:hover {
@@ -1302,7 +1366,7 @@
   text-decoration: none;
   transition:
     color var(--motion-state) var(--ease-out),
-    background-size var(--motion-state) var(--ease-out);
+    background-size var(--motion-hover) var(--ease-magnetic);
 }
 
 .feature-card-title a:hover {
@@ -1336,7 +1400,7 @@
 }
 
 .trips-card-shortcuts a svg {
-  transition: transform var(--motion-state) var(--ease-out);
+  transition: transform var(--motion-hover) var(--ease-magnetic);
 }
 
 .trips-card-shortcuts a:hover {

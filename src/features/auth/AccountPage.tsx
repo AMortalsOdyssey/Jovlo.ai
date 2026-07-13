@@ -1,4 +1,4 @@
-import { ArrowRight, LoaderCircle, LogIn, LogOut, Mail } from 'lucide-react'
+import { ArrowRight, LoaderCircle, LogIn, LogOut, Mail, Route } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -41,7 +41,16 @@ export function AccountPage() {
   }
 
   return (
-    <AuthPageLayout title="账号管理" description="管理当前登录账号。">
+    <AuthPageLayout
+      title="账号管理"
+      description="管理当前登录账号。"
+      footer={
+        <Link className="auth-return-link" to="/trips">
+          <Route aria-hidden="true" size={16} />
+          返回我的路书
+        </Link>
+      }
+    >
       <div className="auth-account">
         <div className="auth-account__row">
           <Mail aria-hidden="true" size={18} />

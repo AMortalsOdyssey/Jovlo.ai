@@ -47,7 +47,7 @@
   width: 36px;
   height: 36px;
   filter: drop-shadow(0 3px 6px rgb(0 0 0 / 22%));
-  transition: transform var(--motion-state) var(--ease-spring);
+  transition: transform var(--motion-hover) var(--ease-magnetic);
 }
 
 .home-brand:hover img {
@@ -126,13 +126,13 @@
   text-decoration: none;
   transition:
     background-color var(--motion-press) var(--ease-out),
-    box-shadow var(--motion-state) var(--ease-out),
-    transform var(--motion-state) var(--ease-out);
+    box-shadow var(--motion-hover) var(--ease-magnetic),
+    transform var(--motion-hover) var(--ease-magnetic);
 }
 
 /* 悬停时按钮轻抬、末尾箭头顺势位移，移走即归位 */
 .home-action svg:last-child {
-  transition: transform var(--motion-state) var(--ease-out);
+  transition: transform var(--motion-hover) var(--ease-magnetic);
 }
 
 .home-action--primary:hover svg:last-child {
@@ -245,7 +245,7 @@
   align-items: center;
   gap: var(--space-3);
   border-bottom: 1px solid var(--line);
-  transition: background-color var(--motion-state) var(--ease-out);
+  transition: background-color var(--motion-hover) var(--ease-magnetic);
 }
 
 @media (hover: hover) {
@@ -258,8 +258,8 @@
     opacity: 0;
     transform: translateX(-6px);
     transition:
-      opacity var(--motion-state) var(--ease-out),
-      transform var(--motion-state) var(--ease-out);
+      opacity var(--motion-hover) var(--ease-magnetic),
+      transform var(--motion-hover) var(--ease-magnetic);
   }
 
   .home-route__list li:hover .home-route__nav {
@@ -421,8 +421,8 @@
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-raised);
   transition:
-    box-shadow var(--motion-route) var(--ease-out),
-    transform var(--motion-route) var(--ease-out);
+    box-shadow var(--motion-hover) var(--ease-magnetic),
+    transform var(--motion-hover) var(--ease-magnetic);
 }
 
 .home-today__day:hover {

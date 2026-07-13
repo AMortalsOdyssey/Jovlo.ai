@@ -630,3 +630,18 @@
     animation-duration: 1.6s;
   }
 }
+
+.auth-return-link {
+  display: inline-flex;
+  min-height: var(--target-min);
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--sea-text);
+  font-weight: 700;
+  text-decoration: none;
+  transition: color var(--motion-state) var(--ease-out);
+}
+
+.auth-return-link:hover {
+  color: var(--gold-text);
+}

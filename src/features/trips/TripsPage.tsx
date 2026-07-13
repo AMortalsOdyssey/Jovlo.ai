@@ -36,7 +36,7 @@ export function TripsPage() {
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Jovlo.ai"
+        trail={[]}
         title="我的路书"
         description="继续完善正在规划的路线，或从一组高影响条件开始新的海南自驾草案。"
         actions={<ButtonLink to="/trips/new" variant="primary" icon={Plus}>新建路书</ButtonLink>}
