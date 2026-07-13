@@ -1,4 +1,4 @@
-import { ArrowRight, LoaderCircle, LogIn, LogOut, Mail, Route } from 'lucide-react'
+import { ArrowRight, Compass, LoaderCircle, LogIn, LogOut, Mail, Route, UserRoundPlus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -24,6 +24,39 @@ export function AccountPage() {
 
   if (status === 'loading') {
     return <div className="auth-loading" role="status">正在载入账号…</div>
+  }
+
+  if (status === 'trial') {
+    return (
+      <AuthPageLayout
+        title="账号管理"
+        description="你正在本地试用：路书只保存在当前浏览器，清除浏览器数据或换设备后会丢失。登录后可同步到云端。"
+        footer={
+          <Link className="auth-return-link" to="/trips">
+            <Route aria-hidden="true" size={16} />
+            返回我的路书
+          </Link>
+        }
+      >
+        <div className="auth-account">
+          <div className="auth-account__row">
+            <Compass aria-hidden="true" size={18} />
+            <div>
+              <span>当前状态</span>
+              <strong>本地试用中</strong>
+            </div>
+          </div>
+          <Link className="auth-primary" to={AUTH_ROUTES.login}>
+            <LogIn aria-hidden="true" size={18} />
+            登录账号，同步到云端
+            <ArrowRight aria-hidden="true" size={17} />
+          </Link>
+          <p className="auth-privacy">
+            还没有账号？ <Link to={AUTH_ROUTES.register}><UserRoundPlus aria-hidden="true" size={14} /> 创建账号</Link>
+          </p>
+        </div>
+      </AuthPageLayout>
+    )
   }
 
   if (status !== 'authenticated') {

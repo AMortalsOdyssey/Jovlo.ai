@@ -30,7 +30,8 @@ export function LoginPage() {
     )
   }
 
-  if (status === 'authenticated' || status === 'trial' || status === 'demo') {
+  // 本地试用（trial）用户访问登录页就是为了登录，不能弹回，否则永远到不了表单
+  if (status === 'authenticated' || status === 'demo') {
     return <Navigate to={returnTo} replace />
   }
 
