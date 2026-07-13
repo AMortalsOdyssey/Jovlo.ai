@@ -69,6 +69,7 @@ describe('MapCanvas fallback', () => {
   it('loads AMap when a key exists while keeping formal markers outside candidate clustering', async () => {
     const user = userEvent.setup()
     const mapAdd = vi.fn()
+    const mapRemove = vi.fn()
     const mapDestroy = vi.fn()
     const mapSetLayers = vi.fn()
     const trafficOn = vi.fn()
@@ -85,6 +86,7 @@ describe('MapCanvas fallback', () => {
 
     function FakeMap(this: Record<string, unknown>) {
       this.add = mapAdd
+      this.remove = mapRemove
       this.setFitView = vi.fn()
       this.setLayers = mapSetLayers
       this.destroy = mapDestroy
@@ -145,7 +147,7 @@ describe('MapCanvas fallback', () => {
     })
 
     const onReady = vi.fn()
-    const { container } = render(
+    const { container, rerender, unmount } = render(
       <MapCanvas
         amapKey="amap-test-key"
         routePoints={[
@@ -207,5 +209,29 @@ describe('MapCanvas fallback', () => {
     await waitFor(() => expect(heatmapShow).toHaveBeenCalled())
     expect(screen.getByText('点位密度 · 非实时客流')).toBeInTheDocument()
     expect(onReady).toHaveBeenCalledWith('amap')
+
+    const firstOverlaySet = mapAdd.mock.calls[0][0]
+    rerender(
+      <MapCanvas
+        amapKey="amap-test-key"
+        routePoints={[
+          { id: 's3', order: 1, name: '博鳌亚洲论坛永久会址', lng: 110.584, lat: 19.139 },
+          { id: 's4', order: 2, name: '潭门渔港', lng: 110.616, lat: 19.244 },
+        ]}
+        candidatePoints={[]}
+        onReady={onReady}
+      />,
+    )
+
+    await waitFor(() => expect(mapAdd).toHaveBeenCalledTimes(2))
+    expect(loadAmap).toHaveBeenCalledTimes(1)
+    expect(mapDestroy).not.toHaveBeenCalled()
+    expect(mapRemove).toHaveBeenCalledWith(firstOverlaySet)
+    expect(container.firstElementChild).toHaveAttribute('data-provider', 'amap')
+    expect(markerOptions.at(-3)?.content).toHaveTextContent('博鳌亚洲论坛永久会址人文')
+    expect(markerOptions.at(-2)?.content).toHaveTextContent('潭门渔港餐饮')
+
+    unmount()
+    expect(mapDestroy).toHaveBeenCalledTimes(1)
   })
 })

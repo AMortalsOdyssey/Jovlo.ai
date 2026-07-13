@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { load as loadAmap } from '@amap/amap-jsapi-loader'
 import {
@@ -57,6 +57,12 @@ interface MapLayerAvailability {
   satellite: boolean
   traffic: boolean
   density: boolean
+}
+
+interface AmapOverlaySet {
+  overlays: any[]
+  roots: Root[]
+  directionMarker: any | null
 }
 
 interface ProjectedPoint {
@@ -252,7 +258,9 @@ export function MapCanvas({
     [routePoints, usesBuiltInReference],
   )
   const hostRef = useRef<HTMLDivElement>(null)
+  const amapRef = useRef<any>(null)
   const mapRef = useRef<any>(null)
+  const overlaysRef = useRef<AmapOverlaySet>({ overlays: [], roots: [], directionMarker: null })
   const standardLayerRef = useRef<any>(null)
   const satelliteLayersRef = useRef<any[]>([])
   const trafficLayerRef = useRef<any>(null)
@@ -299,7 +307,6 @@ export function MapCanvas({
   const canShowDensity = densityData.length >= 3
 
   useEffect(() => {
-    const markerIconRoots: Root[] = []
     if (!apiKey || !hostRef.current) {
       setLoadState('fallback')
       callbacksRef.current.onReady?.('local-reference')
@@ -350,6 +357,7 @@ export function MapCanvas({
           viewMode: '2D',
           ...(standardLayer ? { layers: [standardLayer] } : {}),
         })
+        amapRef.current = AMap
         mapRef.current = map
         standardLayerRef.current = standardLayer
         satelliteLayersRef.current = satelliteLayers
@@ -371,10 +379,6 @@ export function MapCanvas({
               1: '#a63422',
             },
           })
-          heatmap.setDataSet({
-            data: densityData,
-            max: Math.max(4, ...densityData.map((point) => point.count)),
-          })
           heatmap.hide?.()
           heatmapRef.current = heatmap
         } catch {
@@ -383,116 +387,6 @@ export function MapCanvas({
           setLayerNotice('点位密度图层暂时不可用')
         }
 
-        const routeOverlays = visibleRoute.slice(0, -1).map((point, index) => {
-          const next = visibleRoute[index + 1]
-          return new AMap.Polyline({
-            path: [
-              [point.lng, point.lat],
-              [next.lng, next.lat],
-            ],
-            strokeColor: selectedLegIndex === index ? JOVLO_COLORS.brand : JOVLO_COLORS.sea,
-            strokeWeight: selectedLegIndex === index ? 6 : 4,
-            strokeOpacity: 0.94,
-            strokeStyle: 'dashed',
-            strokeDasharray: selectedLegIndex === index ? [14, 10] : [10, 9],
-            showDir: true,
-            dirColor: selectedLegIndex === index ? JOVLO_COLORS.brand : JOVLO_COLORS.sea,
-            lineJoin: 'round',
-          })
-        })
-
-        const formalMarkers = visibleRoute.map((point) => {
-          const pointType = point.type ?? 'other'
-          const markerButton = createAmapPlaceMarker({
-            ariaLabel: `第 ${point.order} 站：${point.name}，${MAP_PLACE_TYPE_LABEL[pointType]}`,
-            kind: 'formal',
-            name: point.name,
-            order: point.order,
-            selected: point.id === selectedPointId,
-            type: pointType,
-            roots: markerIconRoots,
-          })
-          markerButton.addEventListener('click', () => {
-            hostRef.current?.querySelectorAll<HTMLElement>('[data-map-marker-kind="formal"]').forEach((marker) => {
-              marker.dataset.selected = String(marker === markerButton)
-            })
-            setFocusedFormalPointId(point.id)
-            callbacksRef.current.onSelectFormalPoint?.(point.id)
-          })
-
-          return new AMap.Marker({
-            position: [point.lng, point.lat],
-            content: markerButton,
-            offset: new AMap.Pixel(-18, -42),
-            zIndex: 20,
-          })
-        })
-
-        const candidateMarkers = clusters.map((cluster) => {
-          const pointIds = cluster.points.map((point) => point.id)
-          const isCluster = cluster.points.length > 1
-          const lng = cluster.points.reduce((sum, point) => sum + point.lng, 0) / cluster.points.length
-          const lat = cluster.points.reduce((sum, point) => sum + point.lat, 0) / cluster.points.length
-          const markerButton = createAmapPlaceMarker({
-            ariaLabel: isCluster
-              ? `${cluster.points.length} 个候选地点，主类型 ${MAP_PLACE_TYPE_LABEL[cluster.type]}`
-              : `候选地点：${cluster.points[0].name}，${MAP_PLACE_TYPE_LABEL[cluster.type]}`,
-            kind: isCluster ? 'candidate-cluster' : 'candidate',
-            name: isCluster ? `${cluster.points.length} 个候选` : cluster.points[0].name,
-            order: isCluster ? cluster.points.length : undefined,
-            selected: pointIds.includes(selectedPointId ?? ''),
-            type: cluster.type,
-            roots: markerIconRoots,
-          })
-          markerButton.addEventListener('click', () => {
-            setFocusedFormalPointId(null)
-            callbacksRef.current.onSelectCandidateCluster?.(pointIds)
-          })
-
-          return new AMap.Marker({
-            position: [lng, lat],
-            content: markerButton,
-            offset: new AMap.Pixel(-18, -42),
-            zIndex: 16,
-          })
-        })
-
-        const routePath = visibleRoute.map((point) => [point.lng, point.lat])
-        let routeDirectionMarker: any = null
-        if (routePath.length > 1) {
-          const routeArrow = document.createElement('span')
-          routeArrow.className = 'jovlo-amap-route-arrow'
-          routeArrow.dataset.mapMarkerKind = 'route-arrow'
-          const routeArrowRoot = createRoot(routeArrow)
-          routeArrowRoot.render(<Navigation2 aria-hidden="true" size={15} strokeWidth={2.6} />)
-          markerIconRoots.push(routeArrowRoot)
-          routeDirectionMarker = new AMap.Marker({
-            position: routePath[0],
-            content: routeArrow,
-            offset: new AMap.Pixel(-11, -11),
-            zIndex: 18,
-          })
-        }
-
-        map.add([...routeOverlays, ...(routeDirectionMarker ? [routeDirectionMarker] : []), ...formalMarkers, ...candidateMarkers])
-
-        if (
-          routeDirectionMarker?.moveAlong &&
-          !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-        ) {
-          const playRouteDirection = () => {
-            if (cancelled) return
-            routeDirectionMarker.setPosition?.(routePath[0])
-            routeDirectionMarker.moveAlong(routePath, {
-              duration: Math.max(7_000, routePath.length * 2_000),
-              autoRotation: true,
-            })
-          }
-          routeDirectionMarker.on?.('movealong', playRouteDirection)
-          playRouteDirection()
-        }
-
-        if (routeOverlays.length > 0) map.setFitView(routeOverlays, false, [48, 48, 48, 48], 14)
         setLoadState('ready')
         callbacksRef.current.onReady?.('amap')
       })
@@ -510,15 +404,158 @@ export function MapCanvas({
 
     return () => {
       cancelled = true
+      overlaysRef.current.directionMarker?.stopMove?.()
+      const roots = overlaysRef.current.roots
+      overlaysRef.current = { overlays: [], roots: [], directionMarker: null }
       mapRef.current?.destroy?.()
+      amapRef.current = null
       mapRef.current = null
       standardLayerRef.current = null
       satelliteLayersRef.current = []
       trafficLayerRef.current = null
       heatmapRef.current = null
-      queueMicrotask(() => markerIconRoots.forEach((root) => root.unmount()))
+      queueMicrotask(() => roots.forEach((root) => root.unmount()))
     }
-  }, [apiKey, candidateSignature, densityData, routeSignature, selectedLegIndex, selectedPointId])
+  }, [apiKey])
+
+  useLayoutEffect(() => {
+    if (loadState !== 'ready' || !amapRef.current || !mapRef.current) return
+
+    const AMap = amapRef.current
+    const map = mapRef.current
+    const markerIconRoots: Root[] = []
+    const routeOverlays = visibleRoute.slice(0, -1).map((point, index) => {
+      const next = visibleRoute[index + 1]
+      return new AMap.Polyline({
+        path: [
+          [point.lng, point.lat],
+          [next.lng, next.lat],
+        ],
+        strokeColor: selectedLegIndex === index ? JOVLO_COLORS.brand : JOVLO_COLORS.sea,
+        strokeWeight: selectedLegIndex === index ? 6 : 4,
+        strokeOpacity: 0.94,
+        strokeStyle: 'dashed',
+        strokeDasharray: selectedLegIndex === index ? [14, 10] : [10, 9],
+        showDir: true,
+        dirColor: selectedLegIndex === index ? JOVLO_COLORS.brand : JOVLO_COLORS.sea,
+        lineJoin: 'round',
+      })
+    })
+
+    const formalMarkers = visibleRoute.map((point) => {
+      const pointType = point.type ?? 'other'
+      const markerButton = createAmapPlaceMarker({
+        ariaLabel: `第 ${point.order} 站：${point.name}，${MAP_PLACE_TYPE_LABEL[pointType]}`,
+        kind: 'formal',
+        name: point.name,
+        order: point.order,
+        selected: point.id === selectedPointId,
+        type: pointType,
+        roots: markerIconRoots,
+      })
+      markerButton.addEventListener('click', () => {
+        hostRef.current?.querySelectorAll<HTMLElement>('[data-map-marker-kind="formal"]').forEach((marker) => {
+          marker.dataset.selected = String(marker === markerButton)
+        })
+        setFocusedFormalPointId(point.id)
+        callbacksRef.current.onSelectFormalPoint?.(point.id)
+      })
+
+      return new AMap.Marker({
+        position: [point.lng, point.lat],
+        content: markerButton,
+        offset: new AMap.Pixel(-18, -42),
+        zIndex: 20,
+      })
+    })
+
+    const candidateMarkers = clusters.map((cluster) => {
+      const pointIds = cluster.points.map((point) => point.id)
+      const isCluster = cluster.points.length > 1
+      const lng = cluster.points.reduce((sum, point) => sum + point.lng, 0) / cluster.points.length
+      const lat = cluster.points.reduce((sum, point) => sum + point.lat, 0) / cluster.points.length
+      const markerButton = createAmapPlaceMarker({
+        ariaLabel: isCluster
+          ? `${cluster.points.length} 个候选地点，主类型 ${MAP_PLACE_TYPE_LABEL[cluster.type]}`
+          : `候选地点：${cluster.points[0].name}，${MAP_PLACE_TYPE_LABEL[cluster.type]}`,
+        kind: isCluster ? 'candidate-cluster' : 'candidate',
+        name: isCluster ? `${cluster.points.length} 个候选` : cluster.points[0].name,
+        order: isCluster ? cluster.points.length : undefined,
+        selected: pointIds.includes(selectedPointId ?? ''),
+        type: cluster.type,
+        roots: markerIconRoots,
+      })
+      markerButton.addEventListener('click', () => {
+        setFocusedFormalPointId(null)
+        callbacksRef.current.onSelectCandidateCluster?.(pointIds)
+      })
+
+      return new AMap.Marker({
+        position: [lng, lat],
+        content: markerButton,
+        offset: new AMap.Pixel(-18, -42),
+        zIndex: 16,
+      })
+    })
+
+    const routePath = visibleRoute.map((point) => [point.lng, point.lat])
+    let routeDirectionMarker: any = null
+    if (routePath.length > 1) {
+      const routeArrow = document.createElement('span')
+      routeArrow.className = 'jovlo-amap-route-arrow'
+      routeArrow.dataset.mapMarkerKind = 'route-arrow'
+      const routeArrowRoot = createRoot(routeArrow)
+      routeArrowRoot.render(<Navigation2 aria-hidden="true" size={15} strokeWidth={2.6} />)
+      markerIconRoots.push(routeArrowRoot)
+      routeDirectionMarker = new AMap.Marker({
+        position: routePath[0],
+        content: routeArrow,
+        offset: new AMap.Pixel(-11, -11),
+        zIndex: 18,
+      })
+    }
+
+    const nextOverlays = [
+      ...routeOverlays,
+      ...(routeDirectionMarker ? [routeDirectionMarker] : []),
+      ...formalMarkers,
+      ...candidateMarkers,
+    ]
+    const previous = overlaysRef.current
+
+    map.add(nextOverlays)
+    previous.directionMarker?.stopMove?.()
+    if (previous.overlays.length > 0) map.remove?.(previous.overlays)
+    overlaysRef.current = {
+      overlays: nextOverlays,
+      roots: markerIconRoots,
+      directionMarker: routeDirectionMarker,
+    }
+    queueMicrotask(() => previous.roots.forEach((root) => root.unmount()))
+
+    heatmapRef.current?.setDataSet?.({
+      data: densityData,
+      max: Math.max(4, ...densityData.map((point) => point.count)),
+    })
+
+    if (
+      routeDirectionMarker?.moveAlong &&
+      !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ) {
+      const playRouteDirection = () => {
+        if (overlaysRef.current.directionMarker !== routeDirectionMarker) return
+        routeDirectionMarker.setPosition?.(routePath[0])
+        routeDirectionMarker.moveAlong(routePath, {
+          duration: Math.max(7_000, routePath.length * 2_000),
+          autoRotation: true,
+        })
+      }
+      routeDirectionMarker.on?.('movealong', playRouteDirection)
+      playRouteDirection()
+    }
+
+    if (routeOverlays.length > 0) map.setFitView(routeOverlays, false, [48, 48, 48, 48], 14)
+  }, [candidateSignature, loadState, routeSignature, selectedLegIndex, selectedPointId])
 
   useEffect(() => {
     if (loadState !== 'ready' || !mapRef.current) return
