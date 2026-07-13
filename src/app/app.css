@@ -12,6 +12,55 @@
   font: 650 var(--text-body-size) / var(--text-body-line) var(--font-ui);
 }
 
+.app-route-error {
+  display: flex;
+  min-height: 100vh;
+  padding: var(--space-8) var(--space-5);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+}
+
+.app-route-error img {
+  width: 52px;
+  height: 52px;
+  margin-bottom: var(--space-4);
+}
+
+.app-route-error p {
+  margin: 0 0 var(--space-2);
+  color: var(--brand-text);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.app-route-error h1 {
+  margin: 0;
+  font: 700 var(--text-page-size) / var(--text-page-line) var(--font-display);
+}
+
+.app-route-error span {
+  max-width: 420px;
+  margin-top: var(--space-3);
+  color: var(--muted);
+}
+
+.app-route-error button {
+  min-height: var(--target-min);
+  margin-top: var(--space-6);
+  padding: 0 var(--space-5);
+  color: #fff;
+  background: var(--brand-strong);
+  border: 0;
+  border-radius: var(--radius-control);
+  font-weight: 720;
+}
+
+.app-route-error button:hover {
+  background: var(--brand-deep);
+}
+
 .workspace-topbar {
   position: sticky;
   z-index: var(--z-sticky);

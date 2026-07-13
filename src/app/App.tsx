@@ -1,31 +1,33 @@
 import { MapPinned } from 'lucide-react'
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { WorkspaceShell } from './WorkspaceShell'
+import { lazyRoute } from './route-recovery'
 import { EmptyState, PageShell } from '@/features/trips/feature-ui'
 import { ProtectedRoute } from '@/features/auth/ProtectedRoute'
+import './app.css'
 
-const TripsPage = lazy(() => import('@/features/trips/TripsPage').then((module) => ({ default: module.TripsPage })))
-const NewTripPage = lazy(() => import('@/features/trips/NewTripPage').then((module) => ({ default: module.NewTripPage })))
-const PlanPage = lazy(() => import('@/features/planner/PlanPage').then((module) => ({ default: module.PlanPage })))
-const BudgetPage = lazy(() => import('@/features/budget/BudgetPage').then((module) => ({ default: module.BudgetPage })))
-const ChangeSetPage = lazy(() => import('@/features/changesets/ChangeSetPage').then((module) => ({ default: module.ChangeSetPage })))
-const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then((module) => ({ default: module.ReportsPage })))
-const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })))
-const SourcesPage = lazy(() => import('@/features/sources/SourcesPage').then((module) => ({ default: module.SourcesPage })))
-const TodayPage = lazy(() => import('@/features/today/TodayPage').then((module) => ({ default: module.TodayPage })))
-const VersionsPage = lazy(() => import('@/features/versions/VersionsPage').then((module) => ({ default: module.VersionsPage })))
-const SharePage = lazy(() => import('@/features/share/SharePage').then((module) => ({ default: module.SharePage })))
-const PublicTripPage = lazy(() => import('@/features/share/PublicTripPage').then((module) => ({ default: module.PublicTripPage })))
-const PublicReportPage = lazy(() => import('@/features/share/PublicReportPage').then((module) => ({ default: module.PublicReportPage })))
-const LoginPage = lazy(() => import('@/features/auth/LoginPage').then((module) => ({ default: module.LoginPage })))
-const RegisterPage = lazy(() => import('@/features/auth/RegisterPage').then((module) => ({ default: module.RegisterPage })))
-const ForgotPasswordPage = lazy(() => import('@/features/auth/ForgotPasswordPage').then((module) => ({ default: module.ForgotPasswordPage })))
-const AuthCallbackPage = lazy(() => import('@/features/auth/AuthCallbackPage').then((module) => ({ default: module.AuthCallbackPage })))
-const SetNewPasswordPage = lazy(() => import('@/features/auth/SetNewPasswordPage').then((module) => ({ default: module.SetNewPasswordPage })))
-const AccountPage = lazy(() => import('@/features/auth/AccountPage').then((module) => ({ default: module.AccountPage })))
-const HomePage = lazy(() => import('@/features/home/HomePage').then((module) => ({ default: module.HomePage })))
+const TripsPage = lazyRoute(() => import('@/features/trips/TripsPage').then((module) => ({ default: module.TripsPage })))
+const NewTripPage = lazyRoute(() => import('@/features/trips/NewTripPage').then((module) => ({ default: module.NewTripPage })))
+const PlanPage = lazyRoute(() => import('@/features/planner/PlanPage').then((module) => ({ default: module.PlanPage })))
+const BudgetPage = lazyRoute(() => import('@/features/budget/BudgetPage').then((module) => ({ default: module.BudgetPage })))
+const ChangeSetPage = lazyRoute(() => import('@/features/changesets/ChangeSetPage').then((module) => ({ default: module.ChangeSetPage })))
+const ReportsPage = lazyRoute(() => import('@/features/reports/ReportsPage').then((module) => ({ default: module.ReportsPage })))
+const SettingsPage = lazyRoute(() => import('@/features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })))
+const SourcesPage = lazyRoute(() => import('@/features/sources/SourcesPage').then((module) => ({ default: module.SourcesPage })))
+const TodayPage = lazyRoute(() => import('@/features/today/TodayPage').then((module) => ({ default: module.TodayPage })))
+const VersionsPage = lazyRoute(() => import('@/features/versions/VersionsPage').then((module) => ({ default: module.VersionsPage })))
+const SharePage = lazyRoute(() => import('@/features/share/SharePage').then((module) => ({ default: module.SharePage })))
+const PublicTripPage = lazyRoute(() => import('@/features/share/PublicTripPage').then((module) => ({ default: module.PublicTripPage })))
+const PublicReportPage = lazyRoute(() => import('@/features/share/PublicReportPage').then((module) => ({ default: module.PublicReportPage })))
+const LoginPage = lazyRoute(() => import('@/features/auth/LoginPage').then((module) => ({ default: module.LoginPage })))
+const RegisterPage = lazyRoute(() => import('@/features/auth/RegisterPage').then((module) => ({ default: module.RegisterPage })))
+const ForgotPasswordPage = lazyRoute(() => import('@/features/auth/ForgotPasswordPage').then((module) => ({ default: module.ForgotPasswordPage })))
+const AuthCallbackPage = lazyRoute(() => import('@/features/auth/AuthCallbackPage').then((module) => ({ default: module.AuthCallbackPage })))
+const SetNewPasswordPage = lazyRoute(() => import('@/features/auth/SetNewPasswordPage').then((module) => ({ default: module.SetNewPasswordPage })))
+const AccountPage = lazyRoute(() => import('@/features/auth/AccountPage').then((module) => ({ default: module.AccountPage })))
+const HomePage = lazyRoute(() => import('@/features/home/HomePage').then((module) => ({ default: module.HomePage })))
 
 function NotFoundPage() {
   return (
