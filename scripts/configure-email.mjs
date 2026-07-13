@@ -57,12 +57,33 @@ function run(command, args, options = {}) {
   return result.stdout;
 }
 
+function supabaseServiceRoleKey() {
+  const configured = config.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (configured) return configured;
+  const output = run("npx", [
+    "supabase",
+    "projects",
+    "api-keys",
+    "--project-ref",
+    PROJECT_REF,
+    "--output",
+    "json",
+  ]);
+  const keys = JSON.parse(output);
+  const key = keys.find(
+    (item) => item.type === "legacy" && item.name === "service_role",
+  )?.api_key;
+  if (!key) throw new Error("Supabase 项目没有返回 service_role key。");
+  return key;
+}
+
 try {
   const hookSecret =
     config.SUPABASE_SEND_EMAIL_HOOK_SECRET?.trim() ||
     `v1,whsec_${randomBytes(32).toString("base64")}`;
   persistLocalValue("SUPABASE_SEND_EMAIL_HOOK_SECRET", hookSecret);
   const secrets = {
+    SUPABASE_SERVICE_ROLE_KEY: supabaseServiceRoleKey(),
     SUPABASE_SEND_EMAIL_HOOK_SECRET: hookSecret,
     TENCENTCLOUD_SECRET_ID: required("TENCENTCLOUD_SECRET_ID"),
     TENCENTCLOUD_SECRET_KEY: required("TENCENTCLOUD_SECRET_KEY"),

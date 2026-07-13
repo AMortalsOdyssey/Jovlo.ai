@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { D1Database } from '@cloudflare/workers-types'
 import { DEMO_CHANGESET, DEMO_IDS, DEMO_TRIP, DEMO_VERSIONS } from '../../packages/domain/src/index'
 import { app } from '../../worker/index'
 
@@ -609,35 +610,16 @@ describe('Worker API contract', () => {
     expect(body.data.derived.routeLegs.every((leg) => leg.tollsCny === undefined)).toBe(true)
   })
 
-  it('verifies Turnstile and forwards protected Supabase Auth bodies unchanged', async () => {
-    const cases = [
-      {
-        path: '/supabase/auth/v1/signup',
-        action: 'signup',
-        body: {
-          email: 'traveler@example.com',
-          password: 'password123',
-          gotrue_meta_security: { captcha_token: 'challenge-signup' },
-        },
+  it('verifies Turnstile and forwards password login bodies unchanged', async () => {
+    const testCase = {
+      path: '/supabase/auth/v1/token?grant_type=password',
+      action: 'login',
+      body: {
+        email: 'traveler@example.com',
+        password: 'password123',
+        gotrue_meta_security: { captcha_token: 'challenge-login' },
       },
-      {
-        path: '/supabase/auth/v1/token?grant_type=password',
-        action: 'login',
-        body: {
-          email: 'traveler@example.com',
-          password: 'password123',
-          gotrue_meta_security: { captcha_token: 'challenge-login' },
-        },
-      },
-      {
-        path: '/supabase/auth/v1/recover',
-        action: 'password_reset',
-        body: {
-          email: 'traveler@example.com',
-          gotrue_meta_security: { captcha_token: 'challenge-password_reset' },
-        },
-      },
-    ] as const
+    } as const
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       if (url === 'https://challenges.cloudflare.com/turnstile/v0/siteverify') {
@@ -654,41 +636,39 @@ describe('Worker API contract', () => {
       })
     })
     try {
-      for (const testCase of cases) {
-        const rawBody = JSON.stringify(testCase.body)
-        const response = await app.request(`https://jovlo.8xd.io${testCase.path}`, {
-          method: 'POST',
-          headers: {
-            'cf-connecting-ip': '203.0.113.10',
-            'content-type': 'application/json',
-          },
-          body: rawBody,
-        }, {
-          JOVLO_MODE: 'production',
-          SUPABASE_URL: 'https://fixed-project.supabase.co',
-          SUPABASE_PUBLISHABLE_KEY: 'public-key',
-          TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
-        })
-        expect(response.status).toBe(200)
-        expect(response.headers.get('cache-control')).toBe('no-store')
+      const rawBody = JSON.stringify(testCase.body)
+      const response = await app.request(`https://jovlo.8xd.io${testCase.path}`, {
+        method: 'POST',
+        headers: {
+          'cf-connecting-ip': '203.0.113.10',
+          'content-type': 'application/json',
+        },
+        body: rawBody,
+      }, {
+        JOVLO_MODE: 'production',
+        SUPABASE_URL: 'https://fixed-project.supabase.co',
+        SUPABASE_PUBLISHABLE_KEY: 'public-key',
+        TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
+      })
+      expect(response.status).toBe(200)
+      expect(response.headers.get('cache-control')).toBe('no-store')
 
-        const turnstileCall = fetchMock.mock.calls.at(-2)
-        const turnstileForm = new URLSearchParams(String(turnstileCall?.[1]?.body))
-        expect(turnstileForm.get('secret')).toBe('production-turnstile-secret')
-        expect(turnstileForm.get('response')).toBe(`challenge-${testCase.action}`)
-        expect(turnstileForm.get('remoteip')).toBe('203.0.113.10')
+      const turnstileCall = fetchMock.mock.calls.at(-2)
+      const turnstileForm = new URLSearchParams(String(turnstileCall?.[1]?.body))
+      expect(turnstileForm.get('secret')).toBe('production-turnstile-secret')
+      expect(turnstileForm.get('response')).toBe(`challenge-${testCase.action}`)
+      expect(turnstileForm.get('remoteip')).toBe('203.0.113.10')
 
-        const supabaseCall = fetchMock.mock.calls.at(-1)
-        expect(supabaseCall?.[0]).toBe(
-          `https://fixed-project.supabase.co/auth/v1${testCase.path.replace('/supabase/auth/v1', '')}`,
-        )
-        expect(supabaseCall?.[1]).toEqual(expect.objectContaining({
-          method: 'POST',
-          body: rawBody,
-          redirect: 'manual',
-        }))
-        expect(new Headers(supabaseCall?.[1]?.headers).get('apikey')).toBe('public-key')
-      }
+      const supabaseCall = fetchMock.mock.calls.at(-1)
+      expect(supabaseCall?.[0]).toBe(
+        `https://fixed-project.supabase.co/auth/v1${testCase.path.replace('/supabase/auth/v1', '')}`,
+      )
+      expect(supabaseCall?.[1]).toEqual(expect.objectContaining({
+        method: 'POST',
+        body: rawBody,
+        redirect: 'manual',
+      }))
+      expect(new Headers(supabaseCall?.[1]?.headers).get('apikey')).toBe('public-key')
 
       const rejected = await app.request('/supabase/auth/v1/admin/users', { method: 'GET' }, {
         JOVLO_MODE: 'production',
@@ -696,7 +676,276 @@ describe('Worker API contract', () => {
         SUPABASE_PUBLISHABLE_KEY: 'public-key',
       })
       expect(rejected.status).toBe(404)
-      expect(fetchMock).toHaveBeenCalledTimes(cases.length * 2)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('creates an unverified Supabase user and sends the signup link through Tencent SES', async () => {
+    const userId = '10000000-0000-4000-8000-000000000099'
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url === 'https://challenges.cloudflare.com/turnstile/v0/siteverify') {
+        return new Response(JSON.stringify({
+          success: true,
+          action: 'signup',
+          hostname: 'jovlo.8xd.io',
+        }), { headers: { 'content-type': 'application/json' } })
+      }
+      if (url.startsWith('https://fixed-project.supabase.co/auth/v1/admin/generate_link')) {
+        expect(new Headers(init?.headers).get('authorization')).toBe('Bearer service-role-key')
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          type: 'signup',
+          email: 'traveler@example.com',
+          password: 'password123',
+        })
+        expect(new URL(url).searchParams.get('redirect_to')).toBe(
+          'https://jovlo.8xd.io/auth/callback?returnTo=%2Ftrips%2Ftrip-1%2Fplan',
+        )
+        return new Response(JSON.stringify({
+          id: userId,
+          email: 'traveler@example.com',
+          aud: 'authenticated',
+          role: 'authenticated',
+          app_metadata: { provider: 'email', providers: ['email'] },
+          user_metadata: {},
+          identities: [],
+          created_at: '2026-07-13T00:00:00.000Z',
+          updated_at: '2026-07-13T00:00:00.000Z',
+          hashed_token: 'signup-token-hash',
+          verification_type: 'signup',
+        }), { headers: { 'content-type': 'application/json' } })
+      }
+      if (url === 'https://ses.tencentcloudapi.com/') {
+        const payload = JSON.parse(String(init?.body))
+        expect(payload.Destination).toEqual(['traveler@example.com'])
+        expect(JSON.parse(payload.Template.TemplateData)).toEqual({
+          action_query: 'token_hash=signup-token-hash&type=signup&returnTo=%2Ftrips%2Ftrip-1%2Fplan',
+        })
+        return new Response(JSON.stringify({
+          Response: { RequestId: 'request-signup', MessageId: 'message-signup' },
+        }), { headers: { 'content-type': 'application/json' } })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    try {
+      const redirectTo = encodeURIComponent(
+        'https://jovlo.8xd.io/auth/callback?returnTo=%2Ftrips%2Ftrip-1%2Fplan',
+      )
+      const response = await app.request(
+        `https://jovlo.8xd.io/supabase/auth/v1/signup?redirect_to=${redirectTo}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            email: 'traveler@example.com',
+            password: 'password123',
+            data: {},
+            gotrue_meta_security: { captcha_token: 'challenge-signup' },
+          }),
+        },
+        {
+          JOVLO_MODE: 'production',
+          SUPABASE_URL: 'https://fixed-project.supabase.co',
+          SUPABASE_PUBLISHABLE_KEY: 'public-key',
+          SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+          TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
+          TENCENTCLOUD_SECRET_ID: 'AKIDTEST',
+          TENCENTCLOUD_SECRET_KEY: 'tencent-secret',
+          TENCENT_SES_FROM: 'Jovlo.ai <no-reply@auth.8xd.io>',
+          TENCENT_SES_SIGNUP_TEMPLATE_ID: '123',
+        },
+      )
+      const body = (await response.json()) as { id: string; hashed_token?: string }
+      expect(response.status).toBe(200)
+      expect(body.id).toBe(userId)
+      expect(body.hashed_token).toBeUndefined()
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('rate-limits signup emails with hashed D1 keys before creating another user', async () => {
+    const counts = new Map<string, number>()
+    const seenKeys: string[] = []
+    const database = {
+      prepare() {
+        return {
+          bind(throttleKey: string) {
+            seenKeys.push(throttleKey)
+            return {
+              async first() {
+                const next = (counts.get(throttleKey) ?? 0) + 1
+                counts.set(throttleKey, next)
+                return { request_count: next }
+              },
+            }
+          },
+        }
+      },
+    } as unknown as D1Database
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.includes('/turnstile/v0/siteverify')) {
+        return new Response(JSON.stringify({
+          success: true,
+          action: 'signup',
+          hostname: 'jovlo.8xd.io',
+        }), { headers: { 'content-type': 'application/json' } })
+      }
+      if (url.includes('/auth/v1/admin/generate_link')) {
+        return new Response(JSON.stringify({
+          id: '10000000-0000-4000-8000-000000000097',
+          email: 'limited@example.com',
+          hashed_token: 'signup-token-hash',
+          verification_type: 'signup',
+        }), { headers: { 'content-type': 'application/json' } })
+      }
+      if (url === 'https://ses.tencentcloudapi.com/') {
+        return new Response(JSON.stringify({
+          Response: { RequestId: 'request-limited', MessageId: 'message-limited' },
+        }), { headers: { 'content-type': 'application/json' } })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    try {
+      const statuses: number[] = []
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const response = await app.request('https://jovlo.8xd.io/supabase/auth/v1/signup', {
+          method: 'POST',
+          headers: {
+            'cf-connecting-ip': '203.0.113.20',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: 'limited@example.com',
+            password: 'password123',
+            gotrue_meta_security: { captcha_token: `challenge-signup-${attempt}` },
+          }),
+        }, {
+          JOVLO_MODE: 'production',
+          AGENT_GRANTS: database,
+          SUPABASE_URL: 'https://fixed-project.supabase.co',
+          SUPABASE_PUBLISHABLE_KEY: 'public-key',
+          SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+          TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
+          TENCENTCLOUD_SECRET_ID: 'AKIDTEST',
+          TENCENTCLOUD_SECRET_KEY: 'tencent-secret',
+          TENCENT_SES_FROM: 'Jovlo.ai <no-reply@auth.8xd.io>',
+          TENCENT_SES_SIGNUP_TEMPLATE_ID: '123',
+        })
+        statuses.push(response.status)
+      }
+      expect(statuses).toEqual([200, 200, 200, 200, 200, 429])
+      expect(fetchMock).toHaveBeenCalledTimes(16)
+      expect(new Set(seenKeys)).toHaveLength(2)
+      expect(seenKeys.every((key) => /^[0-9a-f]{64}$/.test(key))).toBe(true)
+      expect(seenKeys.join('')).not.toContain('limited@example.com')
+      expect(seenKeys.join('')).not.toContain('203.0.113.20')
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('does not reveal whether a recovery email belongs to an account', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.includes('/turnstile/v0/siteverify')) {
+        return new Response(JSON.stringify({
+          success: true,
+          action: 'password_reset',
+          hostname: 'jovlo.8xd.io',
+        }), { headers: { 'content-type': 'application/json' } })
+      }
+      if (url.includes('/auth/v1/admin/generate_link')) {
+        return new Response(JSON.stringify({ code: 'user_not_found', message: 'User not found' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    try {
+      const response = await app.request('https://jovlo.8xd.io/supabase/auth/v1/recover', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'missing@example.com',
+          gotrue_meta_security: { captcha_token: 'challenge-password_reset' },
+        }),
+      }, {
+        JOVLO_MODE: 'production',
+        SUPABASE_URL: 'https://fixed-project.supabase.co',
+        SUPABASE_PUBLISHABLE_KEY: 'public-key',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+        TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
+      })
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({})
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('rolls back a new user when Tencent SES rejects the signup email', async () => {
+    const userId = '10000000-0000-4000-8000-000000000098'
+    const fetchedUrls: string[] = []
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      fetchedUrls.push(url)
+      if (url.includes('/turnstile/v0/siteverify')) {
+        return new Response(JSON.stringify({
+          success: true,
+          action: 'signup',
+          hostname: 'jovlo.8xd.io',
+        }), { headers: { 'content-type': 'application/json' } })
+      }
+      if (url.includes('/auth/v1/admin/generate_link')) {
+        return new Response(JSON.stringify({
+          id: userId,
+          email: 'traveler@example.com',
+          hashed_token: 'signup-token-hash',
+          verification_type: 'signup',
+        }), { headers: { 'content-type': 'application/json' } })
+      }
+      if (url === 'https://ses.tencentcloudapi.com/') {
+        return new Response(JSON.stringify({
+          Response: {
+            RequestId: 'request-quota',
+            Error: { Code: 'LimitExceeded', Message: 'provider detail' },
+          },
+        }), { status: 400, headers: { 'content-type': 'application/json' } })
+      }
+      if (url.endsWith(`/auth/v1/admin/users/${userId}`)) return new Response(null, { status: 204 })
+      throw new Error(`Unexpected fetch: ${url}`)
+    })
+    try {
+      const response = await app.request('https://jovlo.8xd.io/supabase/auth/v1/signup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email: 'traveler@example.com',
+          password: 'password123',
+          gotrue_meta_security: { captcha_token: 'challenge-signup' },
+        }),
+      }, {
+        JOVLO_MODE: 'production',
+        SUPABASE_URL: 'https://fixed-project.supabase.co',
+        SUPABASE_PUBLISHABLE_KEY: 'public-key',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+        TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
+        TENCENTCLOUD_SECRET_ID: 'AKIDTEST',
+        TENCENTCLOUD_SECRET_KEY: 'tencent-secret',
+        TENCENT_SES_FROM: 'Jovlo.ai <no-reply@auth.8xd.io>',
+        TENCENT_SES_SIGNUP_TEMPLATE_ID: '123',
+      })
+      const body = (await response.json()) as { message: string }
+      expect(response.status).toBe(429)
+      expect(body.message).toBe('邮件发送额度不足')
+      expect(fetchedUrls).toContain(`https://fixed-project.supabase.co/auth/v1/admin/users/${userId}`)
     } finally {
       fetchMock.mockRestore()
     }

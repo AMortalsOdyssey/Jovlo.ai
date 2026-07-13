@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { AppError, mapDatabaseError } from '../lib/errors'
 import type { AppContext, AuthenticatedUser } from '../types'
+import { handleManagedAuthEmail } from './auth-email'
 import { verifyTurnstileChallenge, type TurnstileAction } from './turnstile'
 
 const SupabaseUserSchema = z.object({ id: z.string().uuid() }).passthrough()
@@ -99,6 +100,22 @@ export async function proxySupabaseAuthRequest(context: AppContext): Promise<Res
     const turnstileAction = requiredTurnstileAction(authPath, context.req.method, requestUrl)
     if (turnstileAction) {
       await verifyTurnstileChallenge(context, captchaTokenFromBody(rawBody), turnstileAction)
+    }
+    if (context.get('mode') === 'production' && authPath === '/signup') {
+      return handleManagedAuthEmail(
+        context,
+        'signup',
+        rawBody,
+        requestUrl.searchParams.get('redirect_to'),
+      )
+    }
+    if (context.get('mode') === 'production' && authPath === '/recover') {
+      return handleManagedAuthEmail(
+        context,
+        'recovery',
+        rawBody,
+        requestUrl.searchParams.get('redirect_to'),
+      )
     }
   }
 

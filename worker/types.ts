@@ -32,6 +32,7 @@ export type Env = {
   BUILD_SHA?: string
   SUPABASE_URL?: string
   SUPABASE_PUBLISHABLE_KEY?: string
+  SUPABASE_SERVICE_ROLE_KEY?: string
   TURNSTILE_SECRET_KEY?: string
   AMAP_WEB_SERVICE_KEY?: string
   AMAP_SECURITY_JSCODE?: string
