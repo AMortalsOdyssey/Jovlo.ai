@@ -298,9 +298,9 @@
 }
 
 .feature-card:hover {
-  border-color: rgb(217 109 48 / 45%);
+  border-color: var(--gold-line);
   box-shadow: var(--shadow-raised);
-  transform: translateY(-1px);
+  transform: translateY(-3px);
 }
 
 .feature-card-header,
@@ -1292,12 +1292,23 @@
   gap: var(--space-2);
 }
 
+/* 标题链接：悬停时下划线从左侧展开，移走收回 */
 .feature-card-title a {
   color: inherit;
+  background-image: linear-gradient(var(--gold), var(--gold));
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0% 2px;
   text-decoration: none;
+  transition:
+    color var(--motion-state) var(--ease-out),
+    background-size var(--motion-state) var(--ease-out);
 }
 
-.feature-card-title a:hover { color: var(--brand-text); }
+.feature-card-title a:hover {
+  color: var(--gold-text);
+  background-size: 100% 2px;
+}
 
 .trips-date-block {
   flex: 0 0 auto;
@@ -1324,7 +1335,18 @@
   text-decoration: none;
 }
 
-.trips-card-shortcuts a:hover { color: var(--brand-text); background: var(--brand-tint); }
+.trips-card-shortcuts a svg {
+  transition: transform var(--motion-state) var(--ease-out);
+}
+
+.trips-card-shortcuts a:hover {
+  color: var(--gold-text);
+  background: var(--gold-tint);
+}
+
+.trips-card-shortcuts a:hover svg {
+  transform: translateX(2px);
+}
 
 .new-trip-choice-row {
   display: grid;

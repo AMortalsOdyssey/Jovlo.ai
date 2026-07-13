@@ -47,6 +47,11 @@
   width: 36px;
   height: 36px;
   filter: drop-shadow(0 3px 6px rgb(0 0 0 / 22%));
+  transition: transform var(--motion-state) var(--ease-spring);
+}
+
+.home-brand:hover img {
+  transform: scale(1.08) rotate(-4deg);
 }
 
 .home-account {
@@ -119,7 +124,23 @@
   font-size: 14px;
   font-weight: 750;
   text-decoration: none;
-  transition: background-color var(--motion-press) var(--ease-out), transform var(--motion-press) var(--ease-out);
+  transition:
+    background-color var(--motion-press) var(--ease-out),
+    box-shadow var(--motion-state) var(--ease-out),
+    transform var(--motion-state) var(--ease-out);
+}
+
+/* 悬停时按钮轻抬、末尾箭头顺势位移，移走即归位 */
+.home-action svg:last-child {
+  transition: transform var(--motion-state) var(--ease-out);
+}
+
+.home-action--primary:hover svg:last-child {
+  transform: translateX(3px);
+}
+
+.home-action--quiet:hover svg:last-child {
+  transform: translateY(3px);
 }
 
 .home-action--primary {
@@ -130,6 +151,8 @@
 
 .home-action--primary:hover {
   background: var(--brand-deep);
+  box-shadow: 0 14px 30px rgb(75 36 12 / 32%);
+  transform: translateY(-2px);
 }
 
 .home-action--quiet {
@@ -222,6 +245,27 @@
   align-items: center;
   gap: var(--space-3);
   border-bottom: 1px solid var(--line);
+  transition: background-color var(--motion-state) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .home-route__list li:hover {
+    background: var(--gold-tint);
+  }
+
+  /* 导航箭头默认藏起，悬停该行时才滑入 */
+  .home-route__list .home-route__nav {
+    opacity: 0;
+    transform: translateX(-6px);
+    transition:
+      opacity var(--motion-state) var(--ease-out),
+      transform var(--motion-state) var(--ease-out);
+  }
+
+  .home-route__list li:hover .home-route__nav {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .home-route__list li:not(:last-child)::after {
@@ -376,6 +420,14 @@
   border: 1px solid var(--header-line);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-raised);
+  transition:
+    box-shadow var(--motion-route) var(--ease-out),
+    transform var(--motion-route) var(--ease-out);
+}
+
+.home-today__day:hover {
+  box-shadow: var(--shadow-float);
+  transform: translateY(-6px);
 }
 
 .home-today__date {
@@ -468,7 +520,8 @@
 }
 
 .home-reveal {
-  animation: home-reveal 560ms var(--ease-out) both;
+  /* backwards（而非 both）：入场结束后把 transform 交还给 hover 等状态样式 */
+  animation: home-reveal 560ms var(--ease-out) backwards;
 }
 
 @keyframes home-reveal {
