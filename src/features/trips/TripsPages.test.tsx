@@ -32,7 +32,7 @@ describe('trip entry pages', () => {
     await user.click(screen.getByRole('button', { name: '下一步' }))
     await user.click(screen.getByRole('button', { name: '查看草案' }))
 
-    expect(screen.getByText('模板参考')).toBeInTheDocument()
+    expect(screen.getByText('海南示例')).toBeInTheDocument()
     expect(screen.getByText(/不是高德道路算路结果/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '开始编辑' })).toBeEnabled()
   })

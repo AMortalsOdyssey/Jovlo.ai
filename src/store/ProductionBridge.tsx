@@ -160,7 +160,7 @@ export class ProductionSyncController {
         draftRevision,
         snapshot,
         derivedSnapshot,
-        message: '从海南自驾模板创建',
+        message: '从示例路书创建',
         source: 'template',
       }),
     })

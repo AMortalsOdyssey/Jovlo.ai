@@ -136,7 +136,7 @@ export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProp
         <div className="public-brand"><img src="/jovlo-mark.svg" alt="" /><span>Jovlo</span></div>
         <div className="public-hero-grid">
           <div className="public-hero-copy">
-            <p>{view.scope === 'day' ? '海南自驾 · 单天路书' : '海南自驾路书'}</p>
+            <p>{view.scope === 'day' ? '单天路书' : '完整路书'}</p>
             <h1>{getTripTitle(trip)}</h1>
             <div className="public-hero-meta"><span>{days.length} 天</span><span>{totalStops} 个停靠点</span><span>{(getTripDistanceMeters(derived) / 1000).toFixed(0)} km</span></div>
           </div>
@@ -173,7 +173,7 @@ export function PublicTripPage({ snapshot, derivedSnapshot }: PublicTripPageProp
 
       <article className="public-itinerary">
         <header className="public-day-heading">
-          <div><p>{disclosure.showExactDates ? formatDateLabel(selectedDay.date) : `Day ${selectedDay.dayIndex}`}</p><h2>Day {selectedDay.dayIndex} · {selectedDay.overnightLabel ?? selectedDay.stops.at(-1)?.name ?? '海南'}</h2></div>
+          <div><p>{disclosure.showExactDates ? formatDateLabel(selectedDay.date) : `Day ${selectedDay.dayIndex}`}</p><h2>Day {selectedDay.dayIndex} · {selectedDay.overnightLabel ?? selectedDay.stops.at(-1)?.name ?? '目的地待定'}</h2></div>
           <div><span>驾驶</span><strong>{formatMinutes(readNumber(daySchedule, 'drivingMinutes') ?? 0)}</strong></div>
         </header>
 

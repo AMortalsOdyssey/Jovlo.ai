@@ -110,7 +110,7 @@ export function PublicReportPage() {
         <div className="report-cover-copy">
           <p>{isActual ? '实际旅行报告' : '计划路书报告'} · 第 {report.generationNo} 版</p>
           <h1>{getTripTitle(trip)}</h1>
-          <div className="report-cover-route"><MapPin aria-hidden="true" size={18} /><span>{days[0]?.stops[0]?.name ?? '海南'} → {days.at(-1)?.stops.at(-1)?.name ?? '海南'}</span></div>
+          <div className="report-cover-route"><MapPin aria-hidden="true" size={18} /><span>{days[0]?.stops[0]?.name ?? '起点待定'} → {days.at(-1)?.stops.at(-1)?.name ?? '终点待定'}</span></div>
         </div>
         <div className="report-cover-meta"><span>基于行程 v{reportVersionNo ?? '?'}</span><span>生成于 {formatDateLabel(report.createdAt)}</span></div>
       </header>
@@ -136,7 +136,7 @@ export function PublicReportPage() {
             <div className="report-days">
               {days.map((day) => (
                 <article className="report-day" key={day.id}>
-                  <header><span>Day {day.dayIndex}</span><h3>{day.overnightLabel ?? day.stops.at(-1)?.name ?? '海南'}</h3><small>{disclosure.showExactDates ? formatDateLabel(day.date) : '日期已隐藏'}</small></header>
+                  <header><span>Day {day.dayIndex}</span><h3>{day.overnightLabel ?? day.stops.at(-1)?.name ?? '目的地待定'}</h3><small>{disclosure.showExactDates ? formatDateLabel(day.date) : '日期已隐藏'}</small></header>
                   <RouteSpine>
                     {day.stops.map((stop, index) => {
                       const actual = actuals.find((item) => item.stopId === stop.id)

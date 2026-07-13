@@ -20,7 +20,7 @@ describe('MapCanvas fallback', () => {
     const { container } = render(<MapCanvas amapKey="" onReady={onReady} />)
 
     expect(screen.getByText('本地参考路线 · 非高德实时数据')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: /海南当日自驾本地参考路线/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /当日行车本地参考路线/ })).toBeInTheDocument()
     expect(container.querySelectorAll('.jovlo-reference-map__route').length).toBeGreaterThan(0)
     expect(container.querySelectorAll('[data-map-marker-kind="formal"]')).toHaveLength(4)
     expect(loadAmap).not.toHaveBeenCalled()

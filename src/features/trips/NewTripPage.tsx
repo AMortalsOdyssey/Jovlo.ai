@@ -140,7 +140,7 @@ export function NewTripPage() {
 
   const createDraft = () => {
     const payload = {
-      title: `${form.entry}到${form.exit} · 海南${form.days}日`,
+      title: `${form.entry}到${form.exit} · ${form.days}日行程`,
       intent: {
         startDate: form.startDate || undefined,
         days: form.days,
@@ -166,8 +166,8 @@ export function NewTripPage() {
   return (
     <PageShell width="reading">
       <PageHeader
-        title="创建海南自驾路书"
-        description="先确定会牵动整条路线的条件，地点细节进入编辑台后再慢慢共创。"
+        title="创建路书"
+        description="先用示例模板建立可编辑草案，地点细节进入编辑台后再继续调整。"
         trail={[{ label: '我的路书', to: '/trips' }]}
         backTo="/trips"
       />
@@ -185,12 +185,12 @@ export function NewTripPage() {
                   {[4, 5, 6, 7, 9].map((days) => <option value={days} key={days}>{days} 天</option>)}
                 </select>
               </FormField>
-              <FormField label="进岛地点">
+              <FormField label="示例起点">
                 <select value={form.entry} onChange={(event) => update('entry', event.target.value)}>
                   <option>海口</option><option>三亚</option>
                 </select>
               </FormField>
-              <FormField label="离岛地点">
+              <FormField label="示例终点">
                 <select value={form.exit} onChange={(event) => update('exit', event.target.value)}>
                   <option>三亚</option><option>海口</option>
                 </select>
@@ -274,9 +274,9 @@ export function NewTripPage() {
           <section className="feature-wizard-panel new-trip-preview">
             <div className="new-trip-reference-note">
               <div>
-                <StatusBadge tone="sun">模板参考</StatusBadge>
+                <StatusBadge tone="sun">海南示例</StatusBadge>
                 <h2>{form.entry} → {form.exit} · {form.days} 天</h2>
-                <p>路程来自人工核验的路线模板，仅用于判断走向和节奏，不是高德道路算路结果。</p>
+                <p>当前参考路线来自人工核验的海南模板，仅用于判断走向和节奏，不是高德道路算路结果。</p>
               </div>
               <div className="new-trip-preview-budget">
                 <span>预算参考</span>
@@ -298,7 +298,7 @@ export function NewTripPage() {
                 ))}
               </RouteSpine>
               <aside className="new-trip-summary-panel">
-                <div><MapPinned aria-hidden="true" size={20} /><span>进出岛</span><strong>{form.entry} → {form.exit}</strong></div>
+                <div><MapPinned aria-hidden="true" size={20} /><span>示例起终点</span><strong>{form.entry} → {form.exit}</strong></div>
                 <div><BedDouble aria-hidden="true" size={20} /><span>过夜锚点</span><strong>{Math.max(0, form.days - 1)} 晚</strong></div>
                 <div><Gauge aria-hidden="true" size={20} /><span>驾驶上限</span><strong>{form.maxDriveMinutesPerDay / 60} 小时/天</strong></div>
                 <div><Route aria-hidden="true" size={20} /><span>节奏</span><strong>{form.pace === 'relaxed' ? '轻松' : form.pace === 'packed' ? '尽量多玩' : '均衡'}</strong></div>

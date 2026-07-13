@@ -38,7 +38,7 @@ export function TripsPage() {
       <PageHeader
         trail={[]}
         title="我的路书"
-        description="继续完善正在规划的路线，或从一组高影响条件开始新的海南自驾草案。"
+        description="继续完善正在规划的路线，或从日期、目的地与旅行节奏开始一份新攻略。"
         actions={<ButtonLink to="/trips/new" variant="primary" icon={Plus}>新建路书</ButtonLink>}
       />
 
@@ -46,8 +46,8 @@ export function TripsPage() {
         <EmptyState
           icon={Route}
           title="还没有路书"
-          description="先把日期、进出岛地点和旅行节奏定下来，首份草案大约一分钟可编辑。"
-          action={<ButtonLink to="/trips/new" variant="primary" icon={Plus}>创建海南自驾路书</ButtonLink>}
+          description="先把日期、起终点和旅行节奏定下来，首份草案大约一分钟可编辑。"
+          action={<ButtonLink to="/trips/new" variant="primary" icon={Plus}>创建第一份路书</ButtonLink>}
         />
       ) : (
         <section className="feature-section" aria-label="路书列表">
@@ -94,7 +94,7 @@ export function TripsPage() {
                       { label: '天数', value: `${days.length || readString(intent, 'days') || 0} 天`, note: `${days.reduce((sum, day) => sum + day.stops.length, 0)} 个停靠点` },
                       { label: '总驾驶', value: driveMinutes ? formatMinutes(driveMinutes) : '待计算', note: distance ? `${(distance / 1000).toFixed(0)} km` : '路线摘要待生成' },
                       { label: '计划预算', value: budget ? formatMoney(budget) : '待估算', note: readString(intent, 'pace') === 'relaxed' ? '轻松节奏' : '按当前设置' },
-                      { label: '路线', value: `${entry}–${exit}`, note: '海南自驾' },
+                      { label: '路线', value: `${entry}–${exit}`, note: '旅行路书' },
                     ]}
                   />
 

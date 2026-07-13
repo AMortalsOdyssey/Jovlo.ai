@@ -160,7 +160,7 @@ export function ReportsPage() {
                 <div className="reports-generating"><Clock3 aria-hidden="true" size={28} /><h3>正在生成</h3><p>报告会绑定当前发布版本和两个快照，不会读取后续草稿。</p></div>
               ) : (
                 <div className="reports-document-preview">
-                  <div className="reports-cover-mini"><BarChart3 aria-hidden="true" size={28} /><span>{getTripTitle(state.trip)}</span><strong>{days.length} 日海南自驾</strong></div>
+                  <div className="reports-cover-mini"><BarChart3 aria-hidden="true" size={28} /><span>{getTripTitle(state.trip)}</span><strong>{days.length} 日行程</strong></div>
                   <div className="reports-preview-stats"><span>总距离<strong>{(getTripDistanceMeters(state.derived) / 1000).toFixed(0)} km</strong></span><span>计划预算<strong>{formatMoney(plannedBudget)}</strong></span><span>{selected.type === 'actual' ? '完成记录' : '停靠点'}<strong>{selected.type === 'actual' ? `${visited}/${days.reduce((sum, day) => sum + day.stops.length, 0)}` : days.reduce((sum, day) => sum + day.stops.length, 0)}</strong></span></div>
                   {selectedIsStale ? <div className="feature-notice feature-notice--warning"><AlertCircle aria-hidden="true" size={18} /><div><strong>数据已过期</strong><span>当前行程已更新到 v{currentVersionNo}；这份内容仍保持生成时的固定快照。</span></div></div> : null}
                 </div>

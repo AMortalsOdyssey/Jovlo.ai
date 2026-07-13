@@ -677,7 +677,7 @@ export function MapCanvas({
             aria-labelledby="jovlo-reference-map-title jovlo-reference-map-description"
             style={{ transform: `scale(${fallbackScale})` }}
           >
-            <title id="jovlo-reference-map-title">海南当日自驾本地参考路线</title>
+            <title id="jovlo-reference-map-title">当日行车本地参考路线</title>
             <desc id="jovlo-reference-map-description">
               非高德实时数据。正式地点以独立编号显示，候选地点按邻近位置聚合。
             </desc>

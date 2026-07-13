@@ -14,7 +14,7 @@ type AuthPageLayoutProps = PropsWithChildren<{
 export function AuthPageLayout({
   children,
   description,
-  eyebrow = 'AI 路书共创',
+  eyebrow = '攻略规划 · 出行执行',
   footer,
   showCopyright = false,
   title,
@@ -42,7 +42,7 @@ export function AuthPageLayout({
 
       <aside className="auth-journey" aria-hidden="true">
         <div className="auth-journey__heading">
-          <span>海南环岛 · 7 日</span>
+          <span>示例路书 · 7 日</span>
           <strong>下一站，万宁</strong>
         </div>
         <div className="auth-route-line">
