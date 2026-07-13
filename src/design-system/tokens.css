@@ -10,7 +10,8 @@
   --surface: #fffdf8;
   --ink: #2e2418;
   --muted: #7a6a58;
-  --line: #e7d9c4;
+  /* Translucent ink hairline (kintsugi-style rule): reads as a fine line on any warm surface. */
+  --line: rgb(93 64 28 / 16%);
   --brand: #d96d30;
   --brand-strong: #c25518;
   --brand-deep: #a84708;
@@ -19,6 +20,16 @@
   --sun: #e99a2d;
   --coral: #c94f45;
   --cocoa: #8a624b;
+
+  /*
+   * Kinpaku gold accent family: selection states, tags, and section numbering.
+   * Distinct from --brand (primary CTA orange) so gold reads as "highlight",
+   * never as "action".
+   */
+  --gold: #c8942f;
+  --gold-text: #8a6410;
+  --gold-tint: rgb(200 148 47 / 13%);
+  --gold-line: rgb(200 148 47 / 48%);
 
   /* AA-safe semantic text and icon colors on --surface */
   --brand-text: #b04a12;
@@ -40,7 +51,7 @@
   /* Warm chrome surfaces keep navigation distinct without competing with content. */
   --header-surface: #f6e6d5;
   --header-surface-soft: #fff5e9;
-  --header-line: #dfc3a5;
+  --header-line: rgb(93 64 28 / 20%);
 
   /* Warm map ground colors (reference map + AMap fallback) */
   --map-land: #f2ebda;

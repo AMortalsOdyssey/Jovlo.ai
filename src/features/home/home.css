@@ -184,8 +184,9 @@
 }
 
 .home-section__heading > span {
-  color: var(--brand-text);
+  color: var(--gold-text);
   font: 700 12px / 18px var(--font-numeric);
+  letter-spacing: 0.08em;
 }
 
 .home-section__heading h2 {
@@ -286,8 +287,8 @@
 }
 
 .home-impact__change {
-  border-top: 1px solid rgb(255 255 255 / 22%);
-  border-bottom: 1px solid rgb(255 255 255 / 22%);
+  border-top: 1px solid rgb(233 178 82 / 30%);
+  border-bottom: 1px solid rgb(233 178 82 / 30%);
 }
 
 .home-impact__title {
@@ -316,13 +317,13 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 0;
   margin: 0;
-  border-top: 1px solid rgb(255 255 255 / 14%);
-  border-bottom: 1px solid rgb(255 255 255 / 14%);
+  border-top: 1px solid rgb(233 178 82 / 18%);
+  border-bottom: 1px solid rgb(233 178 82 / 18%);
 }
 
 .home-impact__change dl > div {
   padding: var(--space-6) var(--space-4);
-  border-right: 1px solid rgb(255 255 255 / 14%);
+  border-right: 1px solid rgb(233 178 82 / 18%);
 }
 
 .home-impact__change dl > div:last-child {

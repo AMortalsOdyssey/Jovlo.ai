@@ -55,8 +55,9 @@
   padding: var(--space-1) var(--space-3);
   gap: var(--space-1);
   align-items: center;
-  color: var(--brand-text) !important;
-  background: var(--brand-tint);
+  color: var(--gold-text) !important;
+  background: var(--gold-tint);
+  border: 1px solid var(--gold-line);
   border-radius: var(--radius-pill);
   font-weight: 700;
   white-space: nowrap;

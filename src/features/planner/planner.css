@@ -259,8 +259,8 @@ button.jovlo-trip-header__status:hover {
 }
 
 .jovlo-day-rail__item[data-selected] {
-  background: var(--brand-tint);
-  border-left-color: var(--brand);
+  background: var(--gold-tint);
+  border-left-color: var(--gold);
 }
 
 .jovlo-day-rail__overview {
@@ -627,8 +627,8 @@ button.jovlo-day-health:hover {
 }
 
 .jovlo-stop-card__actions button:hover {
-  color: var(--brand-text);
-  background: var(--brand-tint);
+  color: var(--gold-text);
+  background: var(--gold-tint);
 }
 
 .jovlo-stop-card__actions .jovlo-stop-card__delete {
@@ -1164,8 +1164,8 @@ button.jovlo-day-health:hover {
 
 .jovlo-mobile-nav__item:hover,
 .jovlo-mobile-nav__item[data-selected] {
-  color: var(--brand-text);
-  background: var(--brand-tint);
+  color: var(--gold-text);
+  background: var(--gold-tint);
 }
 
 .jovlo-mobile-nav__item[data-selected] {
@@ -1495,8 +1495,8 @@ button.jovlo-day-health:hover {
 }
 
 .jovlo-map-layer-panel button[aria-pressed="true"] {
-  color: var(--brand-strong);
-  background: var(--brand-tint);
+  color: var(--gold-text);
+  background: var(--gold-tint);
 }
 
 .jovlo-map-layer-panel button:focus-visible {

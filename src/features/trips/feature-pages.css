@@ -447,9 +447,9 @@
 }
 
 .feature-choice input:checked + span {
-  color: var(--brand-text);
-  background: var(--brand-tint);
-  border-color: var(--brand);
+  color: var(--gold-text);
+  background: var(--gold-tint);
+  border-color: var(--gold);
 }
 
 .feature-choice input:focus-visible + span {
@@ -479,7 +479,7 @@
   font-size: var(--text-supporting-size);
   font-weight: 700;
 }
-.feature-segmented input:checked + span { color: var(--brand-text); background: var(--surface); }
+.feature-segmented input:checked + span { color: var(--gold-text); background: var(--surface); box-shadow: inset 0 0 0 1px var(--gold-line); }
 .feature-segmented input:focus-visible + span { outline: 2px solid var(--brand-strong); outline-offset: 1px; }
 
 .feature-stepper {
