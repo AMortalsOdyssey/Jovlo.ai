@@ -626,7 +626,7 @@ export function PlanPage() {
           ) : null}
         </div>
       ) : null}
-      <RouteTimeline>
+      <RouteTimeline flipKey={day.stops.map((stop) => stop.id).join('|')}>
         {day.stops.map((stop, index) => {
           const place = state.trip.placeRefs[stop.placeId]
           const scheduled = schedule?.stops.find((item) => item.stopId === stop.id)
@@ -634,7 +634,7 @@ export function PlanPage() {
           const selected = stop.id === state.selectedStopId
           const replacement = state.candidates.find((item) => !Object.hasOwn(state.trip.placeRefs, item.placeId)) ?? state.candidates[0]
           return (
-            <div className="plan-route-fragment" key={stop.id}>
+            <div className="plan-route-fragment" key={stop.id} data-flip-id={stop.id}>
               <LegRow
                 distance={leg ? formatDistance(leg.distanceMeters) : undefined}
                 duration={leg ? formatDuration(leg.durationSeconds / 60) : undefined}

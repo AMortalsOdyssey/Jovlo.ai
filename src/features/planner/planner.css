@@ -487,9 +487,11 @@ button.jovlo-day-health:hover {
   border-color: var(--brand);
 }
 
-.jovlo-stop-card:hover {
-  box-shadow: var(--shadow-raised);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .jovlo-stop-card:hover {
+    box-shadow: var(--shadow-raised);
+    transform: translateY(-1px);
+  }
 }
 
 .jovlo-stop-card[data-selected] {
@@ -851,18 +853,17 @@ button.jovlo-day-health:hover {
   justify-content: space-between;
   background: var(--surface);
   border-bottom: 1px solid var(--sun);
-  animation: jovlo-impact-in var(--motion-state) var(--ease-out) both;
+  /* 高频面：每次编辑都会重挂载，入场只留 120ms 渐显，重播不可感知 */
+  animation: jovlo-impact-in var(--motion-press) var(--ease-out) both;
 }
 
 @keyframes jovlo-impact-in {
   from {
     opacity: 0;
-    transform: translateY(calc(-1 * var(--space-2)));
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -934,6 +935,18 @@ button.jovlo-day-health:hover {
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-float);
   animation: jovlo-snackbar-in var(--motion-state) var(--ease-out) both;
+}
+
+.jovlo-snackbar--closing {
+  animation: jovlo-snackbar-out var(--motion-state) var(--ease-out) both;
+  pointer-events: none;
+}
+
+@keyframes jovlo-snackbar-out {
+  to {
+    opacity: 0;
+    transform: translateY(var(--space-2));
+  }
 }
 
 @keyframes jovlo-snackbar-in {
@@ -1027,8 +1040,6 @@ button.jovlo-day-health:hover {
   border-bottom: 3px solid transparent;
   box-shadow: inset -1px 0 0 rgb(223 195 165 / 55%);
   transition:
-    min-width 180ms ease,
-    max-width 180ms ease,
     color 160ms ease,
     background-color 160ms ease;
 }
@@ -2496,8 +2507,7 @@ button.jovlo-day-health:hover {
     transform: none;
   }
 
-  .jovlo-skeleton,
-  .jovlo-trip-header__status-spinner {
+  .jovlo-skeleton {
     animation: none;
   }
 

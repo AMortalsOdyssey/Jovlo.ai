@@ -78,8 +78,10 @@
   transition: transform var(--motion-hover) var(--ease-magnetic);
 }
 
-.feature-trail__brand:hover img {
-  transform: scale(1.12) rotate(-4deg);
+@media (hover: hover) {
+  .feature-trail__brand:hover img {
+    transform: scale(1.12) rotate(-4deg);
+  }
 }
 
 .feature-trail__brand:hover span {
@@ -361,10 +363,12 @@
     transform var(--motion-hover) var(--ease-magnetic);
 }
 
-.feature-card:hover {
-  border-color: var(--gold-line);
-  box-shadow: var(--shadow-raised);
-  transform: translateY(-3px);
+@media (hover: hover) {
+  .feature-card:hover {
+    border-color: var(--gold-line);
+    box-shadow: var(--shadow-raised);
+    transform: translateY(-3px);
+  }
 }
 
 .feature-card-header,
@@ -1340,7 +1344,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .feature-spin { animation: none; }
   .feature-impact-bar { animation: none; }
   .feature-card:hover { transform: none; }
 }
@@ -1408,8 +1411,10 @@
   background: var(--gold-tint);
 }
 
-.trips-card-shortcuts a:hover svg {
-  transform: translateX(2px);
+@media (hover: hover) {
+  .trips-card-shortcuts a:hover svg {
+    transform: translateX(2px);
+  }
 }
 
 .new-trip-choice-row {

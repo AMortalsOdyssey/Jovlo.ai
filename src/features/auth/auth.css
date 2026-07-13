@@ -554,12 +554,13 @@
   cursor: pointer;
   text-decoration: none;
   transform: translateY(-50%);
-  transition: width var(--motion-state), background var(--motion-state);
+  /* 用 transform 滑出代替 width 动画，避免 layout 抖动 */
+  transition: transform var(--motion-state) var(--ease-out), background var(--motion-state);
 }
 
 .auth-session-control:hover:not(:disabled) {
-  width: 48px;
   background: var(--brand);
+  transform: translateY(-50%) translateX(-6px);
 }
 
 .auth-session-control:disabled {

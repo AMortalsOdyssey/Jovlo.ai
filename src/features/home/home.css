@@ -50,8 +50,10 @@
   transition: transform var(--motion-hover) var(--ease-magnetic);
 }
 
-.home-brand:hover img {
-  transform: scale(1.08) rotate(-4deg);
+@media (hover: hover) {
+  .home-brand:hover img {
+    transform: scale(1.08) rotate(-4deg);
+  }
 }
 
 .home-account {
@@ -135,12 +137,14 @@
   transition: transform var(--motion-hover) var(--ease-magnetic);
 }
 
-.home-action--primary:hover svg:last-child {
-  transform: translateX(3px);
-}
+@media (hover: hover) {
+  .home-action--primary:hover svg:last-child {
+    transform: translateX(3px);
+  }
 
-.home-action--quiet:hover svg:last-child {
-  transform: translateY(3px);
+  .home-action--quiet:hover svg:last-child {
+    transform: translateY(3px);
+  }
 }
 
 .home-action--primary {
@@ -151,8 +155,13 @@
 
 .home-action--primary:hover {
   background: var(--brand-deep);
-  box-shadow: 0 14px 30px rgb(75 36 12 / 32%);
-  transform: translateY(-2px);
+}
+
+@media (hover: hover) {
+  .home-action--primary:hover {
+    box-shadow: 0 14px 30px rgb(75 36 12 / 32%);
+    transform: translateY(-2px);
+  }
 }
 
 .home-action--quiet {
@@ -425,9 +434,11 @@
     transform var(--motion-hover) var(--ease-magnetic);
 }
 
-.home-today__day:hover {
-  box-shadow: var(--shadow-float);
-  transform: translateY(-6px);
+@media (hover: hover) {
+  .home-today__day:hover {
+    box-shadow: var(--shadow-float);
+    transform: translateY(-6px);
+  }
 }
 
 .home-today__date {

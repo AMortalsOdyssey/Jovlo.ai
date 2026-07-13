@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 
 import { IconButton } from '../../components'
@@ -21,6 +21,8 @@ export function Snackbar({
   onAction,
   onDismiss,
 }: SnackbarProps) {
+  const [rendered, setRendered] = useState(open)
+
   useEffect(() => {
     if (!open || duration <= 0) return undefined
 
@@ -28,10 +30,25 @@ export function Snackbar({
     return () => window.clearTimeout(timeout)
   }, [duration, onDismiss, open])
 
-  if (!open) return null
+  // 关闭时先播 160ms 退场动画，再真正卸载，避免瞬间蒸发
+  useEffect(() => {
+    if (open) {
+      setRendered(true)
+      return undefined
+    }
+    if (!rendered) return undefined
+    const timeout = window.setTimeout(() => setRendered(false), 180)
+    return () => window.clearTimeout(timeout)
+  }, [open, rendered])
+
+  if (!open && !rendered) return null
 
   return (
-    <div className="jovlo-snackbar" role="status" aria-live="polite">
+    <div
+      className={open ? 'jovlo-snackbar' : 'jovlo-snackbar jovlo-snackbar--closing'}
+      role="status"
+      aria-live="polite"
+    >
       <span className="jovlo-snackbar__message">{message}</span>
       {onAction && (
         <button type="button" className="jovlo-snackbar__action" onClick={onAction}>
