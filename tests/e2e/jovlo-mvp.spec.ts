@@ -46,6 +46,10 @@ test('legacy import address now opens the focused MCP Agent flow', async ({ page
   await expect(page.getByRole('heading', { name: 'Agent 协作' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Agent 连接流程' })).toContainText('建立 MCP 连接')
   await expect(page.getByText('开发者工具 · 手动导入变更文件')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '退出本机 Agent' })).toBeVisible()
+  await page.getByRole('button', { name: '切换账号或路书' }).click()
+  await expect(page.getByRole('dialog', { name: '切换 Agent 账号或路书' })).toContainText('旧连接')
+  await page.getByRole('button', { name: '关闭' }).click()
 
   const hasHorizontalOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > window.innerWidth,

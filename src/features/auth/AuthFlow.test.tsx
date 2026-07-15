@@ -137,16 +137,25 @@ describe('Supabase authentication flow', () => {
 
   it('shows a scoped OAuth confirmation for the MCP Agent', async () => {
     authMocks.getSession.mockResolvedValue({ data: { session: authenticatedSession }, error: null })
+    const user = userEvent.setup()
     renderAuthRoute(
       '/oauth/consent?authorization_id=authorization-1',
       '/oauth/consent',
       <OAuthConsentPage />,
+      <Route path="/login" element={<CurrentLocation />} />,
     )
 
     expect(await screen.findByRole('heading', { name: '允许 Agent 修改这本路书？' })).toBeInTheDocument()
     expect(await screen.findByText('Codex')).toBeInTheDocument()
     expect(screen.getByText('读取路书、单日安排和版本历史')).toBeInTheDocument()
     expect(screen.getByText('每次修改立即生成可回退版本')).toBeInTheDocument()
+    expect(screen.getByText('traveler@example.com')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '换一个账号' }))
+    expect(authMocks.signOut).toHaveBeenCalledWith({ scope: 'local' })
+    expect(await screen.findByText(/当前位置 \/login/)).toHaveTextContent(
+      '/login?returnTo=%2Foauth%2Fconsent%3Fauthorization_id%3Dauthorization-1',
+    )
   })
 
   it('signs in with normalized email and returns to the private destination', async () => {

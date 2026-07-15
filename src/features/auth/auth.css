@@ -386,6 +386,25 @@
 
 .oauth-consent li svg { color: var(--sea-text); }
 
+.oauth-consent__account {
+  display: flex;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--canvas);
+  border-left: 3px solid var(--brand);
+}
+
+.oauth-consent__account > div { display: grid; min-width: 0; gap: 2px; }
+.oauth-consent__account small { color: var(--muted); font-size: 11px; }
+.oauth-consent__account strong { overflow-wrap: anywhere; font-size: 13px; }
+.oauth-consent__account button { display: inline-flex; min-height: 34px; padding: 0 var(--space-3); flex: 0 0 auto; align-items: center; gap: var(--space-2); color: var(--brand-text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-control); cursor: pointer; font: 700 12px / 1 var(--font-ui); }
+.oauth-consent__account button:hover:not(:disabled) { border-color: var(--brand); }
+.oauth-consent__account button:disabled { cursor: wait; opacity: 0.65; }
+.oauth-consent__account button svg { width: 15px; }
+
 .oauth-consent__actions {
   display: grid;
   grid-template-columns: 0.7fr 1.3fr;
@@ -404,6 +423,11 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
+}
+
+@media (max-width: 520px) {
+  .oauth-consent__account { align-items: stretch; flex-direction: column; }
+  .oauth-consent__account button { justify-content: center; }
 }
 
 .auth-account {

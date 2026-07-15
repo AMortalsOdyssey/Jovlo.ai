@@ -1,6 +1,6 @@
-import { ArrowRight, Bot, Check, LoaderCircle, ShieldCheck, X } from 'lucide-react'
+import { ArrowRight, Bot, Check, LoaderCircle, Repeat2, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Navigate, useLocation, useSearchParams } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { getSupabaseClient } from '@/lib/supabase'
 import { AuthPageLayout } from './AuthPageLayout'
@@ -15,12 +15,13 @@ type AuthorizationDetails = {
 }
 
 export function OAuthConsentPage() {
-  const { status } = useAuth()
+  const { signOut, status } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const authorizationId = searchParams.get('authorization_id')
   const [details, setDetails] = useState<AuthorizationDetails | null>(null)
-  const [busy, setBusy] = useState<'approve' | 'deny' | null>(null)
+  const [busy, setBusy] = useState<'approve' | 'deny' | 'switch' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -74,12 +75,25 @@ export function OAuthConsentPage() {
     }
   }
 
+  const switchAccount = async () => {
+    setBusy('switch')
+    setError(null)
+    try {
+      await signOut({ scope: 'local' })
+      const returnTo = `${location.pathname}${location.search}`
+      navigate(`/login?returnTo=${encodeURIComponent(returnTo)}`, { replace: true })
+    } catch {
+      setError('暂时无法切换账号，请稍后重试。')
+      setBusy(null)
+    }
+  }
+
   return (
     <AuthPageLayout
       eyebrow="Agent 协作授权"
       title="允许 Agent 修改这本路书？"
       description="授权只对你创建的临时连接生效，可随时在 Jovlo 撤销。"
-      footer={<p className="auth-privacy">当前账号：{details?.user.email ?? '正在确认…'}</p>}
+      footer={<p className="auth-privacy">连接只属于创建它的同一账号和当前路书，不能跨账号复用。</p>}
     >
       <section className="oauth-consent" aria-live="polite">
         {details ? (
@@ -93,6 +107,12 @@ export function OAuthConsentPage() {
               <li><Check aria-hidden="true" />修改行程、时间、住宿、预算和来源</li>
               <li><ShieldCheck aria-hidden="true" />每次修改立即生成可回退版本</li>
             </ul>
+            <div className="oauth-consent__account">
+              <div><small>本次授权账号</small><strong>{details.user.email}</strong></div>
+              <button type="button" disabled={Boolean(busy)} onClick={() => void switchAccount()}>
+                {busy === 'switch' ? <LoaderCircle className="auth-spinner" /> : <Repeat2 />} 换一个账号
+              </button>
+            </div>
             <div className="oauth-consent__actions">
               <button className="auth-back" type="button" disabled={Boolean(busy)} onClick={() => void decide('deny')}>
                 {busy === 'deny' ? <LoaderCircle className="auth-spinner" /> : <X />} 拒绝

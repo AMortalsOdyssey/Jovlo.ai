@@ -232,7 +232,7 @@ try {
     params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "Jovlo production E2E", version: "1" } },
   });
   assert(initializedMcp.status === 200 && initializedMcp.body?.result?.serverInfo?.name === "Jovlo", "MCP initialize 失败。");
-  assert(initializedMcp.body?.result?.instructions?.includes("绝不删除历史") && initializedMcp.body?.result?.instructions?.includes("confirmMajorChange=true"), "MCP initialize 未返回完整 Agent 协作说明。");
+  assert(initializedMcp.body?.result?.instructions?.includes("绝不删除历史") && initializedMcp.body?.result?.instructions?.includes("confirmMajorChange=true") && initializedMcp.body?.result?.instructions?.includes("绝不能跨账号复用"), "MCP initialize 未返回完整 Agent 协作说明。");
   const tools = await mcp(connectionId, { token: ownerToken, method: "tools/list", id: 2 });
   const toolNames = tools.body?.result?.tools?.map((tool) => tool.name) ?? [];
   assert(tools.status === 200 && toolNames.length === 6 && toolNames.includes("jovlo_apply_trip_changes"), "MCP tools/list 不完整。");
@@ -375,7 +375,7 @@ try {
     checks: [
       "邮箱密码会话恢复与首次路书创建",
       "登录接口缺少 Turnstile 时拒绝",
-      "MCP OAuth、能力说明、上下文建议、小版本写入、版本分级、账号隔离与撤销",
+      "MCP OAuth、能力说明、本地切换提示、上下文建议、小版本写入、版本分级、账号隔离与撤销",
       "总览固定分享",
       "单天服务端过滤与总览跳转",
       "匿名只读访问",

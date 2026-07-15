@@ -8,16 +8,22 @@ import {
   Link2,
   LoaderCircle,
   LogIn,
+  LogOut,
+  Laptop,
   PlugZap,
   RefreshCcw,
+  Repeat2,
   Route,
   ShieldCheck,
+  UserRoundCog,
   WalletCards,
   History,
+  X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
+import { useAuth } from '@/features/auth/AuthProvider'
 import { apiRequest } from '@/lib/api'
 import { useTripStore } from '@/store/useTripStore'
 import {
@@ -28,9 +34,13 @@ import {
   SegmentedControl,
   StatusBadge,
 } from '@/features/trips/feature-ui'
+import {
+  buildAgentClientAuthGuide,
+  buildConnectionCommand,
+  type AgentClientKind,
+} from './agent-client-auth'
 import './agent-connection.css'
 
-type ClientKind = 'codex' | 'claude' | 'generic'
 type ConnectionStatus = 'pending' | 'active' | 'expired' | 'revoked'
 
 type McpConnection = {
@@ -45,16 +55,6 @@ type McpConnection = {
   expiresAt: string
   revokedAt?: string | null
   createdAt: string
-}
-
-function connectionCommand(kind: ClientKind, url: string) {
-  if (kind === 'codex') return `codex mcp add jovlo --url ${url}\ncodex mcp login jovlo`
-  if (kind === 'claude') return `claude mcp add --transport http --scope user jovlo ${url}`
-  return JSON.stringify({
-    mcpServers: {
-      jovlo: { type: 'streamable-http', url },
-    },
-  }, null, 2)
 }
 
 async function copyText(value: string) {
@@ -88,12 +88,16 @@ const STATUS_COPY: Record<ConnectionStatus, { label: string; note: string; tone:
 
 export function AgentConnectionPage() {
   const { tripId = '' } = useParams()
+  const navigate = useNavigate()
+  const { signOut, user } = useAuth()
   const title = useTripStore((state) => state.trip.title)
-  const [kind, setKind] = useState<ClientKind>('codex')
+  const [kind, setKind] = useState<AgentClientKind>('codex')
   const [connections, setConnections] = useState<McpConnection[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [busy, setBusy] = useState<'load' | 'create' | 'revoke' | null>('load')
+  const [busy, setBusy] = useState<'load' | 'create' | 'revoke' | 'switch-account' | null>('load')
   const [copied, setCopied] = useState(false)
+  const [sessionDialog, setSessionDialog] = useState<'logout' | 'switch' | null>(null)
+  const [sessionCopied, setSessionCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const loadConnections = useCallback(async (quiet = false) => {
@@ -136,7 +140,8 @@ export function AgentConnectionPage() {
   const selected = connections.find((connection) => connection.id === selectedId) ?? null
   const origin = typeof window === 'undefined' ? 'https://jovlo.8xd.io' : window.location.origin
   const mcpUrl = selected ? `${origin}/mcp/${selected.id}` : ''
-  const command = useMemo(() => selected ? connectionCommand(kind, mcpUrl) : '', [kind, mcpUrl, selected])
+  const command = useMemo(() => selected ? buildConnectionCommand(kind, mcpUrl) : '', [kind, mcpUrl, selected])
+  const authGuide = useMemo(() => buildAgentClientAuthGuide(kind, mcpUrl), [kind, mcpUrl])
 
   const createConnection = async () => {
     setBusy('create')
@@ -179,6 +184,31 @@ export function AgentConnectionPage() {
     await copyText(command)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 2_000)
+  }
+
+  const copySessionInstruction = async () => {
+    const value = sessionDialog === 'switch' ? authGuide.replace : authGuide.logout
+    await copyText(value)
+    setSessionCopied(true)
+    window.setTimeout(() => setSessionCopied(false), 2_000)
+  }
+
+  const switchWebAccount = async () => {
+    setBusy('switch-account')
+    setError(null)
+    try {
+      if (selected && (selected.status === 'active' || selected.status === 'pending')) {
+        await apiRequest(`/api/v1/mcp-connections/${selected.id}`, {
+          method: 'DELETE',
+          headers: { 'idempotency-key': crypto.randomUUID() },
+        })
+      }
+      await signOut({ scope: 'local' })
+      navigate('/login?returnTo=%2Ftrips', { replace: true })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '暂时无法切换账号')
+      setBusy(null)
+    }
   }
 
   const status = selected ? STATUS_COPY[selected.status] : null
@@ -253,10 +283,59 @@ export function AgentConnectionPage() {
         </section>
       ) : null}
 
+      <section className="agent-local-session" aria-labelledby="agent-local-session-title">
+        <div className="agent-local-session__icon"><Laptop aria-hidden="true" /></div>
+        <div className="agent-local-session__copy">
+          <small>本机 Agent 账号</small>
+          <h2 id="agent-local-session-title">退出或切换账号</h2>
+          <p>MCP 连接只属于当前 Jovlo 账号和这本路书；本机 Agent 的 OAuth 登录由客户端单独保存。</p>
+          <span><UserRoundCog aria-hidden="true" />当前网页登录：<strong>{user?.email ?? '正在确认'}</strong></span>
+        </div>
+        <div className="agent-local-session__actions">
+          <Button variant="quiet" icon={LogOut} onClick={() => { setSessionCopied(false); setSessionDialog('logout') }}>退出本机 Agent</Button>
+          <Button icon={Repeat2} onClick={() => { setSessionCopied(false); setSessionDialog('switch') }}>切换账号或路书</Button>
+        </div>
+      </section>
+
       <section className="agent-manual-edit">
         <div><strong>只想微调某个时间或预算？</strong><span>在行程页手动修改更快，也会自动保存并重新计算。</span></div>
         <ButtonLink to={`/trips/${tripId}/plan`} icon={ArrowRight}>回到行程编辑</ButtonLink>
       </section>
+
+      {sessionDialog ? (
+        <div className="agent-session-backdrop" role="presentation" onMouseDown={() => setSessionDialog(null)}>
+          <section className="agent-session-dialog" role="dialog" aria-modal="true" aria-labelledby="agent-session-dialog-title" onMouseDown={(event) => event.stopPropagation()}>
+            <header>
+              <div><small>{sessionDialog === 'switch' ? '账号与路书重新绑定' : '只清除本机凭据'}</small><h2 id="agent-session-dialog-title">{sessionDialog === 'switch' ? '切换 Agent 账号或路书' : '退出本机 Agent 登录'}</h2></div>
+              <button type="button" aria-label="关闭" onClick={() => setSessionDialog(null)}><X aria-hidden="true" /></button>
+            </header>
+            {sessionDialog === 'switch' ? (
+              <ol className="agent-session-steps">
+                <li><span>1</span><div><strong>清除旧连接</strong><small>移除本机旧 OAuth 和旧 MCP 地址，防止继续连到原账号。</small></div></li>
+                <li><span>2</span><div><strong>确认目标账号</strong><small>当前网页为 {user?.email ?? '正在确认'}；若不是目标账号，请先安全切换。</small></div></li>
+                <li><span>3</span><div><strong>重新授权</strong><small>在目标账号的目标路书创建新连接，再由 Agent 完成浏览器授权。</small></div></li>
+              </ol>
+            ) : (
+              <div className="agent-session-dialog__notice"><LogOut aria-hidden="true" /><p>退出只清除这台设备上的 Agent 登录，不会退出 Jovlo 网页，也不会自动撤销服务端连接。</p></div>
+            )}
+            <SegmentedControl
+              label="Agent 客户端"
+              value={kind}
+              onChange={setKind}
+              options={[{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude' }, { value: 'generic', label: '通用 MCP' }]}
+            />
+            <div className="agent-session-command">
+              <pre><code>{sessionDialog === 'switch' ? authGuide.replace : authGuide.logout}</code></pre>
+              <p>{sessionDialog === 'switch' ? authGuide.replaceNote : authGuide.logoutNote}</p>
+            </div>
+            {!mcpUrl && sessionDialog === 'switch' ? <p className="agent-error" role="alert">请先在目标路书创建 MCP 连接，再复制替换指令。</p> : null}
+            <footer>
+              {sessionDialog === 'switch' ? <Button variant="danger" icon={Repeat2} onClick={() => void switchWebAccount()} disabled={Boolean(busy)}>{busy === 'switch-account' ? '正在切换…' : '撤销连接并切换网页登录'}</Button> : <span>需要立即阻止读写时，请同时撤销服务端连接。</span>}
+              <Button variant="primary" icon={sessionCopied ? Check : Copy} onClick={() => void copySessionInstruction()} disabled={sessionDialog === 'switch' && !mcpUrl}>{sessionCopied ? '已复制' : sessionDialog === 'switch' ? '复制替换指令' : '复制退出指令'}</Button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </PageShell>
   )
 }

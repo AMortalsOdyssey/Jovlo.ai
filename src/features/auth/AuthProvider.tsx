@@ -18,7 +18,7 @@ type AuthContextValue = {
   verifyEmailToken: (tokenHash: string, type: EmailOtpType) => Promise<void>
   updatePassword: (password: string) => Promise<void>
   startLocalTrial: () => void
-  signOut: () => Promise<void>
+  signOut: (options?: { scope?: 'global' | 'local' | 'others' }) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -138,8 +138,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setSession(null)
         setStatus('trial')
       },
-      async signOut() {
-        const { error } = await requireSupabase().auth.signOut()
+      async signOut(options) {
+        const { error } = await requireSupabase().auth.signOut(options)
         if (error) throw error
         localStorage.removeItem('jovlo-local-trial')
         useTripStore.getState().resetDemo()

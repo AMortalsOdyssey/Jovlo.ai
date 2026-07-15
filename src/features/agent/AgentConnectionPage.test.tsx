@@ -4,8 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 const apiMock = vi.hoisted(() => vi.fn())
+const signOutMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/api', () => ({ apiRequest: apiMock }))
+vi.mock('@/features/auth/AuthProvider', () => ({
+  useAuth: () => ({
+    signOut: signOutMock,
+    user: { email: 'owner@example.com' },
+  }),
+}))
 
 import { AgentConnectionPage } from './AgentConnectionPage'
 import { useTripStore } from '@/store/useTripStore'
@@ -14,6 +21,8 @@ describe('AgentConnectionPage', () => {
   beforeEach(() => {
     useTripStore.getState().resetDemo()
     apiMock.mockReset()
+    signOutMock.mockReset()
+    signOutMock.mockResolvedValue(undefined)
   })
 
   afterEach(cleanup)
@@ -51,5 +60,14 @@ describe('AgentConnectionPage', () => {
     expect(screen.getByRole('list', { name: '连接后可用能力' })).toHaveTextContent('规划与编辑')
     expect(screen.getByRole('list', { name: '连接后可用能力' })).toHaveTextContent('关联重算')
     expect(screen.getByRole('list', { name: '连接后可用能力' })).toHaveTextContent('版本留痕')
+
+    expect(screen.getByText('owner@example.com')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '切换账号或路书' }))
+    const dialog = screen.getByRole('dialog', { name: '切换 Agent 账号或路书' })
+    expect(dialog).toHaveTextContent('清除旧连接')
+    expect(dialog).toHaveTextContent('codex mcp logout jovlo')
+    expect(dialog).toHaveTextContent('codex mcp remove jovlo')
+    expect(dialog).toHaveTextContent('codex mcp login jovlo')
+    expect(dialog).toHaveTextContent('当前网页为 owner@example.com')
   })
 })
