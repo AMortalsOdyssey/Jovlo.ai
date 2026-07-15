@@ -10,8 +10,13 @@ test('planner stays usable without horizontal page overflow', async ({ page }, t
   await page.goto(`/trips/${tripId}/plan`)
   await expect(page.getByRole('heading', { name: /Day 1/ })).toBeVisible()
   await expect(page.getByRole('region', { name: '当日路线时间轴' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '保存版本' })).toHaveCount(0)
 
   if (testInfo.project.name === 'mobile') {
+    await page.getByRole('button', { name: '更多命令' }).click()
+    await expect(page.getByRole('menuitem', { name: '下载 PDF' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Agent 协作' })).toBeVisible()
+    await page.keyboard.press('Escape')
     await page.getByRole('button', { name: '地图', exact: true }).click()
     await expect(page.getByRole('region', { name: '路线地图' })).toBeVisible()
     await page.getByRole('button', { name: '预算', exact: true }).click()
@@ -25,6 +30,8 @@ test('planner stays usable without horizontal page overflow', async ({ page }, t
     await page.getByLabel('停留时长（分钟）').fill('150')
     await page.getByRole('button', { name: '保存并重算' }).click()
     await expect(page.getByRole('button', { name: '选择第 1 站：海口骑楼老街' })).toContainText('2h 30m')
+    await expect(page.getByRole('button', { name: '下载 PDF' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Agent 协作' })).toBeVisible()
   }
 
   const hasHorizontalOverflow = await page.evaluate(
@@ -33,16 +40,17 @@ test('planner stays usable without horizontal page overflow', async ({ page }, t
   expect(hasHorizontalOverflow).toBe(false)
 })
 
-test('an old public token remains bound to its original version', async ({ page }) => {
+test('legacy import address now opens the focused MCP Agent flow', async ({ page }) => {
   await page.goto(`/trips/${tripId}/imports/demo-import`)
-  await expect(page.getByRole('heading', { name: '审阅 ChangeSet' })).toBeVisible()
-  await page.getByRole('button', { name: '应用并创建新版本' }).click()
-  await expect(page.getByText('已提交应用')).toBeVisible()
+  await expect(page).toHaveURL(`/trips/${tripId}/agent`)
+  await expect(page.getByRole('heading', { name: 'Agent 协作' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Agent 连接流程' })).toContainText('建立 MCP 连接')
+  await expect(page.getByText('开发者工具 · 手动导入变更文件')).toHaveCount(0)
 
-  await page.goto('/s/jovlo-demo-trip')
-  await page.getByRole('button', { name: /Day 4/ }).click()
-  await expect(page.getByText('宿 · 石梅湾舒适型酒店示例')).toBeVisible()
-  await expect(page.getByText('宿 · 日月湾住宿锚点区')).toHaveCount(0)
+  const hasHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  )
+  expect(hasHorizontalOverflow).toBe(false)
 })
 
 test('Cloudflare Worker exposes the healthy fail-closed envelope', async ({ request }) => {

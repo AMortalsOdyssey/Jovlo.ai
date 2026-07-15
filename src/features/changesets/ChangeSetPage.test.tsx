@@ -18,7 +18,7 @@ describe('ChangeSetPage', () => {
     useTripStore.getState().resetDemo()
   })
 
-  it('keeps the Agent handoff simple and moves manual JSON into developer tools', () => {
+  it('keeps the legacy Agent handoff simple and removes manual JSON tools', () => {
     render(<MemoryRouter><ChangeSetPage /></MemoryRouter>)
 
     expect(screen.getByRole('heading', { name: '让 Agent 帮你改路书' })).toBeInTheDocument()
@@ -27,7 +27,7 @@ describe('ChangeSetPage', () => {
     expect(screen.getByText('确认修改建议')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '复制 Agent 连接指令' })).toBeEnabled()
     expect(screen.queryByText('连接指令详情')).not.toBeInTheDocument()
-    expect(screen.getByText('开发者工具 · 手动导入变更文件').closest('details')).not.toHaveAttribute('open')
+    expect(screen.queryByText('开发者工具 · 手动导入变更文件')).not.toBeInTheDocument()
     expect(screen.queryByText('建议内容')).not.toBeInTheDocument()
   })
 

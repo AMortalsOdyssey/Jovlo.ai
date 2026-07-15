@@ -1,5 +1,5 @@
-import { GitCompareArrows, History, Plus, RotateCcw, Save, Waypoints } from 'lucide-react'
-import { useMemo, useState, type FormEvent } from 'react'
+import { GitCompareArrows, History, Plus, RotateCcw, Waypoints } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { semanticDiff, type DerivedSnapshot, type SemanticDiff, type TripSnapshot } from '@domain'
 
 import { useTripStore } from '@/store/useTripStore'
@@ -7,7 +7,6 @@ import { useTripStore } from '@/store/useTripStore'
 import {
   Button,
   EmptyState,
-  FormField,
   MetricStrip,
   PageHeader,
   PageShell,
@@ -67,18 +66,11 @@ export function VersionsPage() {
   const state = useTripStore()
   const versions = useMemo(() => normalizeVersions(state.versions), [state.versions])
   const [selectedId, setSelectedId] = useState<string | null>(versions[0]?.id ?? null)
-  const [message, setMessage] = useState('')
   const [restoreId, setRestoreId] = useState<string | null>(null)
   const selected = versions.find((version) => version.id === selectedId) ?? versions[0]
   const selectedIndex = selected ? versions.findIndex((version) => version.id === selected.id) : -1
   const older = selectedIndex >= 0 ? versions[selectedIndex + 1] : undefined
   const diff = useMemo(() => buildDiff(older, selected), [older, selected])
-
-  const publish = (event: FormEvent) => {
-    event.preventDefault()
-    state.publishVersion(message.trim() || '手动保存')
-    setMessage('')
-  }
 
   const restore = () => {
     if (!restoreId) return
@@ -103,23 +95,13 @@ export function VersionsPage() {
       <PageHeader
         eyebrow={getTripTitle(state.trip)}
         title="版本历史"
-        description="版本是明确发布的检查点；恢复会创建新版本，不会移动或删除历史。"
+        description="每次修改会自动形成检查点；恢复会创建新版本，不会移动或删除历史。"
         backTo={`/trips/${tripId}/plan`}
         meta={<><SaveStatus status={state.saveStatus} dirty={state.dirty} />{current ? <StatusBadge tone="brand">当前 v{current.versionNo}</StatusBadge> : null}</>}
       />
 
-      <section className="feature-section versions-publish-section">
-        <SectionHeading title="保存当前草稿" description={state.dirty ? '草稿有未发布修改，可加一句版本备注。' : '当前草稿与最近版本一致。'} />
-        <form className="versions-publish-form" onSubmit={publish}>
-          <FormField label="版本备注" hint="例如：确认万宁住宿并放宽 Day 3">
-            <input value={message} onChange={(event) => setMessage(event.target.value)} placeholder="这次改了什么" />
-          </FormField>
-          <Button type="submit" variant="primary" icon={Save} disabled={!state.dirty}>保存版本</Button>
-        </form>
-      </section>
-
       {versions.length === 0 ? (
-        <EmptyState icon={Waypoints} title="还没有已发布版本" description="保存当前草稿后，版本比较和恢复会出现在这里。" />
+        <EmptyState icon={Waypoints} title="还没有历史版本" description="完成一次编辑后，自动保存、版本比较和恢复会出现在这里。" />
       ) : (
         <section className="feature-section versions-layout">
           <aside className="versions-list-panel" aria-label="版本列表">
@@ -129,7 +111,7 @@ export function VersionsPage() {
                 <li key={version.id}>
                   <button className={selected?.id === version.id ? 'is-active' : ''} type="button" onClick={() => setSelectedId(version.id)}>
                     <span className="versions-number">v{version.versionNo}</span>
-                    <span className="versions-copy"><strong>{version.message}</strong><small>{formatDateLabel(version.createdAt)} · {version.source === 'restore' ? '历史恢复' : version.source === 'changeset' ? 'ChangeSet' : version.source === 'template' ? '模板创建' : '手动发布'}</small></span>
+                    <span className="versions-copy"><strong>{version.message}</strong><small>{formatDateLabel(version.createdAt)} · {version.source === 'restore' ? '历史恢复' : version.source === 'agent' || version.source === 'changeset' ? 'Agent 修改' : version.source === 'template' ? '模板创建' : '自动保存'}</small></span>
                     {index === 0 ? <StatusBadge tone="sea">当前</StatusBadge> : null}
                   </button>
                 </li>

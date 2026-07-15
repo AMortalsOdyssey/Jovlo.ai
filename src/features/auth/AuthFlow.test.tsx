@@ -13,6 +13,11 @@ const authMocks = vi.hoisted(() => ({
   verifyOtp: vi.fn(),
   updateUser: vi.fn(),
   signOut: vi.fn(),
+  oauth: {
+    getAuthorizationDetails: vi.fn(),
+    approveAuthorization: vi.fn(),
+    denyAuthorization: vi.fn(),
+  },
   unsubscribe: vi.fn(),
 }))
 
@@ -32,6 +37,7 @@ import { AuthCallbackPage } from './AuthCallbackPage'
 import { AuthProvider } from './AuthProvider'
 import { ForgotPasswordPage } from './ForgotPasswordPage'
 import { LoginPage } from './LoginPage'
+import { OAuthConsentPage } from './OAuthConsentPage'
 import { ProtectedRoute } from './ProtectedRoute'
 import { RegisterPage } from './RegisterPage'
 import { SetNewPasswordPage } from './SetNewPasswordPage'
@@ -93,6 +99,18 @@ describe('Supabase authentication flow', () => {
     authMocks.verifyOtp.mockResolvedValue({ data: { session: authenticatedSession }, error: null })
     authMocks.updateUser.mockResolvedValue({ data: { user: authenticatedSession.user }, error: null })
     authMocks.signOut.mockResolvedValue({ error: null })
+    authMocks.oauth.getAuthorizationDetails.mockResolvedValue({
+      data: {
+        authorization_id: 'authorization-1',
+        redirect_uri: 'http://127.0.0.1/callback',
+        scope: 'openid email',
+        client: { id: 'client-1', name: 'Codex' },
+        user: { id: 'user-1', email: 'traveler@example.com' },
+      },
+      error: null,
+    })
+    authMocks.oauth.approveAuthorization.mockResolvedValue({ data: { redirect_url: 'http://127.0.0.1/callback' }, error: null })
+    authMocks.oauth.denyAuthorization.mockResolvedValue({ data: { redirect_url: 'http://127.0.0.1/callback' }, error: null })
   })
 
   afterEach(() => {
@@ -115,6 +133,20 @@ describe('Supabase authentication flow', () => {
 
     expect(await screen.findByText('私有路书')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '账号：traveler@example.com' })).toHaveAttribute('href', '/account')
+  })
+
+  it('shows a scoped OAuth confirmation for the MCP Agent', async () => {
+    authMocks.getSession.mockResolvedValue({ data: { session: authenticatedSession }, error: null })
+    renderAuthRoute(
+      '/oauth/consent?authorization_id=authorization-1',
+      '/oauth/consent',
+      <OAuthConsentPage />,
+    )
+
+    expect(await screen.findByRole('heading', { name: '允许 Agent 修改这本路书？' })).toBeInTheDocument()
+    expect(await screen.findByText('Codex')).toBeInTheDocument()
+    expect(screen.getByText('读取路书、单日安排和版本历史')).toBeInTheDocument()
+    expect(screen.getByText('每次修改立即生成可回退版本')).toBeInTheDocument()
   })
 
   it('signs in with normalized email and returns to the private destination', async () => {

@@ -511,7 +511,7 @@ export const TripVersionSchema = z
     tripId: UuidSchema,
     versionNo: z.number().int().positive(),
     parentVersionId: UuidSchema.nullable(),
-    source: z.enum(['manual', 'changeset', 'restore', 'template']),
+    source: z.enum(['manual', 'manual_auto', 'agent', 'changeset', 'restore', 'template']),
     message: z.string().trim().min(1).max(500),
     snapshot: TripSnapshotSchema,
     snapshotHash: z.string().trim().min(1).max(160),

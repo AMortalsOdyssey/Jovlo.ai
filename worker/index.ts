@@ -85,6 +85,11 @@ import {
 import { reportProviderIssue } from './services/provider-alerts'
 import { handleSupabaseSendEmailHook } from './services/tencent-email'
 import { getDailyWeather } from './services/weather'
+import { getTripStaticMap } from './services/static-map'
+import {
+  handleMcpRequest,
+  oauthProtectedResourceMetadata,
+} from './services/mcp'
 import {
   callSupabaseRpc,
   readSupabaseRow,
@@ -243,6 +248,7 @@ function requestId(context: AppContext): string {
 function logRoute(pathname: string) {
   if (pathname.startsWith('/api/v1/public/reports/')) return '/api/v1/public/reports/:token'
   if (pathname.startsWith('/api/v1/public/')) return '/api/v1/public/:token'
+  if (pathname.startsWith('/mcp/')) return '/mcp/:connectionId'
   return pathname
 }
 
@@ -254,19 +260,25 @@ app.use('*', async (context, next) => {
   setSecurityHeaders(responseHeaders, context.get('requestId'), context.get('mode'))
   responseHeaders.forEach((value, name) => context.header(name, value))
 
+  const pathname = new URL(context.req.url).pathname
+  const isMcpProtocolPath = pathname.startsWith('/mcp/') || pathname.startsWith('/.well-known/oauth-protected-resource')
   const origin = context.req.header('origin')
   const ownOrigin = new URL(context.req.url).origin
-  if (origin === ownOrigin) {
+  if (isMcpProtocolPath && origin) {
+    context.header('access-control-allow-origin', '*')
+    context.header('vary', 'Origin')
+  } else if (origin === ownOrigin) {
     context.header('access-control-allow-origin', origin)
     context.header('access-control-allow-credentials', 'true')
     context.header('vary', 'Origin')
   }
   if (context.req.method === 'OPTIONS') {
-    if (origin && origin !== ownOrigin) {
+    if (!isMcpProtocolPath && origin && origin !== ownOrigin) {
       throw new AppError('FORBIDDEN', '不允许跨域访问该接口', 403)
     }
     context.header('access-control-allow-methods', 'GET,POST,PUT,DELETE,OPTIONS')
-    context.header('access-control-allow-headers', 'authorization,content-type,idempotency-key,x-request-id')
+    context.header('access-control-allow-headers', 'authorization,content-type,idempotency-key,x-request-id,mcp-protocol-version,mcp-session-id,last-event-id')
+    if (isMcpProtocolPath) context.header('access-control-expose-headers', 'mcp-session-id,www-authenticate')
     context.header('access-control-max-age', '600')
     return context.body(null, 204)
   }
@@ -830,6 +842,22 @@ app.all('/_AMapService/*', (context) =>
   proxyAmapJsApiRequest(context.req.raw, context.env),
 )
 
+app.get('/.well-known/oauth-protected-resource', (context) => {
+  context.header('cache-control', 'public, max-age=300')
+  return context.json(oauthProtectedResourceMetadata(context))
+})
+
+app.get('/.well-known/oauth-protected-resource/mcp/:connectionId', (context) => {
+  const connectionId = validateUuid(context.req.param('connectionId'), 'connectionId')
+  context.header('cache-control', 'public, max-age=300')
+  return context.json(oauthProtectedResourceMetadata(context, connectionId))
+})
+
+app.all('/mcp/:connectionId', (context) => {
+  const connectionId = validateUuid(context.req.param('connectionId'), 'connectionId')
+  return handleMcpRequest(context, connectionId)
+})
+
 app.get('/api/v1/demo/bootstrap', (context) => {
   if (context.get('mode') !== 'demo') {
     throw new AppError('VALIDATION_FAILED', '接口不存在', 404)
@@ -958,6 +986,126 @@ app.get('/api/v1/trips/:tripId', async (context) => {
   )
   if (!trip || !draft) throw new AppError('FORBIDDEN', '行程不存在或无权访问', 403)
   return success(context, { trip, draft })
+})
+
+app.get('/api/v1/trips/:tripId/revision', async (context) => {
+  const user = await requireAuthenticatedUser(context)
+  const tripId = validateUuid(context.req.param('tripId'), 'tripId')
+  if (context.get('mode') === 'demo') {
+    const state = demoTrips.get(tripId)
+    if (!state) throw new AppError('FORBIDDEN', '行程不存在或无权访问', 403)
+    return success(context, {
+      currentVersionId: state.currentVersionId,
+      versionNo: state.versions.at(-1)?.versionNo ?? 0,
+      draftRevision: state.draftRevision,
+      updatedAt: state.versions.at(-1)?.createdAt ?? new Date().toISOString(),
+    })
+  }
+  const trip = await readSupabaseRow<Record<string, unknown>>(
+    context,
+    'trips',
+    `id=eq.${tripId}&select=id,current_version_id,updated_at`,
+    user.token as string,
+  )
+  const draft = await readSupabaseRow<Record<string, unknown>>(
+    context,
+    'trip_drafts',
+    `trip_id=eq.${tripId}&select=revision,updated_at`,
+    user.token as string,
+  )
+  if (!trip || !draft) throw new AppError('FORBIDDEN', '行程不存在或无权访问', 403)
+  const currentVersionId = typeof trip.current_version_id === 'string' ? trip.current_version_id : null
+  const version = currentVersionId
+    ? await readSupabaseRow<Record<string, unknown>>(
+        context,
+        'trip_versions',
+        `id=eq.${currentVersionId}&trip_id=eq.${tripId}&select=version_no`,
+        user.token as string,
+      )
+    : null
+  context.header('cache-control', 'no-store')
+  return success(context, {
+    currentVersionId,
+    versionNo: Number(version?.version_no ?? 0),
+    draftRevision: Number(draft.revision),
+    updatedAt: String(draft.updated_at ?? trip.updated_at),
+  })
+})
+
+app.post('/api/v1/trips/:tripId/mcp-connections', async (context) => {
+  const user = await requireAuthenticatedUser(context)
+  const tripId = validateUuid(context.req.param('tripId'), 'tripId')
+  const idempotencyKey = requireIdempotencyKey(context)
+  if (context.get('mode') === 'demo') {
+    if (!demoTrips.has(tripId)) throw new AppError('FORBIDDEN', '路书不存在或无权访问', 403)
+    const now = new Date()
+    return success(context, {
+      id: crypto.randomUUID(),
+      tripId,
+      status: 'pending',
+      scopes: ['read', 'write'],
+      expiresAt: new Date(now.getTime() + 10 * 60_000).toISOString(),
+      createdAt: now.toISOString(),
+    }, 201)
+  }
+  const result = await callSupabaseRpc<Record<string, unknown>>(
+    context,
+    'create_mcp_connection',
+    { p_trip_id: tripId, p_idempotency_key: idempotencyKey },
+    user.token,
+  )
+  return success(context, result, 201)
+})
+
+app.get('/api/v1/trips/:tripId/mcp-connections', async (context) => {
+  const user = await requireAuthenticatedUser(context)
+  const tripId = validateUuid(context.req.param('tripId'), 'tripId')
+  if (context.get('mode') === 'demo') return success(context, [])
+  const trip = await readSupabaseRow<{ id: string }>(
+    context,
+    'trips',
+    `id=eq.${tripId}&select=id`,
+    user.token as string,
+  )
+  if (!trip) throw new AppError('FORBIDDEN', '路书不存在或无权访问', 403)
+  const rows = await readSupabaseRows<Record<string, unknown>>(
+    context,
+    'mcp_connections',
+    `trip_id=eq.${tripId}&select=id,trip_id,status,client_name,client_id,scopes,authorized_at,last_seen_at,expires_at,revoked_at,created_at&order=created_at.desc&limit=20`,
+    user.token as string,
+  )
+  const now = Date.now()
+  return success(context, rows.map((row) => ({
+    id: row.id,
+    tripId: row.trip_id,
+    status: row.status === 'revoked' || row.revoked_at
+      ? 'revoked'
+      : new Date(String(row.expires_at)).getTime() <= now ? 'expired' : row.status,
+    clientName: row.client_name,
+    clientId: row.client_id,
+    scopes: row.scopes,
+    authorizedAt: row.authorized_at,
+    lastSeenAt: row.last_seen_at,
+    expiresAt: row.expires_at,
+    revokedAt: row.revoked_at,
+    createdAt: row.created_at,
+  })))
+})
+
+app.delete('/api/v1/mcp-connections/:connectionId', async (context) => {
+  const user = await requireAuthenticatedUser(context)
+  const connectionId = validateUuid(context.req.param('connectionId'), 'connectionId')
+  const idempotencyKey = requireIdempotencyKey(context)
+  if (context.get('mode') === 'demo') {
+    return success(context, { id: connectionId, status: 'revoked', revokedAt: new Date().toISOString() })
+  }
+  const result = await callSupabaseRpc<Record<string, unknown>>(
+    context,
+    'revoke_mcp_connection',
+    { p_connection_id: connectionId, p_idempotency_key: idempotencyKey },
+    user.token,
+  )
+  return success(context, result)
 })
 
 app.post('/api/v1/trips/:tripId/agent-tickets', async (context) => {
@@ -1186,6 +1334,63 @@ app.get('/api/v1/trips/:tripId/versions', async (context) => {
       }),
     ),
   )
+})
+
+app.get('/api/v1/trips/:tripId/versions/:versionId/static-map', async (context) => {
+  const user = await requireAuthenticatedUser(context)
+  const tripId = validateUuid(context.req.param('tripId'), 'tripId')
+  const versionId = validateUuid(context.req.param('versionId'), 'versionId')
+  const scope = context.req.query('scope') ?? 'overview'
+  const dayId = context.req.query('dayId')
+  if (scope !== 'overview' && scope !== 'day') {
+    throw new AppError('VALIDATION_FAILED', '地图范围无效', 400)
+  }
+  if (scope === 'day' && !dayId) {
+    throw new AppError('VALIDATION_FAILED', '单日地图缺少 dayId', 400)
+  }
+  const version = context.get('mode') === 'demo'
+    ? demoTrips.get(tripId)?.versions.find((item) => item.id === versionId)
+    : await readSupabaseRow<Record<string, unknown>>(
+        context,
+        'trip_versions',
+        `id=eq.${versionId}&trip_id=eq.${tripId}&select=snapshot,derived_snapshot`,
+        user.token as string,
+      )
+  if (!version) throw new AppError('FORBIDDEN', '固定版本不存在或无权访问', 403)
+  const snapshot = TripSnapshotSchema.parse('snapshot' in version ? version.snapshot : version)
+  const derived = 'derivedSnapshot' in version
+    ? DerivedSnapshotSchema.parse(version.derivedSnapshot)
+    : 'derived_snapshot' in version
+      ? DerivedSnapshotSchema.parse(version.derived_snapshot)
+      : undefined
+  const routeHash = stableHash(derived?.routeLegs ?? [])
+  const cacheKey = new Request(`https://jovlo-map-cache.internal/${versionId}/${scope}/${dayId ?? 'overview'}/${routeHash}`)
+  const mapCache = typeof caches !== 'undefined'
+    ? (caches as CacheStorage & { default: Cache }).default
+    : null
+  const cached = mapCache ? await mapCache.match(cacheKey) : null
+  if (cached) {
+    const headers = new Headers(cached.headers)
+    headers.set('cache-control', 'private, max-age=21600')
+    headers.set('x-jovlo-map-cache', 'hit')
+    return new Response(cached.body, { status: cached.status, headers })
+  }
+  const response = await getTripStaticMap(
+    snapshot,
+    scope === 'day' ? { kind: 'day', dayId: validateUuid(dayId as string, 'dayId') } : { kind: 'overview' },
+    context.env,
+    derived,
+  )
+  if (mapCache && response.ok) {
+    const cacheResponse = response.clone()
+    const headers = new Headers(cacheResponse.headers)
+    headers.set('cache-control', 'public, max-age=21600')
+    context.executionCtx.waitUntil(mapCache.put(cacheKey, new Response(cacheResponse.body, {
+      status: cacheResponse.status,
+      headers,
+    })))
+  }
+  return response
 })
 
 app.post('/api/v1/plans/generate', async (context) => {

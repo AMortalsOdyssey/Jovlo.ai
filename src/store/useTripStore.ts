@@ -120,6 +120,7 @@ export type TripStore = {
   discardPending: () => void
   undo: () => void
   dismissSnackbar: () => void
+  notify: (message: string) => void
   retrySave: () => void
   publishVersion: (message?: string, source?: TripVersion['source']) => TripVersion
   restoreVersion: (versionId: string) => void
@@ -618,6 +619,7 @@ export const useTripStore = create<TripStore>()(
         },
 
         dismissSnackbar: () => mutate((state) => void (state.snackbar = null)),
+        notify: (message) => mutate((state) => void (state.snackbar = { id: createId('snackbar'), message })),
         retrySave: () => {
           mutate((state) => {
             state.saveStatus = 'saving'
@@ -632,7 +634,7 @@ export const useTripStore = create<TripStore>()(
           }
         },
 
-        publishVersion: (message = '保存当前行程', source = 'manual') => {
+        publishVersion: (message = '自动保存', source = 'manual_auto') => {
           const state = get()
           const current = state.versions.reduce((best, version) => (version.versionNo > best.versionNo ? version : best))
           const version = TripVersionSchema.parse({
@@ -669,7 +671,7 @@ export const useTripStore = create<TripStore>()(
             draft.pendingAction = null
             draft.snackbar = {
               id: createId('snackbar'),
-              message: draft.productionSync.mode === 'production' ? `正在发布 v${version.versionNo}` : `已发布 v${version.versionNo}`,
+              message: draft.productionSync.mode === 'production' ? '正在自动保存' : `已自动保存 v${version.versionNo}`,
             }
           })
           return version
@@ -826,7 +828,7 @@ export const useTripStore = create<TripStore>()(
 
         applyDemoChangeSet: () => {
           if (get().dirty) {
-            mutate((state) => void (state.snackbar = { id: createId('snackbar'), message: '存在未发布草稿，请先保存版本' }))
+            mutate((state) => void (state.snackbar = { id: createId('snackbar'), message: '存在尚未保存的修改，请等待自动保存后重试' }))
             return
           }
           const preview = get().changeSetPreview ?? get().prepareDemoChangeSet()
@@ -1019,7 +1021,10 @@ export const useTripStore = create<TripStore>()(
               state.dirty = false
               state.saveStatus = 'saved'
             }
-            state.snackbar = { id: createId('snackbar'), message: `已发布 v${validated.versionNo}` }
+            state.snackbar = {
+              id: createId('snackbar'),
+              message: validated.source === 'agent' ? `Agent 已更新 · v${validated.versionNo}` : `已自动保存 · v${validated.versionNo}`,
+            }
           })
         },
 

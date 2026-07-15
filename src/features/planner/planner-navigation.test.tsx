@@ -21,22 +21,27 @@ const DAYS: DaySummary[] = [
 describe('planner navigation components', () => {
   it('keeps the trip title, version, save status and commands in the header', async () => {
     const user = userEvent.setup()
-    const onSaveVersion = vi.fn()
+    const onDownload = vi.fn()
+    const onAgent = vi.fn()
     const onRetrySave = vi.fn()
     const { rerender } = render(
       <TripHeader
         title="海南环岛自驾"
         version={12}
         saveStatus="saved"
-        onSaveVersion={onSaveVersion}
+        onDownload={onDownload}
+        onAgent={onAgent}
       />,
     )
 
     expect(screen.getByText('海南环岛自驾')).toBeInTheDocument()
     expect(screen.getByText('v12')).toBeInTheDocument()
     expect(screen.getByText('已保存')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '保存版本' }))
-    expect(onSaveVersion).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('button', { name: '保存版本' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '下载 PDF' }))
+    expect(onDownload).toHaveBeenCalledOnce()
+    await user.click(screen.getByRole('button', { name: 'Agent 协作' }))
+    expect(onAgent).toHaveBeenCalledOnce()
 
     rerender(
       <TripHeader

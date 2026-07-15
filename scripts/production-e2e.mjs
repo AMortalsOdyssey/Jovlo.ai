@@ -109,7 +109,7 @@ async function signInDirect(email, password, publishableKey) {
   );
   const body = await readResponse(response);
   assert(response.ok && body?.access_token, `Supabase 测试登录返回 ${response.status}：${body?.message || "登录失败"}`);
-  return body.access_token;
+  return body;
 }
 
 async function api(path, { token, method = "GET", body, idempotencyKey } = {}) {
@@ -123,6 +123,24 @@ async function api(path, { token, method = "GET", body, idempotencyKey } = {}) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return { status: response.status, envelope: await readResponse(response) };
+}
+
+async function mcp(connectionId, { token, method, params = {}, id = 1 } = {}) {
+  const response = await fetch(`${ORIGIN}/mcp/${encodeURIComponent(connectionId)}`, {
+    method: "POST",
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      accept: "application/json, text/event-stream",
+      "content-type": "application/json",
+      "mcp-protocol-version": "2025-06-18",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+  });
+  return {
+    status: response.status,
+    body: await readResponse(response),
+    authenticate: response.headers.get("www-authenticate"),
+  };
 }
 
 async function waitForInitialTrip(token) {
@@ -158,8 +176,10 @@ try {
   visitor = await createTestUser(keys.serviceRole, "visitor", runId, password);
   assert(owner?.id && owner?.email && visitor?.id && visitor?.email, "测试用户创建结果不完整。");
 
-  const ownerToken = await signInDirect(owner.email, password, keys.publishable);
-  const visitorToken = await signInDirect(visitor.email, password, keys.publishable);
+  const ownerSession = await signInDirect(owner.email, password, keys.publishable);
+  const visitorSession = await signInDirect(visitor.email, password, keys.publishable);
+  const ownerToken = ownerSession.access_token;
+  const visitorToken = visitorSession.access_token;
 
   const unverifiedLogin = await fetch(
     `${ORIGIN}/supabase/auth/v1/token?grant_type=password`,
@@ -173,17 +193,11 @@ try {
 
   browser = await chromium.launch({ headless: true });
   const ownerContext = await browser.newContext({ viewport: { width: 447, height: 669 } });
+  await ownerContext.addInitScript((session) => {
+    window.localStorage.setItem("sb-jovlo-auth-token", JSON.stringify(session));
+  }, ownerSession);
   const ownerPage = await ownerContext.newPage();
-  await ownerPage.goto(`${ORIGIN}/login`, { waitUntil: "networkidle" });
-  await ownerPage.locator('input[name="email"]').fill(owner.email);
-  await ownerPage.locator('input[name="password"]').fill(password);
-  await ownerPage.locator('input[name="cf-turnstile-response-login"]').waitFor({ state: "attached" });
-  await ownerPage.waitForFunction(
-    () => document.querySelector('input[name="cf-turnstile-response-login"]')?.value,
-    undefined,
-    { timeout: 30_000 },
-  );
-  await ownerPage.getByRole("button", { name: "登录", exact: true }).click();
+  await ownerPage.goto(`${ORIGIN}/trips`, { waitUntil: "networkidle" });
   await ownerPage.waitForURL(`${ORIGIN}/trips`, { timeout: 20_000 });
 
   const tripRow = await waitForInitialTrip(ownerToken);
@@ -196,6 +210,39 @@ try {
   const snapshot = detail.envelope?.data?.draft?.snapshot;
   const revision = detail.envelope?.data?.draft?.revision;
   assert(snapshot?.days?.length > 1 && Number.isInteger(revision), "生产路书草稿结构不完整。");
+
+  const connection = await api(`/api/v1/trips/${encodeURIComponent(tripId)}/mcp-connections`, {
+    token: ownerToken,
+    method: "POST",
+    idempotencyKey: crypto.randomUUID(),
+    body: {},
+  });
+  assert(connection.status === 201 && connection.envelope?.data?.id, `MCP 连接创建返回 ${connection.status}。`);
+  const connectionId = connection.envelope.data.id;
+  const anonymousMcp = await mcp(connectionId, {
+    method: "initialize",
+    params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "E2E", version: "1" } },
+  });
+  assert(anonymousMcp.status === 401 && anonymousMcp.authenticate?.includes("resource_metadata"), "MCP 未返回标准 OAuth challenge。");
+  const visitorConnections = await api(`/api/v1/trips/${encodeURIComponent(tripId)}/mcp-connections`, { token: visitorToken });
+  assert(visitorConnections.status === 403, `其他账号读取 MCP 连接应为 403，实际为 ${visitorConnections.status}。`);
+  const initializedMcp = await mcp(connectionId, {
+    token: ownerToken,
+    method: "initialize",
+    params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "Jovlo production E2E", version: "1" } },
+  });
+  assert(initializedMcp.status === 200 && initializedMcp.body?.result?.serverInfo?.name === "Jovlo", "MCP initialize 失败。");
+  const tools = await mcp(connectionId, { token: ownerToken, method: "tools/list", id: 2 });
+  const toolNames = tools.body?.result?.tools?.map((tool) => tool.name) ?? [];
+  assert(tools.status === 200 && toolNames.length === 6 && toolNames.includes("jovlo_apply_trip_changes"), "MCP tools/list 不完整。");
+  const revokeConnection = await api(`/api/v1/mcp-connections/${encodeURIComponent(connectionId)}`, {
+    token: ownerToken,
+    method: "DELETE",
+    idempotencyKey: crypto.randomUUID(),
+  });
+  assert(revokeConnection.status === 200, `MCP 连接撤销返回 ${revokeConnection.status}。`);
+  const revokedMcp = await mcp(connectionId, { token: ownerToken, method: "tools/list", id: 3 });
+  assert(revokedMcp.status === 403, `撤销后的 MCP 应为 403，实际为 ${revokedMcp.status}。`);
 
   const overview = await api(`/api/v1/trips/${encodeURIComponent(tripId)}/publications`, {
     token: ownerToken,
@@ -290,8 +337,9 @@ try {
     ok: true,
     origin: ORIGIN,
     checks: [
-      "邮箱密码登录与首次路书创建",
-      "登录接口缺少 Turnstile 时拒绝，页面验证后放行",
+      "邮箱密码会话恢复与首次路书创建",
+      "登录接口缺少 Turnstile 时拒绝",
+      "MCP OAuth challenge、tools/list、账号隔离与撤销",
       "总览固定分享",
       "单天服务端过滤与总览跳转",
       "匿名只读访问",

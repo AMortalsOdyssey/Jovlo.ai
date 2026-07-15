@@ -20,6 +20,7 @@ import { Snackbar } from './Snackbar'
 import { StopCard } from './StopCard'
 import { TripOverview } from './TripOverview'
 import { TripHeader } from './TripHeader'
+import { TripPdfDialog } from '@/features/pdf'
 import { buildAmapMarkerUrl, buildAmapNavigationUrl } from '@/lib/amap'
 import { apiRequest } from '@/lib/api'
 import { formatCurrency, formatDistance, formatDuration } from '@/lib/format'
@@ -200,6 +201,7 @@ export function PlanPage() {
   const [routeRetryNonce, setRouteRetryNonce] = useState(0)
   const [liveRoutes, setLiveRoutes] = useState<Record<string, LiveRouteResult>>({})
   const [weatherRefreshNonce, setWeatherRefreshNonce] = useState(0)
+  const [pdfOpen, setPdfOpen] = useState(false)
   const [weatherState, setWeatherState] = useState<{
     key: string
     status: 'loading' | 'ready' | 'error'
@@ -576,7 +578,7 @@ export function PlanPage() {
     <nav className="plan-mobile-panel plan-more-links" aria-label="更多功能">
       <Link to={`/trips/${state.trip.tripId}/sources`}><BookOpen aria-hidden="true" />来源与证据</Link>
       <Link to={`/trips/${state.trip.tripId}/versions`}><FileClock aria-hidden="true" />版本历史</Link>
-      <Link to={`/trips/${state.trip.tripId}/imports/demo-import`}><Sparkles aria-hidden="true" />让 Agent 帮我改</Link>
+      <Link to={`/trips/${state.trip.tripId}/agent`}><Sparkles aria-hidden="true" />让 Agent 帮我改</Link>
       <Link to={`/trips/${state.trip.tripId}/reports`}><ReceiptText aria-hidden="true" />汇总报告</Link>
       <Link to={`/trips/${state.trip.tripId}/settings`}><Settings aria-hidden="true" />行程设置</Link>
     </nav>
@@ -704,7 +706,7 @@ export function PlanPage() {
       <PlannerWorkspace
         activeMobileView={state.mobileView}
         mobileMapCollapsed={mobileMapCollapsed}
-        header={<TripHeader title={state.trip.title} version={version.versionNo} saveStatus={state.saveStatus === 'failed' ? 'error' : state.saveStatus} onBack={() => navigate('/trips')} onImport={() => navigate(`/trips/${state.trip.tripId}/imports/demo-import`)} onHistory={() => navigate(`/trips/${state.trip.tripId}/versions`)} onShare={() => navigate(`/trips/${state.trip.tripId}/share`)} onSaveVersion={() => state.publishVersion()} onRetrySave={state.retrySave} />}
+        header={<TripHeader title={state.trip.title} version={version.versionNo} saveStatus={state.saveStatus === 'failed' ? 'error' : state.saveStatus} onBack={() => navigate('/trips')} onDownload={() => setPdfOpen(true)} onAgent={() => navigate(`/trips/${state.trip.tripId}/agent`)} onHistory={() => navigate(`/trips/${state.trip.tripId}/versions`)} onShare={() => navigate(`/trips/${state.trip.tripId}/share`)} onRetrySave={state.retrySave} />}
         dayRail={<DayRail days={daySummaries} selectedDayId={day.id} overviewSelected={overviewOpen} onSelectOverview={openOverview} onSelectDay={updateDay} />}
         dayStrip={<MobileDayStrip days={daySummaries} selectedDayId={day.id} overviewSelected={overviewOpen} onSelectOverview={openOverview} onSelectDay={updateDay} />}
         timeline={overviewOpen ? overview : timeline}
@@ -736,6 +738,7 @@ export function PlanPage() {
       {impactDetailsOpen && state.pendingAction ? <div className="plan-impact-details" role="dialog" aria-modal="true" aria-label="影响详情"><span>{state.pendingAction.impact.title}</span><strong>{state.pendingAction.impact.description}</strong><p>{formatDistance(state.pendingAction.impact.distanceDeltaMeters ?? 0)} · {formatDuration(Math.abs(state.pendingAction.impact.durationDeltaMinutes ?? 0))} · {formatCurrency(state.pendingAction.impact.budgetDelta ?? 0)}</p><button type="button" className="jovlo-button jovlo-button--primary" onClick={() => setImpactDetailsOpen(false)}>知道了</button></div> : null}
       <Snackbar open={Boolean(state.snackbar)} message={state.snackbar?.message ?? ''} actionLabel={state.snackbar?.actionLabel} onAction={state.snackbar?.actionLabel ? state.undo : undefined} onDismiss={state.dismissSnackbar} />
       {editingStop && editingPlace ? <StopEditor stop={editingStop} place={editingPlace} onClose={() => setEditingStopId(null)} onToggleLock={() => state.toggleStopLock(editingStop.id)} onSave={(stayMinutes, plannedStart, publicNote) => { state.updateStop(editingStop.id, { stayMinutes, plannedStart: plannedStart || undefined, publicNote: publicNote || undefined }); setEditingStopId(null) }} /> : null}
+      <TripPdfDialog open={pdfOpen} onClose={() => setPdfOpen(false)} />
     </>
   )
 }

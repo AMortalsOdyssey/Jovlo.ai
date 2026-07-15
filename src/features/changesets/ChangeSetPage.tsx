@@ -477,23 +477,6 @@ export function ChangeSetPage() {
             <ButtonLink to={`/trips/${tripId}/plan`} icon={ArrowRight}>回到行程编辑</ButtonLink>
           </section>
 
-          <details className="feature-section changeset-developer">
-            <summary><FileJson2 aria-hidden="true" size={19} />开发者工具 · 手动导入变更文件</summary>
-            <div className="changeset-developer__body">
-              <p>仅用于调试或兼容其他 Agent。接受 UTF-8 JSON 或单个 JSON 代码块，最大 256KB。</p>
-              <div className="changeset-input-layout">
-                <label className="feature-field">
-                  <span className="feature-field-label">TripChangeSet v1</span>
-                  <textarea className="changeset-editor" value={raw} onChange={(event) => { setRaw(event.target.value); setError(null) }} disabled={state.dirty} spellCheck={false} placeholder={'{\n  "schemaVersion": 1,\n  "proposalGroups": […]\n}'} />
-                </label>
-                <div className="changeset-input-actions">
-                  <input ref={fileRef} className="jovlo-sr-only" type="file" accept="application/json,.json,.md,text/markdown" onChange={upload} disabled={state.dirty} />
-                  <Button icon={Upload} onClick={() => fileRef.current?.click()} disabled={state.dirty}>上传文件</Button>
-                  <Button variant="primary" icon={ClipboardPaste} onClick={() => parse()} disabled={state.dirty || !raw.trim()}>校验并预览</Button>
-                </div>
-              </div>
-            </div>
-          </details>
         </>
       ) : null}
 

@@ -1,0 +1,92 @@
+.trip-pdf-backdrop { position: fixed; z-index: 1200; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(45 37 29 / 46%); backdrop-filter: blur(3px); }
+.trip-pdf-dialog { width: min(520px, 100%); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: var(--shadow-modal); }
+.trip-pdf-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 22px 24px 18px; border-bottom: 1px solid var(--line); }
+.trip-pdf-dialog > header span { color: var(--brand-text); font-size: 12px; font-weight: 800; }
+.trip-pdf-dialog h2 { margin: 4px 0 0; font: 700 24px/1.3 var(--font-display); }
+.trip-pdf-dialog > header button { display: grid; width: 36px; height: 36px; place-items: center; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
+.trip-pdf-dialog__preview { display: flex; align-items: flex-start; gap: 14px; padding: 20px 24px; background: var(--brand-tint); }
+.trip-pdf-dialog__preview > svg { flex: 0 0 auto; color: var(--brand); }
+.trip-pdf-dialog__preview strong, .trip-pdf-dialog__preview span { display: block; }
+.trip-pdf-dialog__preview span { margin-top: 5px; color: var(--muted); font-size: 14px; line-height: 1.65; }
+.trip-pdf-dialog ul { display: grid; gap: 10px; padding: 18px 24px; margin: 0; list-style: none; }
+.trip-pdf-dialog li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.trip-pdf-dialog li svg { width: 18px; color: var(--sea-text); }
+.trip-pdf-dialog__error { padding: 10px 24px; margin: 0; color: var(--danger); font-size: 14px; }
+.trip-pdf-dialog__progress { display: flex; align-items: center; gap: 10px; padding: 12px 24px; color: var(--sea-text); background: var(--sea-tint); font-weight: 700; }
+.trip-pdf-dialog__progress svg { width: 18px; }
+.trip-pdf-dialog > footer { display: flex; justify-content: flex-end; gap: 10px; padding: 18px 24px; border-top: 1px solid var(--line); }
+.trip-pdf-dialog .jovlo-button svg { width: 18px; }
+
+.jovlo-pdf-document { position: fixed; z-index: -1; top: 0; left: -20000px; width: 794px; pointer-events: none; }
+.jovlo-pdf-page { position: relative; box-sizing: border-box; width: 794px; height: 1123px; overflow: hidden; padding: 56px; color: #2d251d; background: #fffdf8; font-family: "Noto Sans SC Variable", sans-serif; letter-spacing: 0; }
+.jovlo-pdf-page h1, .jovlo-pdf-page h2, .jovlo-pdf-page p { margin: 0; }
+.jovlo-pdf-page > footer { position: absolute; right: 56px; bottom: 28px; left: 56px; display: flex; justify-content: space-between; color: #7a6d60; font-size: 12px; border-top: 1px solid #dfd1be; padding-top: 12px; }
+.jovlo-pdf-cover { background: #f8efe1; }
+.jovlo-pdf-cover > header { display: flex; align-items: center; gap: 10px; }
+.jovlo-pdf-cover > header img { width: 34px; height: 34px; }
+.jovlo-pdf-cover > header span { font-size: 20px; font-weight: 800; }
+.jovlo-pdf-cover > header small { margin-left: auto; color: #7a6d60; }
+.jovlo-pdf-cover__copy { padding: 72px 0 42px; }
+.jovlo-pdf-cover__copy p { color: #b8490f; font-size: 16px; font-weight: 700; }
+.jovlo-pdf-cover__copy h1 { max-width: 650px; margin: 12px 0 16px; font: 750 48px/1.23 "Noto Serif SC Variable", serif; overflow-wrap: anywhere; }
+.jovlo-pdf-cover__copy strong { color: #66594d; font-size: 18px; }
+.jovlo-pdf-map { display: block; width: 100%; height: 370px; object-fit: cover; border: 1px solid #dfd1be; border-radius: 6px; }
+.jovlo-pdf-map--cover { height: 420px; }
+.jovlo-pdf-metrics { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 24px; border-top: 1px solid #dfd1be; border-bottom: 1px solid #dfd1be; }
+.jovlo-pdf-metrics div { padding: 18px 12px; }
+.jovlo-pdf-metrics div + div { border-left: 1px solid #dfd1be; }
+.jovlo-pdf-metrics span, .jovlo-pdf-metrics strong { display: block; }
+.jovlo-pdf-metrics span { color: #7a6d60; font-size: 12px; }
+.jovlo-pdf-metrics strong { margin-top: 5px; font-size: 19px; }
+.jovlo-pdf-day__header { display: flex; min-height: 86px; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.jovlo-pdf-day__header p { color: #b8490f; font-weight: 700; }
+.jovlo-pdf-day__header h2 { margin-top: 6px; font: 750 30px/1.3 "Noto Serif SC Variable", serif; }
+.jovlo-pdf-day__header > span { flex: 0 0 auto; color: #0f7469; font-weight: 700; }
+.jovlo-pdf-day .jovlo-pdf-map { height: 330px; }
+.jovlo-pdf-day__metrics { display: flex; gap: 20px; padding: 15px 0; color: #66594d; border-bottom: 1px solid #dfd1be; font-size: 14px; font-weight: 650; }
+.jovlo-pdf-timeline { display: grid; gap: 12px; padding: 20px 0 0; margin: 0; list-style: none; }
+.jovlo-pdf-timeline li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; }
+.jovlo-pdf-timeline li > b { display: grid; width: 30px; height: 30px; place-items: center; color: white; background: #2d251d; border-radius: 50%; }
+.jovlo-pdf-timeline strong, .jovlo-pdf-timeline span, .jovlo-pdf-timeline small { display: block; }
+.jovlo-pdf-timeline strong { font-size: 17px; }
+.jovlo-pdf-timeline span { margin-top: 2px; color: #776a5d; font-size: 13px; }
+.jovlo-pdf-timeline small { margin-top: 4px; color: #8f7b64; font-size: 12px; }
+.jovlo-pdf-stay { display: grid; grid-template-columns: 55px 1fr; gap: 4px 12px; padding: 14px 16px; margin-top: 18px; background: #edf5f1; border-left: 4px solid #0f8274; }
+.jovlo-pdf-stay span { grid-row: 1 / 3; color: #0f7469; font-weight: 800; }
+.jovlo-pdf-stay small { color: #776a5d; }
+.jovlo-pdf-budget > header { padding-bottom: 30px; border-bottom: 2px solid #c95516; }
+.jovlo-pdf-budget > header p { color: #b8490f; font-weight: 800; }
+.jovlo-pdf-budget > header h2 { margin: 10px 0 4px; font-size: 48px; line-height: 1.15; }
+.jovlo-pdf-budget > header span { color: #776a5d; }
+.jovlo-pdf-budget__rows { margin-top: 20px; }
+.jovlo-pdf-budget__rows > div { display: grid; grid-template-columns: 130px 110px 1fr; align-items: center; gap: 16px; min-height: 67px; border-bottom: 1px solid #dfd1be; }
+.jovlo-pdf-budget__rows strong { text-align: right; }
+.jovlo-pdf-budget__rows small { color: #776a5d; }
+.jovlo-pdf-budget aside { padding: 20px; margin-top: 28px; background: #f8efe1; }
+.jovlo-pdf-budget aside p { margin-top: 8px; color: #66594d; line-height: 1.7; white-space: pre-wrap; }
+.jovlo-pdf-sources > header { padding-bottom: 26px; border-bottom: 2px solid #c95516; }
+.jovlo-pdf-sources > header p { color: #b8490f; font-weight: 800; }
+.jovlo-pdf-sources > header h2 { margin-top: 8px; font: 750 34px/1.3 "Noto Serif SC Variable", serif; }
+.jovlo-pdf-sources > header span { display: block; margin-top: 8px; color: #776a5d; }
+.jovlo-pdf-sources ol { display: grid; padding: 0; margin: 22px 0 0; gap: 0; list-style: none; }
+.jovlo-pdf-sources li { min-height: 148px; padding: 18px 0; border-bottom: 1px solid #dfd1be; }
+.jovlo-pdf-sources li div { display: flex; align-items: baseline; gap: 12px; }
+.jovlo-pdf-sources li div span { flex: 0 0 auto; color: #b8490f; font-size: 12px; font-weight: 800; }
+.jovlo-pdf-sources li strong { font-size: 17px; }
+.jovlo-pdf-sources li p { display: -webkit-box; margin-top: 7px; overflow: hidden; color: #66594d; font-size: 13px; line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.jovlo-pdf-sources li .jovlo-pdf-link { display: block; margin-top: 7px; overflow-wrap: anywhere; color: #0f7469; font: 500 10px/1.45 var(--font-numeric); text-decoration: none; }
+.jovlo-pdf-finale { display: flex; align-items: center; flex-direction: column; justify-content: center; text-align: center; background: #f8efe1; }
+.jovlo-pdf-finale > img:first-child { width: 64px; height: 64px; }
+.jovlo-pdf-finale p { margin-top: 40px; color: #b8490f; font-weight: 800; }
+.jovlo-pdf-finale h2 { max-width: 580px; margin: 14px 0 34px; font: 750 38px/1.35 "Noto Serif SC Variable", serif; }
+.jovlo-pdf-finale .jovlo-pdf-qr { width: 260px; height: 260px; }
+.jovlo-pdf-finale > strong { margin-top: 24px; font-size: 18px; }
+.jovlo-pdf-finale .jovlo-pdf-link { max-width: 620px; margin-top: 12px; color: #776a5d; font: 500 12px/1.45 var(--font-numeric); overflow-wrap: anywhere; text-decoration: none; }
+.jovlo-pdf-finale > span { margin-top: 42px; font-size: 20px; font-weight: 800; }
+
+@media (max-width: 560px) {
+  .trip-pdf-backdrop { align-items: end; padding: 0; }
+  .trip-pdf-dialog { width: 100%; border-radius: var(--radius-card) var(--radius-card) 0 0; }
+  .trip-pdf-dialog > header, .trip-pdf-dialog__preview, .trip-pdf-dialog ul, .trip-pdf-dialog > footer { padding-right: 18px; padding-left: 18px; }
+  .trip-pdf-dialog > footer .jovlo-button { flex: 1; }
+}

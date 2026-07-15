@@ -25,7 +25,9 @@ export function hasRecommendedPasswordMix(password: string) {
 }
 
 export function safeReturnTo(value: string | null) {
-  return value?.startsWith('/trips') && !value.startsWith('//') ? value : '/trips'
+  const isInternal = value && !value.startsWith('//')
+    && (value.startsWith('/trips') || value.startsWith('/oauth/consent'))
+  return isInternal ? value : '/trips'
 }
 
 const supportedEmailTokenTypes = new Set<EmailOtpType>([

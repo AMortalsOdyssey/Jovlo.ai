@@ -35,6 +35,13 @@ type PublishResult = {
   draftRevision: number
 }
 
+type RevisionResult = {
+  currentVersionId: string | null
+  versionNo: number
+  draftRevision: number
+  updatedAt: string
+}
+
 export type ProductionBridgeProps = {
   apiBase?: string
   debounceMs?: number
@@ -120,6 +127,8 @@ export class ProductionSyncController {
   private readonly abortController = new AbortController()
   private unsubscribe: (() => void) | null = null
   private saveTimer: ReturnType<typeof setTimeout> | null = null
+  private checkpointTimer: ReturnType<typeof setTimeout> | null = null
+  private revisionTimer: ReturnType<typeof setTimeout> | null = null
   private operationChain: Promise<void> = Promise.resolve()
   private latestDraft: { snapshot: TripSnapshot; localRevision: number } | null = null
   private processedPublishIds = new Set<string>()
@@ -127,6 +136,7 @@ export class ProductionSyncController {
   private savedLocalRevision = 0
   private currentVersionId: string | null = null
   private disposed = false
+  private refreshing = false
 
   constructor(options: ProductionSyncControllerOptions) {
     this.accessToken = options.accessToken
@@ -223,6 +233,7 @@ export class ProductionSyncController {
       this.currentVersionId = currentVersionId
       this.savedLocalRevision = useTripStore.getState().revision
       this.subscribe()
+      this.scheduleRevisionPoll()
     } catch (error) {
       if (this.disposed || (error instanceof DOMException && error.name === 'AbortError')) return
       useTripStore.getState().setProductionSync({
@@ -236,13 +247,77 @@ export class ProductionSyncController {
   private subscribe() {
     this.unsubscribe = useTripStore.subscribe((state, previous) => {
       if (state.productionSync.mode !== 'production') return
-      if (state.revision !== previous.revision) {
+      if (!this.refreshing && state.revision !== previous.revision) {
         this.scheduleDraft(cloneJson(state.trip), state.revision)
+        this.scheduleCheckpoint()
       }
       for (const request of state.productionPublishQueue) {
         if (!this.processedPublishIds.has(request.id)) this.processPublish(request)
       }
     })
+  }
+
+  private scheduleCheckpoint() {
+    if (this.checkpointTimer) clearTimeout(this.checkpointTimer)
+    this.checkpointTimer = setTimeout(() => {
+      this.checkpointTimer = null
+      const state = useTripStore.getState()
+      if (this.disposed || state.productionSync.mode !== 'production' || !state.dirty) return
+      if (state.productionPublishQueue.length) {
+        this.scheduleCheckpoint()
+        return
+      }
+      state.publishVersion('自动保存', 'manual_auto')
+    }, 5_000)
+  }
+
+  private scheduleRevisionPoll() {
+    if (this.revisionTimer) clearTimeout(this.revisionTimer)
+    if (this.disposed) return
+    const delay = typeof document !== 'undefined' && document.visibilityState === 'hidden' ? 15_000 : 2_000
+    this.revisionTimer = setTimeout(() => {
+      this.revisionTimer = null
+      void this.pollRevision().finally(() => this.scheduleRevisionPoll())
+    }, delay)
+  }
+
+  private async pollRevision() {
+    const state = useTripStore.getState()
+    if (this.disposed || state.productionSync.mode !== 'production' || !state.productionSync.hydrated) return
+    try {
+      const remote = await this.request<RevisionResult>(`/api/v1/trips/${state.trip.tripId}/revision`)
+      if (remote.draftRevision === this.draftRevision && remote.currentVersionId === this.currentVersionId) return
+      if (state.dirty || state.productionPublishQueue.length || this.latestDraft) {
+        state.notify('Agent 已更新路书；完成当前编辑后会重新同步')
+        return
+      }
+
+      const detail = asRecord(await this.request<unknown>(`/api/v1/trips/${state.trip.tripId}`))
+      const draft = asRecord(detail.draft)
+      const trip = asRecord(detail.trip)
+      const snapshot = TripSnapshotSchema.parse(draft.snapshot)
+      const draftRevision = readNumber(draft, 'revision') ?? remote.draftRevision
+      const currentVersionId = readString(trip, 'currentVersionId', 'current_version_id') ?? remote.currentVersionId
+      const rawVersions = await this.request<unknown[]>(`/api/v1/trips/${state.trip.tripId}/versions`)
+      const versions = normalizeVersions(rawVersions, snapshot, currentVersionId, this.userId)
+
+      this.refreshing = true
+      useTripStore.getState().hydrateProduction({
+        snapshot,
+        derived: recalculate(snapshot),
+        versions,
+        draftRevision,
+        currentVersionId,
+      })
+      this.draftRevision = draftRevision
+      this.currentVersionId = currentVersionId
+      this.savedLocalRevision = useTripStore.getState().revision
+      useTripStore.getState().notify(`Agent 已更新 · v${remote.versionNo}`)
+    } catch {
+      // Revision polling is opportunistic. The normal save path remains authoritative.
+    } finally {
+      this.refreshing = false
+    }
   }
 
   private enqueue(operation: () => Promise<void>) {
@@ -287,6 +362,10 @@ export class ProductionSyncController {
 
   private processPublish(request: ProductionPublishRequest) {
     this.processedPublishIds.add(request.id)
+    if (this.checkpointTimer) {
+      clearTimeout(this.checkpointTimer)
+      this.checkpointTimer = null
+    }
     if (this.saveTimer) {
       clearTimeout(this.saveTimer)
       this.saveTimer = null
@@ -306,7 +385,7 @@ export class ProductionSyncController {
             snapshot: request.snapshot,
             derivedSnapshot: request.derivedSnapshot,
             message: request.message,
-            source: request.source === 'template' ? 'template' : 'manual',
+            source: request.source,
           }),
         })
         const version = TripVersionSchema.parse(result.version)
@@ -340,6 +419,8 @@ export class ProductionSyncController {
   dispose() {
     this.disposed = true
     if (this.saveTimer) clearTimeout(this.saveTimer)
+    if (this.checkpointTimer) clearTimeout(this.checkpointTimer)
+    if (this.revisionTimer) clearTimeout(this.revisionTimer)
     this.unsubscribe?.()
     this.abortController.abort()
   }

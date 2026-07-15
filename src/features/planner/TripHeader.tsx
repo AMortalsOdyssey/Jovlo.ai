@@ -1,14 +1,14 @@
 import {
   ArrowLeft,
+  Bot,
   Check,
   CircleAlert,
   Clock3,
-  Download,
+  FileDown,
   History,
   LoaderCircle,
   MoreHorizontal,
   RefreshCcw,
-  Save,
   Share2,
 } from 'lucide-react'
 
@@ -22,10 +22,10 @@ export interface TripHeaderProps {
   saveStatus: SaveStatus
   logoSrc?: string
   onBack?: () => void
-  onImport?: () => void
+  onDownload?: () => void
+  onAgent?: () => void
   onHistory?: () => void
   onShare?: () => void
-  onSaveVersion?: () => void
   onRetrySave?: () => void
 }
 
@@ -43,16 +43,17 @@ export function TripHeader({
   saveStatus,
   logoSrc = '/jovlo-mark.svg',
   onBack,
-  onImport,
+  onDownload,
+  onAgent,
   onHistory,
   onShare,
-  onSaveVersion,
   onRetrySave,
 }: TripHeaderProps) {
   const status = SAVE_STATUS[saveStatus]
   const StatusIcon = status.icon
   const mobileItems: ActionMenuItem[] = [
-    { label: '导入', icon: Download, onSelect: () => onImport?.(), disabled: !onImport },
+    { label: '下载 PDF', icon: FileDown, onSelect: () => onDownload?.(), disabled: !onDownload },
+    { label: 'Agent 协作', icon: Bot, onSelect: () => onAgent?.(), disabled: !onAgent },
     { label: '版本历史', icon: History, onSelect: () => onHistory?.(), disabled: !onHistory },
     { label: '分享', icon: Share2, onSelect: () => onShare?.(), disabled: !onShare },
   ]
@@ -106,20 +107,11 @@ export function TripHeader({
         </HoverTooltip>
 
         <span className="jovlo-trip-header__desktop-actions">
-          <IconButton icon={Download} label="导入变更" onClick={onImport} disabled={!onImport} />
+          <IconButton icon={FileDown} label="下载 PDF" onClick={onDownload} disabled={!onDownload} />
+          <IconButton icon={Bot} label="Agent 协作" onClick={onAgent} disabled={!onAgent} />
           <IconButton icon={History} label="版本历史" onClick={onHistory} disabled={!onHistory} />
           <IconButton icon={Share2} label="分享路书" onClick={onShare} disabled={!onShare} />
         </span>
-
-        <button
-          type="button"
-          className="jovlo-button jovlo-button--primary jovlo-trip-header__save"
-          onClick={onSaveVersion}
-          disabled={!onSaveVersion}
-        >
-          <Save aria-hidden="true" size={18} strokeWidth={1.8} />
-          <span>保存版本</span>
-        </button>
 
         <span className="jovlo-trip-header__mobile-more">
           <ActionMenu label="更多命令" icon={MoreHorizontal} items={mobileItems} />

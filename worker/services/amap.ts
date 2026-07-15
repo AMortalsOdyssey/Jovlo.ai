@@ -313,6 +313,7 @@ const AMapResponseSchema = z
               .object({
                 distance: z.coerce.number().int().nonnegative(),
                 duration: z.coerce.number().int().nonnegative().optional(),
+                polyline: z.string().optional(),
                 tolls: z.coerce.number().nonnegative().optional(),
                 traffic_lights: z.coerce.number().int().nonnegative().optional(),
                 cost: z
@@ -417,7 +418,7 @@ async function fetchAmapLegOnce(
   url.searchParams.set('origin', `${point.coordinate.lon},${point.coordinate.lat}`)
   url.searchParams.set('destination', `${next.coordinate.lon},${next.coordinate.lat}`)
   url.searchParams.set('strategy', input.strategy)
-  url.searchParams.set('show_fields', 'cost')
+  url.searchParams.set('show_fields', 'cost,polyline')
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 8_000)
   let response: Response
@@ -448,6 +449,12 @@ async function fetchAmapLegOnce(
   if (result.status !== '1' || !path || durationSeconds === undefined) {
     throw classifyAmapFailure(result.infocode)
   }
+  const polyline = path.polyline?.split(';').flatMap((coordinate) => {
+    const [lon, lat] = coordinate.split(',').map(Number)
+    return Number.isFinite(lon) && Number.isFinite(lat)
+      ? [{ lon, lat, crs: 'GCJ02' as const }]
+      : []
+  })
   return RouteLegSchema.parse({
     id: crypto.randomUUID(),
     dayId: input.dayId,
@@ -458,6 +465,7 @@ async function fetchAmapLegOnce(
     durationSeconds,
     tollsCny: path.tolls ?? path.cost?.tolls,
     trafficLights: path.traffic_lights ?? path.cost?.traffic_lights,
+    polyline: polyline?.length ? polyline : undefined,
     strategy: input.strategy,
     calculatedAt: new Date().toISOString(),
     status: 'fresh',
@@ -600,4 +608,99 @@ export async function calculateRouteLegs(input: RouteDryRunRequest, env: Env) {
     warning: notice?.message ?? null,
     providerNotice: notice,
   }
+}
+
+const AmapPlaceSearchResponseSchema = z.object({
+  status: z.string(),
+  info: z.string().optional(),
+  infocode: z.string().optional(),
+  pois: z.array(z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    type: z.string().optional(),
+    typecode: z.string().optional(),
+    address: z.union([z.string(), z.array(z.string())]).optional(),
+    location: z.string().regex(/^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/),
+    pname: z.string().optional(),
+    cityname: z.string().optional(),
+    adname: z.string().optional(),
+  }).passthrough()).optional(),
+}).passthrough()
+
+export type AmapPlaceSearchResult = {
+  providerId: string
+  name: string
+  type: string
+  typeCode?: string
+  address?: string
+  region: string
+  gcj02: { lon: number; lat: number; crs: 'GCJ02' }
+}
+
+export async function searchAmapPlaces(
+  query: string,
+  city: string | undefined,
+  env: Env,
+): Promise<AmapPlaceSearchResult[]> {
+  if (!env.AMAP_WEB_SERVICE_KEY) {
+    throw new AppError('DEPENDENCY_UNAVAILABLE', '高德地点搜索尚未配置', 503)
+  }
+  const url = new URL('https://restapi.amap.com/v3/place/text')
+  url.searchParams.set('key', env.AMAP_WEB_SERVICE_KEY)
+  url.searchParams.set('keywords', query)
+  url.searchParams.set('offset', '12')
+  url.searchParams.set('page', '1')
+  url.searchParams.set('extensions', 'base')
+  if (city) {
+    url.searchParams.set('city', city)
+    url.searchParams.set('citylimit', 'false')
+  }
+
+  let lastFailure: unknown
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8_000)
+    try {
+      const response = await fetch(url, { signal: controller.signal })
+      if (response.status === 429) {
+        throw new AppError('RATE_LIMITED', '高德地点搜索请求过于频繁', 429, { retryable: true })
+      }
+      if (!response.ok) throw new Error(`AMAP_HTTP_${response.status}`)
+      const parsed = AmapPlaceSearchResponseSchema.safeParse(await response.json())
+      if (!parsed.success) throw new Error('AMAP_INVALID_RESPONSE')
+      if (parsed.data.status !== '1') {
+        const code = parsed.data.infocode ?? ''
+        if (AMAP_QUOTA_CODES.has(code)) {
+          throw new AppError('ROUTE_QUOTA_EXCEEDED', '高德今日额度已用完', 429)
+        }
+        if (AMAP_RATE_LIMIT_CODES.has(code)) {
+          throw new AppError('RATE_LIMITED', '高德地点搜索请求过于频繁', 429, { retryable: true })
+        }
+        throw new AppError('ROUTE_PROVIDER_UNAVAILABLE', parsed.data.info ?? '高德地点搜索暂不可用', 502, {
+          retryable: AMAP_TRANSIENT_CODES.has(code),
+        })
+      }
+      return (parsed.data.pois ?? []).map((poi) => {
+        const [lon, lat] = poi.location.split(',').map(Number)
+        const address = Array.isArray(poi.address) ? poi.address.join('') : poi.address
+        return {
+          providerId: poi.id,
+          name: poi.name,
+          type: poi.type?.split(';').at(-1) ?? '地点',
+          typeCode: poi.typecode,
+          address: address || undefined,
+          region: [poi.pname, poi.cityname, poi.adname].filter(Boolean).join(' '),
+          gcj02: { lon, lat, crs: 'GCJ02' as const },
+        }
+      })
+    } catch (error) {
+      lastFailure = error
+      if (error instanceof AppError && !error.retryable) throw error
+      if (attempt === 0) await sleep(420)
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  if (lastFailure instanceof AppError) throw lastFailure
+  throw new AppError('ROUTE_PROVIDER_UNAVAILABLE', '高德地点搜索暂不可用', 503, { retryable: true })
 }

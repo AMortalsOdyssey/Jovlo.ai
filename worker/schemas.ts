@@ -42,7 +42,7 @@ export const PublishVersionRequestSchema = z
     snapshot: TripSnapshotSchema,
     derivedSnapshot: DerivedSnapshotSchema,
     message: z.string().trim().min(1).max(500),
-    source: z.enum(['manual', 'template']).default('manual'),
+    source: z.enum(['manual', 'manual_auto', 'agent', 'template']).default('manual_auto'),
   })
   .strict()
 

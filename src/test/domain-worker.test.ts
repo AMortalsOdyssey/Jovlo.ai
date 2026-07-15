@@ -10,6 +10,32 @@ type Envelope = {
 }
 
 describe('Worker API contract', () => {
+  it('publishes OAuth resource metadata and challenges unauthenticated MCP clients', async () => {
+    const connectionId = 'a0000000-0000-4000-8000-000000000001'
+    const env = { JOVLO_MODE: 'production' as const, SUPABASE_URL: 'https://project.supabase.co' }
+    const metadata = await app.request(`/.well-known/oauth-protected-resource/mcp/${connectionId}`, undefined, env)
+    expect(metadata.status).toBe(200)
+    expect(await metadata.json()).toMatchObject({
+      resource: `http://localhost/mcp/${connectionId}`,
+      authorization_servers: ['https://project.supabase.co/auth/v1'],
+      bearer_methods_supported: ['header'],
+    })
+
+    const response = await app.request(`/mcp/${connectionId}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'mcp-protocol-version': '2025-06-18' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
+    }, env)
+    expect(response.status).toBe(401)
+    expect(response.headers.get('www-authenticate')).toContain(
+      `/.well-known/oauth-protected-resource/mcp/${connectionId}`,
+    )
+    expect(await response.json()).toMatchObject({
+      jsonrpc: '2.0',
+      error: { code: -32001, message: '需要通过 Jovlo 登录授权' },
+    })
+  })
+
   it('returns the standard envelope, request ID, and security headers', async () => {
     const response = await app.request('/api/health', undefined, { JOVLO_MODE: 'demo' })
     const body = (await response.json()) as Envelope

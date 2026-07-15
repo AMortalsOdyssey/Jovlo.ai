@@ -49,7 +49,7 @@ export function WorkspaceShell({ children }: PropsWithChildren) {
         </nav>
 
         <div className="workspace-actions">
-          <Link className="workspace-import-link" to={`${base}/imports/demo-import`}>
+          <Link className="workspace-import-link" to={`${base}/agent`}>
             <Sparkles aria-hidden="true" size={17} />
             Agent 协作
           </Link>

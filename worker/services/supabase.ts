@@ -28,6 +28,14 @@ const AUTH_PROXY_METHODS: Record<string, readonly string[]> = {
   '/settings': ['GET'],
 }
 
+function allowedAuthMethods(authPath: string): readonly string[] | undefined {
+  const configured = AUTH_PROXY_METHODS[authPath]
+  if (configured) return configured
+  if (/^\/oauth\/authorizations\/[A-Za-z0-9_-]+$/.test(authPath)) return ['GET']
+  if (/^\/oauth\/authorizations\/[A-Za-z0-9_-]+\/consent$/.test(authPath)) return ['POST']
+  return undefined
+}
+
 function requiredTurnstileAction(
   authPath: string,
   method: string,
@@ -63,7 +71,7 @@ export async function proxySupabaseAuthRequest(context: AppContext): Promise<Res
     throw new AppError('FORBIDDEN', '不允许跨站调用账号接口', 403)
   }
   const authPath = requestUrl.pathname.slice('/supabase/auth/v1'.length) || '/settings'
-  const allowedMethods = AUTH_PROXY_METHODS[authPath]
+  const allowedMethods = allowedAuthMethods(authPath)
   if (!allowedMethods?.includes(context.req.method)) {
     throw new AppError('VALIDATION_FAILED', '认证接口不存在', 404)
   }
