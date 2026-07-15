@@ -205,6 +205,20 @@ try {
   const versionId = tripRow.current_version_id || tripRow.currentVersionId;
   assert(typeof tripId === "string" && typeof versionId === "string", "初始路书缺少稳定 ID。");
 
+  await ownerPage.goto(`${ORIGIN}/trips/${encodeURIComponent(tripId)}/agent`, { waitUntil: "networkidle" });
+  const switchAgentAccount = ownerPage.getByRole("button", { name: "切换账号或路书", exact: true });
+  await switchAgentAccount.waitFor({ state: "visible" });
+  await switchAgentAccount.click();
+  const switchDialog = ownerPage.getByRole("dialog", { name: "切换 Agent 账号或路书", exact: true });
+  await switchDialog.waitFor({ state: "visible" });
+  const switchDialogText = await switchDialog.innerText();
+  assert(switchDialogText.includes("清除旧连接") && switchDialogText.includes("codex mcp logout jovlo") && switchDialogText.includes("当前网页为"), "Agent 账号切换面板内容不完整。");
+  const agentUi = await ownerPage.evaluate(() => ({
+    overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  }));
+  assert(!agentUi.overflow, "Agent 账号切换面板在 447px 手机宽度发生横向溢出。");
+  await switchDialog.getByRole("button", { name: "关闭", exact: true }).click();
+
   const detail = await api(`/api/v1/trips/${encodeURIComponent(tripId)}`, { token: ownerToken });
   assert(detail.status === 200, `所有者读取路书返回 ${detail.status}。`);
   const snapshot = detail.envelope?.data?.draft?.snapshot;
@@ -376,6 +390,7 @@ try {
       "邮箱密码会话恢复与首次路书创建",
       "登录接口缺少 Turnstile 时拒绝",
       "MCP OAuth、能力说明、本地切换提示、上下文建议、小版本写入、版本分级、账号隔离与撤销",
+      "Agent 账号切换面板与手机宽度",
       "总览固定分享",
       "单天服务端过滤与总览跳转",
       "匿名只读访问",
