@@ -55,13 +55,15 @@ export { cloneJson, stableCanonicalString, stableHash, stableUuid } from './cano
 export { calculateBudget } from './budget'
 export { calculateSchedule, getDayRouteEndpoints, recalculateTrip } from './planning'
 export { safeValidateTripSnapshot, validateTripSnapshot } from './validation'
-export { semanticDiff } from './diff'
+export { classifyVersionChange, semanticDiff } from './diff'
 export type {
   SemanticDiff,
   SemanticDiffEntry,
   SemanticDiffKind,
   SemanticFieldChange,
   SemanticHotelChange,
+  VersionChangeClassification,
+  VersionChangeLevel,
 } from './diff'
 export { applyChangeSetToSnapshot, previewChangeSet } from './changeset'
 export type {

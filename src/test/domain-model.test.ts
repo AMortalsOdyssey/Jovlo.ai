@@ -8,6 +8,7 @@ import {
   TripSnapshotSchema,
   calculateBudget,
   calculateSchedule,
+  classifyVersionChange,
   cloneJson,
   semanticDiff,
   stableCanonicalString,
@@ -131,5 +132,44 @@ describe('budget, canonical hash, and semantic diff', () => {
     expect(diff.entries.some((entry) => entry.kind === 'stop_moved' && entry.entityId === moved.id)).toBe(true)
     expect(diff.entries.some((entry) => entry.kind === 'stop_updated' && entry.entityId === moved.id)).toBe(true)
     expect(diff.affectedDays).toEqual(expect.arrayContaining([DEMO_IDS.days[3], DEMO_IDS.days[4]]))
+  })
+
+  it('classifies a single restaurant edit as a minor version', () => {
+    const next = cloneJson(DEMO_TRIP)
+    const meal = next.days.flatMap((day) => day.stops).find((stop) => stop.kind === 'meal') ?? next.days[0].stops[0]
+    meal.stayMinutes += 15
+
+    const classification = classifyVersionChange(
+      DEMO_TRIP,
+      TripSnapshotSchema.parse(next),
+      DEMO_DERIVED,
+      DEMO_DERIVED,
+    )
+
+    expect(classification.level).toBe('minor')
+    expect(classification.label).toBe('小版本')
+  })
+
+  it('classifies removing most of one day as a major version', () => {
+    const next = cloneJson(DEMO_TRIP)
+    const target = next.days.find((day) => day.stops.length >= 2) ?? next.days[0]
+    target.stops = target.stops.slice(0, Math.max(0, target.stops.length - 2))
+
+    const classification = classifyVersionChange(
+      DEMO_TRIP,
+      TripSnapshotSchema.parse(next),
+      DEMO_DERIVED,
+      DEMO_DERIVED,
+    )
+
+    expect(classification.level).toBe('major')
+    expect(classification.reasons.join(' ')).toContain(`Day ${target.dayIndex}`)
+  })
+
+  it('treats the first immutable snapshot as the baseline', () => {
+    expect(classifyVersionChange(undefined, DEMO_TRIP, undefined, DEMO_DERIVED)).toMatchObject({
+      level: 'baseline',
+      label: '基线版本',
+    })
   })
 })

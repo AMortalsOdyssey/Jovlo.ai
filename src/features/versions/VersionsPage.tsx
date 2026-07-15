@@ -1,11 +1,18 @@
-import { GitCompareArrows, History, Plus, RotateCcw, Waypoints } from 'lucide-react'
+import { Eye, GitCompareArrows, History, Plus, RotateCcw, Waypoints } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { semanticDiff, type DerivedSnapshot, type SemanticDiff, type TripSnapshot } from '@domain'
+import {
+  classifyVersionChange,
+  semanticDiff,
+  type SemanticDiff,
+  type TripVersion,
+  type VersionChangeClassification,
+} from '@domain'
 
 import { useTripStore } from '@/store/useTripStore'
 
 import {
   Button,
+  ButtonLink,
   EmptyState,
   MetricStrip,
   PageHeader,
@@ -21,7 +28,6 @@ import {
   getTripDays,
   getTripId,
   getTripTitle,
-  normalizeVersions,
 } from '@/features/trips/model'
 
 const kindLabel: Record<string, string> = {
@@ -38,18 +44,24 @@ const kindLabel: Record<string, string> = {
   source_updated: '更新来源',
 }
 
-function buildDiff(older?: ReturnType<typeof normalizeVersions>[number], newer?: ReturnType<typeof normalizeVersions>[number]): SemanticDiff | null {
-  if (!older?.snapshot || !newer?.snapshot) return null
+function buildDiff(older?: TripVersion, newer?: TripVersion): SemanticDiff | null {
+  if (!older || !newer) return null
   try {
     return semanticDiff(
-      older.snapshot as unknown as TripSnapshot,
-      newer.snapshot as unknown as TripSnapshot,
-      older.derivedSnapshot as unknown as DerivedSnapshot | undefined,
-      newer.derivedSnapshot as unknown as DerivedSnapshot | undefined,
+      older.snapshot,
+      newer.snapshot,
+      older.derivedSnapshot,
+      newer.derivedSnapshot,
     )
   } catch {
     return null
   }
+}
+
+function versionTone(classification: VersionChangeClassification) {
+  if (classification.level === 'major') return 'coral' as const
+  if (classification.level === 'baseline') return 'sky' as const
+  return 'neutral' as const
 }
 
 function renderChangeValue(value: unknown): string {
@@ -62,15 +74,36 @@ function renderChangeValue(value: unknown): string {
   }
 }
 
+function formatSignedMinutes(value: number): string {
+  if (value === 0) return '驾驶时间不变'
+  return `${value > 0 ? '+' : '-'}${formatMinutes(Math.abs(value))}`
+}
+
 export function VersionsPage() {
   const state = useTripStore()
-  const versions = useMemo(() => normalizeVersions(state.versions), [state.versions])
+  const versions = useMemo(
+    () => [...state.versions].sort((left, right) => right.versionNo - left.versionNo),
+    [state.versions],
+  )
+  const classifications = useMemo(
+    () => new Map(versions.map((version, index) => [
+      version.id,
+      classifyVersionChange(
+        versions[index + 1]?.snapshot,
+        version.snapshot,
+        versions[index + 1]?.derivedSnapshot,
+        version.derivedSnapshot,
+      ),
+    ])),
+    [versions],
+  )
   const [selectedId, setSelectedId] = useState<string | null>(versions[0]?.id ?? null)
   const [restoreId, setRestoreId] = useState<string | null>(null)
   const selected = versions.find((version) => version.id === selectedId) ?? versions[0]
   const selectedIndex = selected ? versions.findIndex((version) => version.id === selected.id) : -1
   const older = selectedIndex >= 0 ? versions[selectedIndex + 1] : undefined
   const diff = useMemo(() => buildDiff(older, selected), [older, selected])
+  const selectedClassification = selected ? classifications.get(selected.id) : undefined
 
   const restore = () => {
     if (!restoreId) return
@@ -95,7 +128,7 @@ export function VersionsPage() {
       <PageHeader
         eyebrow={getTripTitle(state.trip)}
         title="版本历史"
-        description="每次修改会自动形成检查点；恢复会创建新版本，不会移动或删除历史。"
+        description="回看不会修改当前路书；恢复会复制旧快照并创建新版本，任何一版都不会丢失。"
         backTo={`/trips/${tripId}/plan`}
         meta={<><SaveStatus status={state.saveStatus} dirty={state.dirty} />{current ? <StatusBadge tone="brand">当前 v{current.versionNo}</StatusBadge> : null}</>}
       />
@@ -103,19 +136,27 @@ export function VersionsPage() {
       {versions.length === 0 ? (
         <EmptyState icon={Waypoints} title="还没有历史版本" description="完成一次编辑后，自动保存、版本比较和恢复会出现在这里。" />
       ) : (
-        <section className="feature-section versions-layout">
+        <>
+          <details className="versions-rules">
+            <summary>大版本 / 小版本判定</summary>
+            <p>天数、日期、出入口、单日大部分地点，或路线 / 耗时 / 预算显著变化记为大版本；单个餐厅、停留时间、来源、备注等局部调整记为小版本。</p>
+          </details>
+          <section className="feature-section versions-layout">
           <aside className="versions-list-panel" aria-label="版本列表">
             <SectionHeading title={`${versions.length} 个版本`} />
             <ol className="versions-list">
-              {versions.map((version, index) => (
+              {versions.map((version, index) => {
+                const classification = classifications.get(version.id)
+                return (
                 <li key={version.id}>
                   <button className={selected?.id === version.id ? 'is-active' : ''} type="button" onClick={() => setSelectedId(version.id)}>
                     <span className="versions-number">v{version.versionNo}</span>
-                    <span className="versions-copy"><strong>{version.message}</strong><small>{formatDateLabel(version.createdAt)} · {version.source === 'restore' ? '历史恢复' : version.source === 'agent' || version.source === 'changeset' ? 'Agent 修改' : version.source === 'template' ? '模板创建' : '自动保存'}</small></span>
-                    {index === 0 ? <StatusBadge tone="sea">当前</StatusBadge> : null}
+                    <span className="versions-copy"><strong>{version.message}</strong><small>{formatDateLabel(version.createdAt)} · {version.source === 'restore' ? '历史恢复' : version.source === 'agent' || version.source === 'changeset' ? 'Agent 修改' : version.source === 'template' ? '模板创建' : '自动保存'}</small>{classification ? <em>{classification.reasons[0]}</em> : null}</span>
+                    <span className="versions-list-status">{index === 0 ? <StatusBadge tone="sea">当前</StatusBadge> : null}{classification ? <StatusBadge tone={versionTone(classification)}>{classification.label}</StatusBadge> : null}</span>
                   </button>
                 </li>
-              ))}
+                )
+              })}
             </ol>
           </aside>
 
@@ -123,9 +164,14 @@ export function VersionsPage() {
             {selected ? (
               <>
                 <div className="feature-section-heading versions-detail-heading">
-                  <div><h2>v{selected.versionNo} · {selected.message}</h2><p>{older ? `与 v${older.versionNo} 比较` : '首个版本，无上一版本可比较'}</p></div>
-                  {selected.id !== current?.id ? <Button icon={RotateCcw} onClick={() => setRestoreId(selected.id)}>恢复此版本</Button> : null}
+                  <div><h2>v{selected.versionNo} · {selected.message}</h2><p>{older ? `与 v${older.versionNo} 比较` : '首个版本，无上一版本可比较'}{selectedClassification ? ` · ${selectedClassification.label}` : ''}</p></div>
+                  <div className="feature-action-row versions-detail-actions">
+                    <ButtonLink icon={Eye} to={`/trips/${tripId}/versions/${selected.id}`}>只读回看</ButtonLink>
+                    {selected.id !== current?.id ? <Button icon={RotateCcw} onClick={() => setRestoreId(selected.id)}>恢复此版本</Button> : null}
+                  </div>
                 </div>
+
+                {selectedClassification ? <div className={`versions-classification versions-classification--${selectedClassification.level}`}><strong>{selectedClassification.label}</strong><span>{selectedClassification.reasons.join(' · ')}</span></div> : null}
 
                 <MetricStrip
                   className="versions-diff-metrics"
@@ -142,14 +188,13 @@ export function VersionsPage() {
                     <div className="versions-impact-line">
                       <GitCompareArrows aria-hidden="true" size={18} />
                       <span>{diff.impact.distanceDeltaMeters ? `${diff.impact.distanceDeltaMeters > 0 ? '+' : ''}${(diff.impact.distanceDeltaMeters / 1000).toFixed(0)} km` : '里程不变'}</span>
-                      <span>{diff.impact.durationDeltaSeconds ? `${diff.impact.durationDeltaSeconds > 0 ? '+' : ''}${formatMinutes(diff.impact.durationDeltaSeconds / 60)}` : '驾驶时间不变'}</span>
+                      <span>{formatSignedMinutes((diff.impact.durationDeltaSeconds ?? 0) / 60)}</span>
                       <span>{diff.impact.budgetDelta ? `${diff.impact.budgetDelta.expected > 0 ? '+' : ''}${formatMoney(diff.impact.budgetDelta.expected)}` : '预算不变'}</span>
                     </div>
                     {diff.entries.length ? (
                       <ol className="versions-diff-list">
                         {diff.entries.map((entry, index) => {
-                          const snapshot = selected.snapshot as unknown as TripSnapshot
-                          const day = snapshot.days?.find((candidate) => candidate.id === (entry.dayId ?? entry.toDayId))
+                          const day = selected.snapshot.days.find((candidate) => candidate.id === (entry.dayId ?? entry.toDayId))
                           return (
                             <li key={`${entry.kind}-${entry.entityId}-${index}`}>
                               <span className="versions-diff-marker" />
@@ -170,7 +215,8 @@ export function VersionsPage() {
               </>
             ) : null}
           </div>
-        </section>
+          </section>
+        </>
       )}
 
       {restoreId ? (

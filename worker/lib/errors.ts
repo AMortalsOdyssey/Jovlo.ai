@@ -31,6 +31,7 @@ export function mapDatabaseError(message: string): AppError {
     ['CHANGESET_STALE', 'CHANGESET_STALE', 409, '请基于当前版本重新预览'],
     ['BASE_VERSION_STALE', 'BASE_VERSION_STALE', 409, '请刷新并比较当前版本'],
     ['DRAFT_REVISION_STALE', 'DRAFT_REVISION_STALE', 409, '请刷新草稿后重试'],
+    ['MAJOR_CHANGE_CONFIRMATION_REQUIRED', 'MAJOR_CHANGE_CONFIRMATION_REQUIRED', 409, '请先确认大版本影响'],
     ['PLACE_PROPOSAL_UNRESOLVED', 'PLACE_PROPOSAL_UNRESOLVED', 409, '请先解析地点提案'],
     ['PUBLICATION_REVOKED', 'PUBLICATION_REVOKED', 410, '请联系分享者获取新链接'],
     ['PUBLICATION_NOT_FOUND', 'VALIDATION_FAILED', 404, '请检查分享链接'],

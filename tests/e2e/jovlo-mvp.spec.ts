@@ -53,6 +53,22 @@ test('legacy import address now opens the focused MCP Agent flow', async ({ page
   expect(hasHorizontalOverflow).toBe(false)
 })
 
+test('version history opens an immutable read-only trip view', async ({ page }) => {
+  await page.goto(`/trips/${tripId}/versions`)
+  await expect(page.getByRole('heading', { name: '版本历史' })).toBeVisible()
+  await expect(page.getByText('大版本 / 小版本判定')).toBeVisible()
+  await page.getByRole('link', { name: '只读回看' }).click()
+  await expect(page).toHaveURL(/\/versions\/[0-9a-f-]+$/)
+  await expect(page.getByText(/只读快照 · 当前仍为 v/)).toBeVisible()
+  await expect(page.getByText('你正在查看固定历史快照。切换日期、打开来源和地图不会改变当前路书。')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '海南东线 5 日自驾示例' })).toBeVisible()
+
+  const hasHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  )
+  expect(hasHorizontalOverflow).toBe(false)
+})
+
 test('Cloudflare Worker exposes the healthy fail-closed envelope', async ({ request }) => {
   const response = await request.get('/api/v1/health')
   expect(response.ok()).toBeTruthy()

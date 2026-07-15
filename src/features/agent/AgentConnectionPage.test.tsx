@@ -48,5 +48,8 @@ describe('AgentConnectionPage', () => {
     expect(await screen.findByText(/codex mcp add jovlo --url/)).toBeInTheDocument()
     expect(screen.getByText(/\/mcp\/a0000000-0000-4000-8000-000000000001/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '复制连接命令' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: '连接后可用能力' })).toHaveTextContent('规划与编辑')
+    expect(screen.getByRole('list', { name: '连接后可用能力' })).toHaveTextContent('关联重算')
+    expect(screen.getByRole('list', { name: '连接后可用能力' })).toHaveTextContent('版本留痕')
   })
 })

@@ -13,6 +13,7 @@ import {
   TripVersionSchema,
   UuidSchema,
   cloneJson,
+  classifyVersionChange,
   semanticDiff,
   stableUuid,
   type DerivedSnapshot,
@@ -26,6 +27,12 @@ import type { AppContext, AuthenticatedUser } from '../types'
 import { searchAmapPlaces } from './amap'
 import { callSupabaseRpc, readSupabaseRow, readSupabaseRows, requireAuthenticatedUser } from './supabase'
 import { recalculateTripWithRoutes } from './trip-planning'
+import {
+  JOVLO_MCP_INSTRUCTIONS,
+  buildDaySuggestions,
+  buildTripSuggestions,
+  buildWriteReminders,
+} from './mcp-guidance'
 
 type ConnectionRow = {
   id: string
@@ -109,7 +116,7 @@ function toolSuccess(value: unknown) {
 
 function toolFailure(error: unknown) {
   const detail = error instanceof AppError
-    ? { code: error.code, message: error.message, retryable: error.retryable, userAction: error.userAction }
+    ? { code: error.code, message: error.message, retryable: error.retryable, userAction: error.userAction, details: error.details }
     : error instanceof ZodError
       ? { code: 'VALIDATION_FAILED', message: '修改内容未通过路书校验', retryable: false }
       : { code: 'INTERNAL_ERROR', message: '本次操作未完成', retryable: true }
@@ -338,6 +345,7 @@ async function applyAgentSnapshot(
   expectedRevision: number,
   message: string,
   idempotencyKey: string,
+  confirmMajorChange = false,
 ) {
   if (expectedRevision !== state.draftRevision) {
     throw new AppError('DRAFT_REVISION_STALE', '路书已有新修改', 409, {
@@ -347,6 +355,24 @@ async function applyAgentSnapshot(
   }
   const { derived, warnings } = await recalculateTripWithRoutes(snapshot, context)
   const impact = semanticDiff(state.snapshot, snapshot, state.currentDerived ?? undefined, derived)
+  const classification = classifyVersionChange(
+    state.snapshot,
+    snapshot,
+    state.currentDerived ?? undefined,
+    derived,
+  )
+  if (classification.level === 'major' && !confirmMajorChange) {
+    throw new AppError(
+      'MAJOR_CHANGE_CONFIRMATION_REQUIRED',
+      '这次修改会形成大版本，需要先向用户确认影响',
+      409,
+      {
+        retryable: true,
+        userAction: '简要说明大版本原因；用户确认后使用相同修改并设置 confirmMajorChange=true',
+        details: classification,
+      },
+    )
+  }
   const result = await callSupabaseRpc<Record<string, unknown>>(
     context,
     'apply_agent_snapshot',
@@ -371,8 +397,27 @@ async function applyAgentSnapshot(
       affectedDays: impact.affectedDays,
       ...impact.impact,
     },
+    classification,
     warnings,
+    reminders: buildWriteReminders(Number(result.versionNo ?? result.version_no), classification, warnings),
   }
+}
+
+function parseVersionRow(row: Record<string, unknown>): TripVersion {
+  return TripVersionSchema.parse({
+    id: row.id,
+    tripId: row.trip_id,
+    versionNo: row.version_no,
+    parentVersionId: row.parent_version_id,
+    source: row.source,
+    message: row.message,
+    snapshot: row.snapshot,
+    snapshotHash: row.snapshot_hash,
+    derivedSnapshot: row.derived_snapshot,
+    derivedHash: row.derived_hash,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  })
 }
 
 function connectionResourceUrl(context: AppContext, connectionId: string) {
@@ -423,7 +468,10 @@ export async function handleMcpRequest(context: AppContext, connectionId: string
     throw error
   }
 
-  const server = new McpServer({ name: 'Jovlo', version: '1.0.0', websiteUrl: 'https://jovlo.8xd.io' })
+  const server = new McpServer(
+    { name: 'Jovlo', version: '1.1.0', websiteUrl: 'https://jovlo.8xd.io' },
+    { instructions: JOVLO_MCP_INSTRUCTIONS },
+  )
   const readState = () => readTripState(context, auth.connection, auth.user.token as string)
 
   server.registerTool('jovlo_get_trip', {
@@ -437,6 +485,7 @@ export async function handleMcpRequest(context: AppContext, connectionId: string
       revision: state.draftRevision,
       currentVersionId: state.currentVersionId,
       derived: state.currentDerived,
+      suggestions: buildTripSuggestions(state.snapshot, state.currentDerived),
     }
   }))
 
@@ -458,6 +507,7 @@ export async function handleMcpRequest(context: AppContext, connectionId: string
       routeLegs: state.currentDerived?.routeLegs.filter((leg) => leg.dayId === day.id) ?? [],
       schedule: state.currentDerived?.daySchedules.find((schedule) => schedule.dayId === day.id) ?? null,
       revision: state.draftRevision,
+      suggestions: buildDaySuggestions(state.snapshot, state.currentDerived, day.id),
     }
   }))
 
@@ -482,40 +532,57 @@ export async function handleMcpRequest(context: AppContext, connectionId: string
 
   server.registerTool('jovlo_apply_trip_changes', {
     title: '修改路书',
-    description: '使用类型化操作原子修改路书。系统会重算路线、耗时和预算并立即生成 Agent 版本。',
+    description: '使用类型化操作原子修改路书。系统会重算路线、耗时、预算和天气并立即生成 Agent 版本；大版本必须先向用户说明影响并确认。',
     inputSchema: {
       expectedRevision: z.number().int().nonnegative(),
       idempotencyKey: z.string().trim().min(8).max(200),
       message: z.string().trim().min(1).max(500),
       operations: z.array(McpOperationSchema).min(1).max(100),
+      confirmMajorChange: z.boolean().default(false),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
-  }, async ({ expectedRevision, idempotencyKey, message, operations }) => runTool(async () => {
+  }, async ({ expectedRevision, idempotencyKey, message, operations, confirmMajorChange }) => runTool(async () => {
     const state = await readState()
     const snapshot = applyOperations(state.snapshot, operations)
-    return applyAgentSnapshot(context, auth, state, snapshot, expectedRevision, message, idempotencyKey)
+    return applyAgentSnapshot(context, auth, state, snapshot, expectedRevision, message, idempotencyKey, confirmMajorChange)
   }))
 
   server.registerTool('jovlo_list_versions', {
     title: '查看版本历史',
-    description: '列出路书版本，用于查看 Agent 和手动修改记录。',
+    description: '列出路书版本及大/小版本原因。回看只读；恢复会创建新版本并保留当前和全部历史。',
     inputSchema: { limit: z.number().int().min(1).max(50).default(20) },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async ({ limit }) => runTool(async () => {
     const rows = await readSupabaseRows<Record<string, unknown>>(
       context,
       'trip_versions',
-      `trip_id=eq.${auth.connection.trip_id}&select=id,version_no,parent_version_id,source,message,created_at&order=version_no.desc&limit=${limit}`,
+      `trip_id=eq.${auth.connection.trip_id}&select=id,trip_id,version_no,parent_version_id,source,message,snapshot,snapshot_hash,derived_snapshot,derived_hash,created_by,created_at&order=version_no.desc&limit=${limit + 1}`,
       auth.user.token as string,
     )
-    return { versions: rows.map((row) => ({
-      id: row.id,
-      versionNo: row.version_no,
-      parentVersionId: row.parent_version_id,
-      source: row.source,
-      message: row.message,
-      createdAt: row.created_at,
-    })) }
+    const parsed = rows.map(parseVersionRow)
+    return {
+      versions: parsed.slice(0, limit).map((version, index) => {
+        const older = parsed[index + 1]
+        return {
+          id: version.id,
+          versionNo: version.versionNo,
+          parentVersionId: version.parentVersionId,
+          source: version.source,
+          message: version.message,
+          createdAt: version.createdAt,
+          classification: classifyVersionChange(
+            older?.snapshot,
+            version.snapshot,
+            older?.derivedSnapshot,
+            version.derivedSnapshot,
+          ),
+        }
+      }),
+      policy: {
+        browse: '只读回看不会修改当前路书',
+        restore: '恢复或撤销会复制目标快照成为新版本，现有最新版和全部历史仍会保留',
+      },
+    }
   }))
 
   server.registerTool('jovlo_undo_last_change', {
@@ -525,9 +592,10 @@ export async function handleMcpRequest(context: AppContext, connectionId: string
       expectedRevision: z.number().int().nonnegative(),
       idempotencyKey: z.string().trim().min(8).max(200),
       message: z.string().trim().min(1).max(500).default('Agent 撤销上一次修改'),
+      confirmMajorChange: z.boolean().default(false),
     },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
-  }, async ({ expectedRevision, idempotencyKey, message }) => runTool(async () => {
+  }, async ({ expectedRevision, idempotencyKey, message, confirmMajorChange }) => runTool(async () => {
     const state = await readState()
     const rows = await readSupabaseRows<Record<string, unknown>>(
       context,
@@ -536,21 +604,8 @@ export async function handleMcpRequest(context: AppContext, connectionId: string
       auth.user.token as string,
     )
     if (rows.length < 2) throw new AppError('VALIDATION_FAILED', '暂无可撤销的上一版本', 409)
-    const target = TripVersionSchema.parse({
-      id: rows[1].id,
-      tripId: rows[1].trip_id,
-      versionNo: rows[1].version_no,
-      parentVersionId: rows[1].parent_version_id,
-      source: rows[1].source,
-      message: rows[1].message,
-      snapshot: rows[1].snapshot,
-      snapshotHash: rows[1].snapshot_hash,
-      derivedSnapshot: rows[1].derived_snapshot,
-      derivedHash: rows[1].derived_hash,
-      createdBy: rows[1].created_by,
-      createdAt: rows[1].created_at,
-    }) as TripVersion
-    return applyAgentSnapshot(context, auth, state, target.snapshot, expectedRevision, message, idempotencyKey)
+    const target = parseVersionRow(rows[1])
+    return applyAgentSnapshot(context, auth, state, target.snapshot, expectedRevision, message, idempotencyKey, confirmMajorChange)
   }))
 
   const transport = new WebStandardStreamableHTTPServerTransport({

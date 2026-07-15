@@ -19,6 +19,7 @@ const SettingsPage = lazyRoute(() => import('@/features/settings/SettingsPage').
 const SourcesPage = lazyRoute(() => import('@/features/sources/SourcesPage').then((module) => ({ default: module.SourcesPage })))
 const TodayPage = lazyRoute(() => import('@/features/today/TodayPage').then((module) => ({ default: module.TodayPage })))
 const VersionsPage = lazyRoute(() => import('@/features/versions/VersionsPage').then((module) => ({ default: module.VersionsPage })))
+const VersionPreviewPage = lazyRoute(() => import('@/features/versions/VersionPreviewPage').then((module) => ({ default: module.VersionPreviewPage })))
 const SharePage = lazyRoute(() => import('@/features/share/SharePage').then((module) => ({ default: module.SharePage })))
 const PublicTripPage = lazyRoute(() => import('@/features/share/PublicTripPage').then((module) => ({ default: module.PublicTripPage })))
 const PublicReportPage = lazyRoute(() => import('@/features/share/PublicReportPage').then((module) => ({ default: module.PublicReportPage })))
@@ -72,6 +73,7 @@ export function App() {
             <Route path="budget" element={<BudgetPage />} />
             <Route path="sources" element={<SourcesPage />} />
             <Route path="versions" element={<VersionsPage />} />
+            <Route path="versions/:versionId" element={<VersionPreviewPage />} />
             <Route path="agent" element={<AgentConnectionPage />} />
             <Route path="imports/demo-import" element={<LegacyAgentImportRedirect />} />
             <Route path="imports/:changeSetId" element={<ChangeSetPage />} />

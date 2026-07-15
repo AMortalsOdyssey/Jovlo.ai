@@ -10,7 +10,10 @@ import {
   LogIn,
   PlugZap,
   RefreshCcw,
+  Route,
   ShieldCheck,
+  WalletCards,
+  History,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
@@ -224,6 +227,11 @@ export function AgentConnectionPage() {
               <Button variant="primary" icon={copied ? Check : Copy} onClick={() => void copyCommand()}>{copied ? '已复制' : '复制连接命令'}</Button>
             </div>
             <p className="agent-command-note"><ShieldCheck aria-hidden="true" />Agent 会自动打开 Jovlo 登录授权。页面不会显示密钥或底层协议内容。</p>
+            <ul className="agent-capability-list" aria-label="连接后可用能力">
+              <li><Route aria-hidden="true" /><span><strong>规划与编辑</strong><small>日期、地点、顺序、住宿与停留</small></span></li>
+              <li><WalletCards aria-hidden="true" /><span><strong>关联重算</strong><small>路线、耗时、预算、天气与地图</small></span></li>
+              <li><History aria-hidden="true" /><span><strong>版本留痕</strong><small>大改先确认，任何版本都能回看与恢复</small></span></li>
+            </ul>
           </>
         )}
         {error ? <p className="agent-error" role="alert">{error}</p> : null}

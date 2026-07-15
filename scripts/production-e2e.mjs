@@ -232,16 +232,52 @@ try {
     params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "Jovlo production E2E", version: "1" } },
   });
   assert(initializedMcp.status === 200 && initializedMcp.body?.result?.serverInfo?.name === "Jovlo", "MCP initialize 失败。");
+  assert(initializedMcp.body?.result?.instructions?.includes("绝不删除历史") && initializedMcp.body?.result?.instructions?.includes("confirmMajorChange=true"), "MCP initialize 未返回完整 Agent 协作说明。");
   const tools = await mcp(connectionId, { token: ownerToken, method: "tools/list", id: 2 });
   const toolNames = tools.body?.result?.tools?.map((tool) => tool.name) ?? [];
   assert(tools.status === 200 && toolNames.length === 6 && toolNames.includes("jovlo_apply_trip_changes"), "MCP tools/list 不完整。");
+  const mcpTrip = await mcp(connectionId, {
+    token: ownerToken,
+    method: "tools/call",
+    id: 3,
+    params: { name: "jovlo_get_trip", arguments: {} },
+  });
+  const mcpTripData = mcpTrip.body?.result?.structuredContent;
+  assert(mcpTrip.status === 200 && Number.isInteger(mcpTripData?.revision), "MCP 读取路书失败。");
+  assert(Array.isArray(mcpTripData?.suggestions) && mcpTripData.suggestions.length <= 2, "MCP 没有返回精简的上下文建议。");
+  const mcpWrite = await mcp(connectionId, {
+    token: ownerToken,
+    method: "tools/call",
+    id: 4,
+    params: {
+      name: "jovlo_apply_trip_changes",
+      arguments: {
+        expectedRevision: mcpTripData.revision,
+        idempotencyKey: crypto.randomUUID(),
+        message: "生产 E2E：验证 Agent 小版本",
+        operations: [{ type: "update_trip", patch: { title: `${snapshot.title} · E2E` } }],
+        confirmMajorChange: false,
+      },
+    },
+  });
+  const mcpWriteData = mcpWrite.body?.result?.structuredContent;
+  assert(mcpWrite.status === 200 && !mcpWrite.body?.result?.isError && mcpWriteData?.classification?.level === "minor", "MCP 小版本写入失败。");
+  assert(Array.isArray(mcpWriteData?.reminders) && mcpWriteData.reminders[0]?.includes(`v${mcpWriteData.versionNo}`), "MCP 写入后没有返回版本提醒。");
+  const mcpVersions = await mcp(connectionId, {
+    token: ownerToken,
+    method: "tools/call",
+    id: 5,
+    params: { name: "jovlo_list_versions", arguments: { limit: 5 } },
+  });
+  const versionRows = mcpVersions.body?.result?.structuredContent?.versions;
+  assert(Array.isArray(versionRows) && versionRows[0]?.classification?.label === "小版本", "MCP 版本历史缺少语义分级。");
   const revokeConnection = await api(`/api/v1/mcp-connections/${encodeURIComponent(connectionId)}`, {
     token: ownerToken,
     method: "DELETE",
     idempotencyKey: crypto.randomUUID(),
   });
   assert(revokeConnection.status === 200, `MCP 连接撤销返回 ${revokeConnection.status}。`);
-  const revokedMcp = await mcp(connectionId, { token: ownerToken, method: "tools/list", id: 3 });
+  const revokedMcp = await mcp(connectionId, { token: ownerToken, method: "tools/list", id: 6 });
   assert(revokedMcp.status === 403, `撤销后的 MCP 应为 403，实际为 ${revokedMcp.status}。`);
 
   const overview = await api(`/api/v1/trips/${encodeURIComponent(tripId)}/publications`, {
@@ -339,7 +375,7 @@ try {
     checks: [
       "邮箱密码会话恢复与首次路书创建",
       "登录接口缺少 Turnstile 时拒绝",
-      "MCP OAuth challenge、tools/list、账号隔离与撤销",
+      "MCP OAuth、能力说明、上下文建议、小版本写入、版本分级、账号隔离与撤销",
       "总览固定分享",
       "单天服务端过滤与总览跳转",
       "匿名只读访问",

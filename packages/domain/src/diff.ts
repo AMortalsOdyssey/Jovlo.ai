@@ -48,6 +48,23 @@ export type SemanticDiff = {
   }
 }
 
+export type VersionChangeLevel = 'baseline' | 'minor' | 'major'
+
+export type VersionChangeClassification = {
+  level: VersionChangeLevel
+  label: '基线版本' | '小版本' | '大版本'
+  reasons: string[]
+  affectedDays: number
+  changedStops: number
+  thresholds: {
+    affectedDayRatio: number
+    changedStopRatio: number
+    distanceRatio?: number
+    durationRatio?: number
+    budgetRatio?: number
+  }
+}
+
 type StopLocation = {
   dayId: string
   dayIndex: number
@@ -82,6 +99,174 @@ function totalDuration(derived: DerivedSnapshot): number {
     (total, leg) => total + (leg.status === 'failed' ? 0 : leg.durationSeconds),
     0,
   )
+}
+
+function changeRatio(before: number, after: number): number {
+  if (before === after) return 0
+  if (before === 0) return 1
+  return Math.abs(after - before) / Math.abs(before)
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`
+}
+
+function uniqueReasons(reasons: string[]): string[] {
+  return [...new Set(reasons)].slice(0, 3)
+}
+
+/**
+ * Uses product impact rather than raw field count to classify a saved version.
+ * The result is calculated from immutable snapshots, so old versions do not
+ * need a database migration when the rules are refined.
+ */
+export function classifyVersionChange(
+  before: TripSnapshot | undefined,
+  after: TripSnapshot,
+  beforeDerived?: DerivedSnapshot,
+  afterDerived?: DerivedSnapshot,
+): VersionChangeClassification {
+  if (!before) {
+    return {
+      level: 'baseline',
+      label: '基线版本',
+      reasons: [`建立 ${after.days.length} 天路书基线`],
+      affectedDays: after.days.length,
+      changedStops: after.days.reduce((total, day) => total + day.stops.length, 0),
+      thresholds: { affectedDayRatio: 1, changedStopRatio: 1 },
+    }
+  }
+
+  const diff = semanticDiff(before, after, beforeDerived, afterDerived)
+  const beforeDays = new Map(before.days.map((day) => [day.id, day]))
+  const afterDays = new Map(after.days.map((day) => [day.id, day]))
+  const allDayIds = new Set([...beforeDays.keys(), ...afterDays.keys()])
+  const affectedDayIds = new Set(diff.affectedDays)
+  const majorReasons: string[] = []
+  const minorReasons: string[] = []
+  let changedStops = 0
+
+  for (const dayId of allDayIds) {
+    const previous = beforeDays.get(dayId)
+    const next = afterDays.get(dayId)
+    if (!previous || !next) {
+      affectedDayIds.add(dayId)
+      changedStops += previous?.stops.length ?? next?.stops.length ?? 0
+      majorReasons.push(previous ? `删除 Day ${previous.dayIndex}` : `新增 Day ${next?.dayIndex ?? ''}`.trim())
+      continue
+    }
+
+    const previousById = new Map(previous.stops.map((stop) => [stop.id, stop]))
+    const nextById = new Map(next.stops.map((stop) => [stop.id, stop]))
+    const changedIds = new Set<string>()
+    for (const stopId of new Set([...previousById.keys(), ...nextById.keys()])) {
+      const previousStop = previousById.get(stopId)
+      const nextStop = nextById.get(stopId)
+      if (!previousStop || !nextStop || previousStop.placeId !== nextStop.placeId) changedIds.add(stopId)
+    }
+
+    const commonBefore = previous.stops.filter((stop) => nextById.has(stop.id)).map((stop) => stop.id)
+    const commonAfter = next.stops.filter((stop) => previousById.has(stop.id)).map((stop) => stop.id)
+    if (stableCanonicalString(commonBefore) !== stableCanonicalString(commonAfter)) {
+      commonBefore.forEach((stopId, index) => {
+        if (commonAfter[index] !== stopId) changedIds.add(stopId)
+      })
+    }
+
+    if (changedIds.size > 0) affectedDayIds.add(dayId)
+    changedStops += changedIds.size
+    const dayStopBase = Math.max(previous.stops.length, next.stops.length, 1)
+    const dayChangeRatio = changedIds.size / dayStopBase
+    if (changedIds.size >= 2 && dayChangeRatio >= 0.5) {
+      majorReasons.push(`Day ${next.dayIndex} 调整 ${changedIds.size}/${dayStopBase} 个地点`)
+    }
+  }
+
+  if (before.days.length !== after.days.length) {
+    majorReasons.push(`天数从 ${before.days.length} 天调整为 ${after.days.length} 天`)
+  }
+  if (before.intent.startDate !== after.intent.startDate) majorReasons.push('整体出发日期发生变化')
+  if (
+    stableCanonicalString(before.intent.entryAnchor) !== stableCanonicalString(after.intent.entryAnchor) ||
+    stableCanonicalString(before.intent.exitAnchor) !== stableCanonicalString(after.intent.exitAnchor)
+  ) {
+    majorReasons.push('行程出入口发生变化')
+  }
+
+  const dayBase = Math.max(before.days.length, after.days.length, 1)
+  const stopBase = Math.max(
+    before.days.reduce((total, day) => total + day.stops.length, 0),
+    after.days.reduce((total, day) => total + day.stops.length, 0),
+    1,
+  )
+  const affectedDayRatio = affectedDayIds.size / dayBase
+  const changedStopRatio = changedStops / stopBase
+  if (affectedDayIds.size >= 3 && affectedDayRatio >= 0.5 && changedStops >= 4) {
+    majorReasons.push(`影响 ${affectedDayIds.size}/${dayBase} 天行程`)
+  }
+  if (changedStops >= 4 && changedStopRatio >= 0.35) {
+    majorReasons.push(`调整 ${changedStops}/${stopBase} 个地点`)
+  }
+
+  let distanceRatio: number | undefined
+  let durationRatio: number | undefined
+  let budgetRatio: number | undefined
+  if (beforeDerived && afterDerived) {
+    const beforeDistance = beforeDerived.budget.totalDistanceMeters
+    const afterDistance = afterDerived.budget.totalDistanceMeters
+    const distanceDelta = Math.abs(afterDistance - beforeDistance)
+    distanceRatio = changeRatio(beforeDistance, afterDistance)
+    if (distanceDelta >= 60_000 && distanceRatio >= 0.2) {
+      majorReasons.push(`路线里程变化 ${(distanceDelta / 1000).toFixed(0)} km（${formatPercent(distanceRatio)}）`)
+    }
+
+    const beforeDuration = totalDuration(beforeDerived)
+    const afterDuration = totalDuration(afterDerived)
+    const durationDelta = Math.abs(afterDuration - beforeDuration)
+    durationRatio = changeRatio(beforeDuration, afterDuration)
+    if (durationDelta >= 5_400 && durationRatio >= 0.25) {
+      majorReasons.push(`驾驶时间变化 ${Math.round(durationDelta / 60)} 分钟（${formatPercent(durationRatio)}）`)
+    }
+
+    const beforeBudget = beforeDerived.budget.total.expected
+    const afterBudget = afterDerived.budget.total.expected
+    const budgetDelta = Math.abs(afterBudget - beforeBudget)
+    budgetRatio = changeRatio(beforeBudget, afterBudget)
+    if (budgetDelta >= 1_000 && budgetRatio >= 0.25) {
+      majorReasons.push(`预计预算变化 ¥${Math.round(budgetDelta)}（${formatPercent(budgetRatio)}）`)
+    }
+  }
+
+  if (changedStops > 0) minorReasons.push(`调整 ${changedStops} 个地点`)
+  if (changedStops === 0) {
+    const editedStops = new Set(
+      diff.entries
+        .filter((entry) => entry.kind === 'stop_updated' || entry.kind === 'stop_moved' || entry.kind === 'place_replaced')
+        .map((entry) => entry.entityId),
+    )
+    if (editedStops.size > 0) minorReasons.push(`微调 ${editedStops.size} 个地点`)
+  }
+  if (diff.hotelChanges.length > 0) minorReasons.push(`调整 ${diff.hotelChanges.length} 处住宿`)
+  if (diff.entries.some((entry) => entry.kind.startsWith('source_'))) minorReasons.push('补充或更新资料来源')
+  if (diff.entries.some((entry) => entry.kind === 'budget_assumption_changed')) minorReasons.push('更新预算假设')
+  if (diff.entries.some((entry) => entry.kind === 'setting_changed')) minorReasons.push('微调行程设置')
+  if (minorReasons.length === 0) minorReasons.push('更新标题、备注或生成检查点')
+
+  const level = majorReasons.length > 0 ? 'major' : 'minor'
+  return {
+    level,
+    label: level === 'major' ? '大版本' : '小版本',
+    reasons: uniqueReasons(level === 'major' ? majorReasons : minorReasons),
+    affectedDays: affectedDayIds.size,
+    changedStops,
+    thresholds: {
+      affectedDayRatio,
+      changedStopRatio,
+      ...(distanceRatio === undefined ? {} : { distanceRatio }),
+      ...(durationRatio === undefined ? {} : { durationRatio }),
+      ...(budgetRatio === undefined ? {} : { budgetRatio }),
+    },
+  }
 }
 
 export function semanticDiff(
