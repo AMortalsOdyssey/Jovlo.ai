@@ -24,6 +24,7 @@ type ProductionSyncControllerOptions = {
   userId: string
   apiBase?: string
   debounceMs?: number
+  preferredTripId?: string | null
 }
 
 type DraftSaveResult = {
@@ -124,6 +125,7 @@ export class ProductionSyncController {
   private readonly userId: string
   private readonly apiBase: string
   private readonly debounceMs: number
+  private readonly preferredTripId: string | null
   private readonly abortController = new AbortController()
   private unsubscribe: (() => void) | null = null
   private saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -143,6 +145,7 @@ export class ProductionSyncController {
     this.userId = options.userId
     this.apiBase = options.apiBase ?? import.meta.env.VITE_API_BASE_URL ?? ''
     this.debounceMs = options.debounceMs ?? 720
+    this.preferredTripId = options.preferredTripId ?? null
   }
 
   private request<T>(path: string, init?: RequestInit) {
@@ -185,7 +188,10 @@ export class ProductionSyncController {
       let currentVersionId: string | null = null
       let draftRevision = 0
 
-      const firstTrip = asRecord(trips[0])
+      const preferredTrip = this.preferredTripId
+        ? trips.find((trip) => readString(asRecord(trip), 'id', 'tripId', 'trip_id') === this.preferredTripId)
+        : null
+      const firstTrip = asRecord(preferredTrip ?? trips[0])
       const existingTripId = readString(firstTrip, 'id', 'tripId', 'trip_id')
       if (!existingTripId) {
         snapshot = cloneJson(DEMO_TRIP)
@@ -430,6 +436,10 @@ export function createProductionSyncController(options: ProductionSyncController
   return new ProductionSyncController(options)
 }
 
+export function readRouteTripId(pathname: string) {
+  return pathname.match(/^\/trips\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:\/|$)/i)?.[1] ?? null
+}
+
 export function ProductionBridge({ apiBase, debounceMs }: ProductionBridgeProps) {
   useEffect(() => {
     const config = getProductionBridgeConfig()
@@ -479,6 +489,7 @@ export function ProductionBridge({ apiBase, debounceMs }: ProductionBridgeProps)
         userId: session.user.id,
         apiBase,
         debounceMs,
+        preferredTripId: readRouteTripId(window.location.pathname),
       })
       void controller.start()
     }

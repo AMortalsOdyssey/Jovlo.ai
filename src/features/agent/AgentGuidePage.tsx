@@ -32,8 +32,8 @@ export function AgentGuidePage() {
   const { status } = useAuth()
   const canOpenWorkspace = status === 'authenticated' || status === 'trial' || status === 'demo'
   const agentStartPath = canOpenWorkspace
-    ? '/trips/new?mode=agent'
-    : '/login?returnTo=%2Ftrips%2Fnew%3Fmode%3Dagent'
+    ? '/trips/new'
+    : '/login?returnTo=%2Ftrips%2Fnew'
 
   return (
     <PageShell width="reading" className="agent-guide-page">

@@ -20,7 +20,7 @@ describe('Agent guide', () => {
     expect(screen.getByRole('link', { name: '自己创建' })).toHaveAttribute('href', '/trips/new?mode=manual')
     expect(screen.getAllByRole('link', { name: /AI 协作创建|开始 AI 协作/ })[0]).toHaveAttribute(
       'href',
-      '/login?returnTo=%2Ftrips%2Fnew%3Fmode%3Dagent',
+      '/login?returnTo=%2Ftrips%2Fnew',
     )
   })
 })

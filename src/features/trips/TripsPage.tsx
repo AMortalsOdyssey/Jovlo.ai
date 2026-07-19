@@ -42,8 +42,8 @@ export function TripsPage() {
         actions={
           <div className="trips-create-actions" aria-label="创建与教程入口">
             <ButtonLink to="/guide/agent" variant="quiet" icon={BookOpen}>使用教程</ButtonLink>
-            <ButtonLink to="/trips/new?mode=agent" icon={Sparkles}>AI 协作创建</ButtonLink>
-            <ButtonLink to="/trips/new?mode=manual" variant="primary" icon={Plus}>手动创建</ButtonLink>
+            <ButtonLink to="/trips/new?mode=manual" icon={Plus}>手动创建</ButtonLink>
+            <ButtonLink to="/trips/new" variant="primary" icon={Sparkles}>AI 协作创建</ButtonLink>
           </div>
         }
       />
@@ -55,8 +55,8 @@ export function TripsPage() {
           description="先把日期、起终点和旅行节奏定下来，首份草案大约一分钟可编辑。"
           action={
             <div className="trips-empty-actions">
-              <ButtonLink to="/trips/new?mode=agent" icon={Sparkles}>AI 协作创建</ButtonLink>
-              <ButtonLink to="/trips/new?mode=manual" variant="primary" icon={Plus}>手动创建</ButtonLink>
+              <ButtonLink to="/trips/new?mode=manual" icon={Plus}>手动创建</ButtonLink>
+              <ButtonLink to="/trips/new" variant="primary" icon={Sparkles}>AI 协作创建</ButtonLink>
             </div>
           }
         />

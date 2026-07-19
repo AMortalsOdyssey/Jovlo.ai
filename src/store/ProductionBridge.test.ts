@@ -1,7 +1,7 @@
 import { DEMO_IDS, DEMO_TRIP, DEMO_VERSIONS, TripVersionSchema, cloneJson } from '@domain'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createProductionSyncController, getProductionBridgeConfig } from './ProductionBridge'
+import { createProductionSyncController, getProductionBridgeConfig, readRouteTripId } from './ProductionBridge'
 import { useTripStore } from './useTripStore'
 
 const USER_ID = DEMO_IDS.owner
@@ -41,6 +41,12 @@ describe('ProductionBridge', () => {
 
     expect(getProductionBridgeConfig()).toBeNull()
     expect(useTripStore.getState().productionSync.mode).toBe('demo')
+  })
+
+  it('reads only a concrete trip id from planner routes', () => {
+    expect(readRouteTripId(`/trips/${DEMO_TRIP.tripId}/plan`)).toBe(DEMO_TRIP.tripId)
+    expect(readRouteTripId('/trips/new')).toBeNull()
+    expect(readRouteTripId('/trips')).toBeNull()
   })
 
   it('creates the current template and publishes a real initial version when the account has no trips', async () => {
@@ -101,7 +107,10 @@ describe('ProductionBridge', () => {
       const request = requestDetails(input, init)
       calls.push(request)
       if (request.url.endsWith('/api/v1/trips') && request.method === 'GET') {
-        return response([{ id: DEMO_TRIP.tripId, current_version_id: DEMO_VERSIONS[1].id }])
+        return response([
+          { id: 'a0000000-0000-4000-8000-000000000099', current_version_id: null },
+          { id: DEMO_TRIP.tripId, current_version_id: DEMO_VERSIONS[1].id },
+        ])
       }
       if (request.url.endsWith(`/api/v1/trips/${DEMO_TRIP.tripId}`) && request.method === 'GET') {
         return response({
@@ -146,6 +155,7 @@ describe('ProductionBridge', () => {
       accessToken: 'session-token',
       userId: USER_ID,
       debounceMs: 60_000,
+      preferredTripId: DEMO_TRIP.tripId,
     })
     await controller.start()
 
