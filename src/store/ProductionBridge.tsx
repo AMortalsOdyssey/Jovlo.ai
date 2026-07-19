@@ -436,8 +436,14 @@ export function createProductionSyncController(options: ProductionSyncController
   return new ProductionSyncController(options)
 }
 
-export function readRouteTripId(pathname: string) {
-  return pathname.match(/^\/trips\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:\/|$)/i)?.[1] ?? null
+export function readRouteTripId(pathname: string, search = '') {
+  const pathTripId = pathname.match(/^\/trips\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?:\/|$)/i)?.[1]
+  if (pathTripId) return pathTripId
+  if (pathname !== '/guide/agent') return null
+  const queryTripId = new URLSearchParams(search).get('tripId')
+  return queryTripId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(queryTripId)
+    ? queryTripId
+    : null
 }
 
 export function ProductionBridge({ apiBase, debounceMs }: ProductionBridgeProps) {
@@ -489,7 +495,7 @@ export function ProductionBridge({ apiBase, debounceMs }: ProductionBridgeProps)
         userId: session.user.id,
         apiBase,
         debounceMs,
-        preferredTripId: readRouteTripId(window.location.pathname),
+        preferredTripId: readRouteTripId(window.location.pathname, window.location.search),
       })
       void controller.start()
     }

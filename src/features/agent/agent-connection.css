@@ -1,4 +1,5 @@
 .agent-page { padding-bottom: var(--space-12); }
+.agent-page--embedded { padding-bottom: 0; }
 
 .agent-flow {
   margin-top: var(--space-6);

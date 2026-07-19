@@ -1507,6 +1507,9 @@
   border-bottom: 1px solid var(--line);
 }
 
+.new-trip-agent--compact { padding: 0; border: 0; }
+.new-trip-agent--compact .new-trip-agent__connect { margin-top: var(--space-5); }
+
 .new-trip-agent > header {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);

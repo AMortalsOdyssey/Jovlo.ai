@@ -578,7 +578,7 @@ export function PlanPage() {
     <nav className="plan-mobile-panel plan-more-links" aria-label="更多功能">
       <Link to={`/trips/${state.trip.tripId}/sources`}><BookOpen aria-hidden="true" />来源与证据</Link>
       <Link to={`/trips/${state.trip.tripId}/versions`}><FileClock aria-hidden="true" />版本历史</Link>
-      <Link to={`/trips/${state.trip.tripId}/agent`}><Sparkles aria-hidden="true" />让 Agent 帮我改</Link>
+      <Link to={`/guide/agent?tripId=${encodeURIComponent(state.trip.tripId)}`}><Sparkles aria-hidden="true" />让 Agent 帮我改</Link>
       <Link to={`/trips/${state.trip.tripId}/reports`}><ReceiptText aria-hidden="true" />汇总报告</Link>
       <Link to={`/trips/${state.trip.tripId}/settings`}><Settings aria-hidden="true" />行程设置</Link>
     </nav>
@@ -706,7 +706,7 @@ export function PlanPage() {
       <PlannerWorkspace
         activeMobileView={state.mobileView}
         mobileMapCollapsed={mobileMapCollapsed}
-        header={<TripHeader title={state.trip.title} version={version.versionNo} saveStatus={state.saveStatus === 'failed' ? 'error' : state.saveStatus} onBack={() => navigate('/trips')} onDownload={() => setPdfOpen(true)} onAgent={() => navigate(`/trips/${state.trip.tripId}/agent`)} onHistory={() => navigate(`/trips/${state.trip.tripId}/versions`)} onShare={() => navigate(`/trips/${state.trip.tripId}/share`)} onRetrySave={state.retrySave} />}
+        header={<TripHeader title={state.trip.title} version={version.versionNo} saveStatus={state.saveStatus === 'failed' ? 'error' : state.saveStatus} onBack={() => navigate('/trips')} onDownload={() => setPdfOpen(true)} onAgent={() => navigate(`/guide/agent?tripId=${encodeURIComponent(state.trip.tripId)}`)} onHistory={() => navigate(`/trips/${state.trip.tripId}/versions`)} onShare={() => navigate(`/trips/${state.trip.tripId}/share`)} onRetrySave={state.retrySave} />}
         dayRail={<DayRail days={daySummaries} selectedDayId={day.id} overviewSelected={overviewOpen} onSelectOverview={openOverview} onSelectDay={updateDay} />}
         dayStrip={<MobileDayStrip days={daySummaries} selectedDayId={day.id} overviewSelected={overviewOpen} onSelectOverview={openOverview} onSelectDay={updateDay} />}
         timeline={overviewOpen ? overview : timeline}

@@ -2,6 +2,28 @@
 
 .agent-guide-page { padding-bottom: var(--space-12); }
 
+.agent-guide-context {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: var(--space-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.agent-guide-context article {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+  padding: var(--space-4);
+}
+
+.agent-guide-context article + article { border-left: 1px solid var(--line); }
+.agent-guide-context article[data-current="true"] { background: var(--brand-tint); box-shadow: inset 0 2px 0 var(--brand); }
+.agent-guide-context span { color: var(--brand-text); font-size: 11px; font-weight: 760; }
+.agent-guide-context strong { font-size: 15px; }
+.agent-guide-context p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+
 .agent-guide-intro {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
@@ -32,6 +54,110 @@
 .agent-guide-example h2 { margin: 0; }
 .agent-guide-intro h2 { margin-top: var(--space-1); font: 700 28px / 38px var(--font-display); }
 .agent-guide-intro p { max-width: 620px; margin-top: var(--space-2); color: var(--muted); }
+
+.agent-guide-connector,
+.agent-guide-tools,
+.agent-guide-requests { padding: var(--space-8) 0; border-bottom: 1px solid var(--line); }
+
+.agent-guide-connector > header,
+.agent-guide-tools > header,
+.agent-guide-requests > header { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--space-3); }
+
+.agent-guide-connector > header > span,
+.agent-guide-tools > header > span,
+.agent-guide-requests > header > span { color: var(--brand-text); font-size: 12px; font-weight: 760; }
+
+.agent-guide-connector h2,
+.agent-guide-tools h2,
+.agent-guide-requests h2,
+.agent-guide-connector p,
+.agent-guide-tools p,
+.agent-guide-requests p { margin: 0; }
+
+.agent-guide-connector h2,
+.agent-guide-tools h2,
+.agent-guide-requests h2 { font: 700 var(--text-panel-size) / var(--text-panel-line) var(--font-ui); }
+
+.agent-guide-connector > header p,
+.agent-guide-tools > header p,
+.agent-guide-requests > header p { margin-top: var(--space-1); color: var(--muted); }
+
+.agent-guide-trip-id {
+  display: block;
+  margin-top: var(--space-1);
+  overflow-wrap: anywhere;
+  color: var(--sea-text);
+  font: 500 11px / 1.6 var(--font-numeric);
+}
+
+.agent-guide-login {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-top: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.agent-guide-login > svg { color: var(--sea-text); }
+.agent-guide-login strong,
+.agent-guide-login span { display: block; }
+.agent-guide-login span { margin-top: 2px; color: var(--muted); font-size: 12px; }
+
+.agent-guide-tools ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0;
+  margin: var(--space-5) 0 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+.agent-guide-tools li {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+
+.agent-guide-tools li:nth-child(odd) { border-right: 1px solid var(--line); }
+.agent-guide-tools li:nth-last-child(-n + 2) { border-bottom: 0; }
+.agent-guide-tools li > svg { width: 19px; color: var(--brand-text); }
+.agent-guide-tools li div { min-width: 0; }
+.agent-guide-tools strong,
+.agent-guide-tools code { display: block; }
+.agent-guide-tools strong { font-size: 13px; }
+.agent-guide-tools code { margin-top: 2px; overflow-wrap: anywhere; color: var(--muted); font: 500 11px / 1.5 var(--font-numeric); }
+
+.agent-guide-requests > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.agent-guide-requests article {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+
+.agent-guide-requests article > svg { width: 22px; color: var(--brand-text); }
+.agent-guide-requests article > span { color: var(--brand-text); font-size: 12px; font-weight: 760; }
+.agent-guide-requests article > p { color: var(--ink); font: 550 14px / 1.75 var(--font-display); }
 
 .agent-guide-flow { padding: var(--space-8) 0; border-bottom: 1px solid var(--line); }
 .agent-guide-flow > header { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--space-3); }
@@ -72,6 +198,8 @@
 .agent-guide-actions { display: flex; justify-content: flex-end; gap: var(--space-2); padding-top: var(--space-6); }
 
 @media (max-width: 767px) {
+  .agent-guide-context { grid-template-columns: minmax(0, 1fr); }
+  .agent-guide-context article + article { border-top: 1px solid var(--line); border-left: 0; }
   .agent-guide-intro { grid-template-columns: 44px minmax(0, 1fr); padding: var(--space-6) 0; }
   .agent-guide-intro__icon { width: 44px; height: 44px; }
   .agent-guide-intro h2 { font-size: 23px; line-height: 32px; }
@@ -84,6 +212,12 @@
   .agent-guide-example { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
   .agent-guide-example > svg { grid-row: 1; width: 28px; height: 28px; }
   .agent-guide-example h2 { font-size: 18px; line-height: 29px; }
-  .agent-guide-actions { align-items: stretch; flex-direction: column-reverse; }
+  .agent-guide-tools ul,
+  .agent-guide-requests > div { grid-template-columns: minmax(0, 1fr); }
+  .agent-guide-tools li:nth-child(n) { border-right: 0; border-bottom: 1px solid var(--line); }
+  .agent-guide-tools li:last-child { border-bottom: 0; }
+  .agent-guide-login { grid-template-columns: 32px minmax(0, 1fr); }
+  .agent-guide-login .feature-button { grid-column: 1 / -1; width: 100%; }
+  .agent-guide-actions { align-items: stretch; }
   .agent-guide-actions .feature-button { width: 100%; }
 }

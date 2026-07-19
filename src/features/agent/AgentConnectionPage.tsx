@@ -86,8 +86,14 @@ const STATUS_COPY: Record<ConnectionStatus, { label: string; note: string; tone:
   revoked: { label: '已撤销', note: '这条连接已不能读写路书', tone: 'coral' },
 }
 
-export function AgentConnectionPage() {
-  const { tripId = '' } = useParams()
+type AgentConnectionPageProps = {
+  embedded?: boolean
+  tripId?: string
+}
+
+export function AgentConnectionPage({ embedded = false, tripId: providedTripId }: AgentConnectionPageProps = {}) {
+  const { tripId: routeTripId = '' } = useParams()
+  const tripId = providedTripId ?? routeTripId
   const navigate = useNavigate()
   const { signOut, user } = useAuth()
   const title = useTripStore((state) => state.trip.title)
@@ -212,23 +218,15 @@ export function AgentConnectionPage() {
   }
 
   const status = selected ? STATUS_COPY[selected.status] : null
-  return (
-    <PageShell width="reading" className="agent-page">
-      <PageHeader
-        trail={[{ label: title, to: `/trips/${tripId}/plan` }]}
-        title="Agent 协作"
-        description="在 Agent 里发攻略或直接说出修改要求，Jovlo 会自动重算路线、耗时与预算。"
-        backTo={`/trips/${tripId}/plan`}
-        meta={status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : null}
-      />
-
-      <section className="agent-flow" aria-label="Agent 连接流程">
+  const content = (
+    <>
+      {!embedded ? <section className="agent-flow" aria-label="Agent 连接流程">
         <ol>
           <li data-active="true"><span>1</span><div><strong>建立 MCP 连接</strong><small>复制一次性连接命令</small></div></li>
           <li data-active={selected?.status === 'active'}><span>2</span><div><strong>登录 Jovlo 授权</strong><small>只允许修改当前路书</small></div></li>
           <li data-active={selected?.status === 'active'}><span>3</span><div><strong>直接对话修改</strong><small>更改立即生效，随时可回退</small></div></li>
         </ol>
-      </section>
+      </section> : null}
 
       <section className="agent-connect-section">
         <header>
@@ -336,6 +334,21 @@ export function AgentConnectionPage() {
           </section>
         </div>
       ) : null}
+    </>
+  )
+
+  if (embedded) return <div className="agent-page agent-page--embedded">{content}</div>
+
+  return (
+    <PageShell width="reading" className="agent-page">
+      <PageHeader
+        trail={[{ label: title, to: `/trips/${tripId}/plan` }]}
+        title="Agent 协作"
+        description="在 Agent 里发攻略或直接说出修改要求，Jovlo 会自动重算路线、耗时与预算。"
+        backTo={`/trips/${tripId}/plan`}
+        meta={status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : null}
+      />
+      {content}
     </PageShell>
   )
 }

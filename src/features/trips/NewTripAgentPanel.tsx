@@ -116,7 +116,7 @@ export function createEmptyAgentTripSnapshot(): TripSnapshot {
   })
 }
 
-export function NewTripAgentPanel() {
+export function NewTripAgentPanel({ compact = false }: { compact?: boolean }) {
   const [kind, setKind] = useState<AgentClientKind>('codex')
   const [draft, setDraft] = useState<AgentDraft | null>(() => readStoredDraft())
   const [connection, setConnection] = useState<McpConnection | null>(null)
@@ -203,6 +203,57 @@ export function NewTripAgentPanel() {
 
   const connectionUsable = connection && connection.status !== 'expired' && connection.status !== 'revoked'
 
+  const connector = (
+    <section className="new-trip-agent__connect" aria-labelledby="new-trip-agent-connect-title">
+      <header>
+        <div>
+          <small>MCP 连接 · 创建新路书</small>
+          <h3 id="new-trip-agent-connect-title">{connectionUsable ? '复制命令到你的 Agent' : '创建一条安全连接'}</h3>
+          <p>{connectionUsable ? '运行命令后，浏览器会打开 Jovlo 登录授权。' : '先建立空白路书并绑定连接，再把攻略或口述要求发给 Agent。'}</p>
+        </div>
+        {connectionUsable ? <StatusBadge tone={connection.status === 'active' ? 'sea' : 'sun'}>{connection.status === 'active' ? '已连接' : '等待授权'}</StatusBadge> : null}
+      </header>
+
+      {!connectionUsable ? (
+        <Button variant="primary" icon={busy === 'create' ? LoaderCircle : Link2} onClick={() => void createConnection()} disabled={Boolean(busy)}>
+          {busy === 'create' ? '正在创建…' : draft ? '重新创建 MCP 连接' : '创建 MCP 连接'}
+        </Button>
+      ) : (
+        <>
+          <SegmentedControl
+            label="Agent 客户端"
+            value={kind}
+            onChange={setKind}
+            options={[{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude' }, { value: 'generic', label: '通用 MCP' }]}
+          />
+          <div className="new-trip-agent__command">
+            <pre><code>{command}</code></pre>
+            <Button variant="primary" icon={copied ? Check : Copy} onClick={() => void handleCopy()}>{copied ? '已复制' : '复制连接命令'}</Button>
+          </div>
+          <p className="new-trip-agent__connection-note"><ShieldCheck aria-hidden="true" />连接只允许读写这本新路书，可在路书内随时撤销。</p>
+        </>
+      )}
+
+      {error ? <p className="new-trip-agent__error" role="alert">{error}</p> : null}
+    </section>
+  )
+
+  const ready = draft && readyVersionNo > 0 ? (
+    <section className="new-trip-agent__ready" aria-live="polite">
+      <span className="new-trip-agent__ready-icon"><Check aria-hidden="true" /></span>
+      <div>
+        <small>Agent 已完成</small>
+        <strong>新路书已生成 · v{readyVersionNo}</strong>
+        <p>路线、时间和预算已经写入，可以继续查看或手动调整。</p>
+      </div>
+      <a href={`/trips/${draft.tripId}/plan`}>打开路书 <ArrowRight aria-hidden="true" /></a>
+    </section>
+  ) : null
+
+  if (compact) {
+    return <div className="new-trip-agent new-trip-agent--compact">{connector}{ready}</div>
+  }
+
   return (
     <section className="new-trip-agent" aria-labelledby="new-trip-agent-title">
       <header>
@@ -214,38 +265,7 @@ export function NewTripAgentPanel() {
         </div>
       </header>
 
-      <section className="new-trip-agent__connect" aria-labelledby="new-trip-agent-connect-title">
-        <header>
-          <div>
-            <small>MCP 连接</small>
-            <h3 id="new-trip-agent-connect-title">{connectionUsable ? '复制命令到你的 Agent' : '创建一条安全连接'}</h3>
-            <p>{connectionUsable ? '运行命令后，浏览器会打开 Jovlo 登录授权。' : '会同时建立一份空白路书，待授权连接 10 分钟失效。'}</p>
-          </div>
-          {connectionUsable ? <StatusBadge tone={connection.status === 'active' ? 'sea' : 'sun'}>{connection.status === 'active' ? '已连接' : '等待授权'}</StatusBadge> : null}
-        </header>
-
-        {!connectionUsable ? (
-          <Button variant="primary" icon={busy === 'create' ? LoaderCircle : Link2} onClick={() => void createConnection()} disabled={Boolean(busy)}>
-            {busy === 'create' ? '正在创建…' : draft ? '重新创建 MCP 连接' : '创建 MCP 连接'}
-          </Button>
-        ) : (
-          <>
-            <SegmentedControl
-              label="Agent 客户端"
-              value={kind}
-              onChange={setKind}
-              options={[{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude' }, { value: 'generic', label: '通用 MCP' }]}
-            />
-            <div className="new-trip-agent__command">
-              <pre><code>{command}</code></pre>
-              <Button variant="primary" icon={copied ? Check : Copy} onClick={() => void handleCopy()}>{copied ? '已复制' : '复制连接命令'}</Button>
-            </div>
-            <p className="new-trip-agent__connection-note"><ShieldCheck aria-hidden="true" />连接只允许读写这本新路书，可在路书内随时撤销。</p>
-          </>
-        )}
-
-        {error ? <p className="new-trip-agent__error" role="alert">{error}</p> : null}
-      </section>
+      {connector}
 
       <ol className="new-trip-agent__flow">
         <li><strong>1</strong><Link2 aria-hidden="true" /><div><b>建立连接</b><span>自动创建空白路书</span></div></li>
@@ -253,17 +273,7 @@ export function NewTripAgentPanel() {
         <li><strong>3</strong><MessageSquareText aria-hidden="true" /><div><b>发送要求</b><span>路线、时间与预算联动</span></div></li>
       </ol>
 
-      {draft && readyVersionNo > 0 ? (
-        <section className="new-trip-agent__ready" aria-live="polite">
-          <span className="new-trip-agent__ready-icon"><Check aria-hidden="true" /></span>
-          <div>
-            <small>Agent 已完成</small>
-            <strong>新路书已生成 · v{readyVersionNo}</strong>
-            <p>路线、时间和预算已经写入，可以继续查看或手动调整。</p>
-          </div>
-          <a href={`/trips/${draft.tripId}/plan`}>打开路书 <ArrowRight aria-hidden="true" /></a>
-        </section>
-      ) : null}
+      {ready}
 
       <div className="new-trip-agent__example">
         <small>连接后，直接在 Agent 里说</small>

@@ -45,6 +45,8 @@ describe('ProductionBridge', () => {
 
   it('reads only a concrete trip id from planner routes', () => {
     expect(readRouteTripId(`/trips/${DEMO_TRIP.tripId}/plan`)).toBe(DEMO_TRIP.tripId)
+    expect(readRouteTripId('/guide/agent', `?tripId=${DEMO_TRIP.tripId}`)).toBe(DEMO_TRIP.tripId)
+    expect(readRouteTripId('/guide/agent', '?tripId=not-a-trip')).toBeNull()
     expect(readRouteTripId('/trips/new')).toBeNull()
     expect(readRouteTripId('/trips')).toBeNull()
   })

@@ -13,7 +13,6 @@ const NewTripPage = lazyRoute(() => import('@/features/trips/NewTripPage').then(
 const PlanPage = lazyRoute(() => import('@/features/planner/PlanPage').then((module) => ({ default: module.PlanPage })))
 const BudgetPage = lazyRoute(() => import('@/features/budget/BudgetPage').then((module) => ({ default: module.BudgetPage })))
 const ChangeSetPage = lazyRoute(() => import('@/features/changesets/ChangeSetPage').then((module) => ({ default: module.ChangeSetPage })))
-const AgentConnectionPage = lazyRoute(() => import('@/features/agent/AgentConnectionPage').then((module) => ({ default: module.AgentConnectionPage })))
 const AgentGuidePage = lazyRoute(() => import('@/features/agent/AgentGuidePage').then((module) => ({ default: module.AgentGuidePage })))
 const ReportsPage = lazyRoute(() => import('@/features/reports/ReportsPage').then((module) => ({ default: module.ReportsPage })))
 const SettingsPage = lazyRoute(() => import('@/features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })))
@@ -46,9 +45,9 @@ function NotFoundPage() {
   )
 }
 
-function LegacyAgentImportRedirect() {
+function AgentGuideTripRedirect() {
   const { tripId = '' } = useParams()
-  return <Navigate to={`/trips/${tripId}/agent`} replace />
+  return <Navigate to={`/guide/agent?tripId=${encodeURIComponent(tripId)}`} replace />
 }
 
 export function App() {
@@ -76,8 +75,8 @@ export function App() {
             <Route path="sources" element={<SourcesPage />} />
             <Route path="versions" element={<VersionsPage />} />
             <Route path="versions/:versionId" element={<VersionPreviewPage />} />
-            <Route path="agent" element={<AgentConnectionPage />} />
-            <Route path="imports/demo-import" element={<LegacyAgentImportRedirect />} />
+            <Route path="agent" element={<AgentGuideTripRedirect />} />
+            <Route path="imports/demo-import" element={<AgentGuideTripRedirect />} />
             <Route path="imports/:changeSetId" element={<ChangeSetPage />} />
             <Route path="today" element={<TodayPage />} />
             <Route path="reports" element={<ReportsPage />} />
