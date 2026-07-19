@@ -36,12 +36,22 @@ import {
 
 type ConnectionRow = {
   id: string
-  trip_id: string
+  trip_id: string | null
   owner_id: string
   status: 'pending' | 'active' | 'revoked' | 'expired'
   scopes: string[]
   expires_at: string
   revoked_at: string | null
+}
+
+function requireBoundTrip(connection: ConnectionRow): string {
+  if (!connection.trip_id) {
+    throw new AppError('VALIDATION_FAILED', '这条连接尚未创建路书', 409, {
+      retryable: false,
+      userAction: '如果用户要创建新路书，请整理好完整快照后调用 jovlo_create_trip',
+    })
+  }
+  return connection.trip_id
 }
 
 type TripState = {
@@ -198,16 +208,17 @@ async function authorizeConnection(
 }
 
 async function readTripState(context: AppContext, connection: ConnectionRow, token: string): Promise<TripState> {
+  const tripId = requireBoundTrip(connection)
   const trip = await readSupabaseRow<{ current_version_id: string | null }>(
     context,
     'trips',
-    `id=eq.${connection.trip_id}&select=current_version_id`,
+    `id=eq.${tripId}&select=current_version_id`,
     token,
   )
   const draft = await readSupabaseRow<{ snapshot: unknown; revision: number }>(
     context,
     'trip_drafts',
-    `trip_id=eq.${connection.trip_id}&select=snapshot,revision`,
+    `trip_id=eq.${tripId}&select=snapshot,revision`,
     token,
   )
   if (!trip || !draft) throw new AppError('FORBIDDEN', '连接无效或已撤销', 403)
@@ -215,7 +226,7 @@ async function readTripState(context: AppContext, connection: ConnectionRow, tok
     ? await readSupabaseRow<{ derived_snapshot: unknown }>(
         context,
         'trip_versions',
-        `id=eq.${trip.current_version_id}&trip_id=eq.${connection.trip_id}&select=derived_snapshot`,
+        `id=eq.${trip.current_version_id}&trip_id=eq.${tripId}&select=derived_snapshot`,
         token,
       )
     : null
@@ -347,6 +358,7 @@ async function applyAgentSnapshot(
   idempotencyKey: string,
   confirmMajorChange = false,
 ) {
+  const tripId = requireBoundTrip(auth.connection)
   if (expectedRevision !== state.draftRevision) {
     throw new AppError('DRAFT_REVISION_STALE', '路书已有新修改', 409, {
       retryable: true,
@@ -378,7 +390,7 @@ async function applyAgentSnapshot(
     'apply_agent_snapshot',
     {
       p_connection_id: auth.connection.id,
-      p_trip_id: auth.connection.trip_id,
+      p_trip_id: tripId,
       p_expected_revision: expectedRevision,
       p_base_version_id: state.currentVersionId,
       p_snapshot: snapshot,
@@ -474,6 +486,46 @@ export async function handleMcpRequest(context: AppContext, connectionId: string
   )
   const readState = () => readTripState(context, auth.connection, auth.user.token as string)
 
+  server.registerTool('jovlo_create_trip', {
+    title: '创建新路书',
+    description: '仅用于尚未绑定路书的新建连接。根据用户明确要求一次性创建完整路书，系统重算路线、耗时、预算和天气后生成 v1；建立 MCP 连接本身不会创建空路书。',
+    inputSchema: {
+      snapshot: TripSnapshotSchema,
+      idempotencyKey: z.string().trim().min(8).max(200),
+      message: z.string().trim().min(1).max(500).default('Agent 创建路书'),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  }, async ({ snapshot, idempotencyKey, message }) => runTool(async () => {
+    if (auth.connection.trip_id) {
+      throw new AppError('VALIDATION_FAILED', '这条连接已绑定路书，不能再创建新路书', 409, {
+        userAction: '修改当前路书请先调用 jovlo_get_trip，再调用 jovlo_apply_trip_changes',
+      })
+    }
+    const parsedSnapshot = TripSnapshotSchema.parse(snapshot)
+    const { derived, warnings } = await recalculateTripWithRoutes(parsedSnapshot, context)
+    const result = await callSupabaseRpc<Record<string, unknown>>(
+      context,
+      'create_trip_from_mcp',
+      {
+        p_connection_id: auth.connection.id,
+        p_snapshot: parsedSnapshot,
+        p_derived_snapshot: derived,
+        p_message: message,
+        p_idempotency_key: idempotencyKey,
+      },
+      auth.user.token,
+    )
+    auth.connection.trip_id = parsedSnapshot.tripId
+    return {
+      ...result,
+      trip: parsedSnapshot,
+      derived,
+      warnings,
+      openUrl: `${new URL(context.req.url).origin}/trips/${parsedSnapshot.tripId}/plan`,
+      reminders: ['路书已创建并自动绑定当前 MCP 连接；后续修改请先重新读取 revision。'],
+    }
+  }))
+
   server.registerTool('jovlo_get_trip', {
     title: '读取完整路书',
     description: '读取当前路书的可编辑快照、revision 和最新派生数据。写入前必须先读取。',
@@ -553,10 +605,11 @@ export async function handleMcpRequest(context: AppContext, connectionId: string
     inputSchema: { limit: z.number().int().min(1).max(50).default(20) },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async ({ limit }) => runTool(async () => {
+    const tripId = requireBoundTrip(auth.connection)
     const rows = await readSupabaseRows<Record<string, unknown>>(
       context,
       'trip_versions',
-      `trip_id=eq.${auth.connection.trip_id}&select=id,trip_id,version_no,parent_version_id,source,message,snapshot,snapshot_hash,derived_snapshot,derived_hash,created_by,created_at&order=version_no.desc&limit=${limit + 1}`,
+      `trip_id=eq.${tripId}&select=id,trip_id,version_no,parent_version_id,source,message,snapshot,snapshot_hash,derived_snapshot,derived_hash,created_by,created_at&order=version_no.desc&limit=${limit + 1}`,
       auth.user.token as string,
     )
     const parsed = rows.map(parseVersionRow)
@@ -597,10 +650,11 @@ export async function handleMcpRequest(context: AppContext, connectionId: string
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
   }, async ({ expectedRevision, idempotencyKey, message, confirmMajorChange }) => runTool(async () => {
     const state = await readState()
+    const tripId = requireBoundTrip(auth.connection)
     const rows = await readSupabaseRows<Record<string, unknown>>(
       context,
       'trip_versions',
-      `trip_id=eq.${auth.connection.trip_id}&select=id,trip_id,version_no,parent_version_id,source,message,snapshot,snapshot_hash,derived_snapshot,derived_hash,created_by,created_at&order=version_no.desc&limit=2`,
+      `trip_id=eq.${tripId}&select=id,trip_id,version_no,parent_version_id,source,message,snapshot,snapshot_hash,derived_snapshot,derived_hash,created_by,created_at&order=version_no.desc&limit=2`,
       auth.user.token as string,
     )
     if (rows.length < 2) throw new AppError('VALIDATION_FAILED', '暂无可撤销的上一版本', 409)

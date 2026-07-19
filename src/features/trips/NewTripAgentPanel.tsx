@@ -1,12 +1,6 @@
 import { ArrowRight, Check, Copy, Link2, LoaderCircle, MessageSquareText, Route, ShieldCheck, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
-import {
-  DEMO_TRIP,
-  TripSnapshotSchema,
-  cloneJson,
-  type TripSnapshot,
-} from '@domain'
 import { buildConnectionCommand, type AgentClientKind } from '@/features/agent/agent-client-auth'
 import { apiRequest } from '@/lib/api'
 
@@ -16,22 +10,17 @@ type ConnectionStatus = 'pending' | 'active' | 'expired' | 'revoked'
 
 type McpConnection = {
   id: string
-  tripId: string
+  tripId: string | null
   status: ConnectionStatus
   expiresAt: string
   createdAt: string
-}
-
-type AgentDraft = {
-  tripId: string
-  title: string
 }
 
 type RevisionResult = {
   versionNo: number
 }
 
-const SESSION_KEY = 'jovlo:new-agent-draft'
+const SESSION_KEY = 'jovlo:new-agent-connection'
 
 async function copyText(value: string) {
   try {
@@ -49,76 +38,15 @@ async function copyText(value: string) {
   }
 }
 
-function readStoredDraft(): AgentDraft | null {
+function readStoredConnectionId(): string | null {
   if (typeof window === 'undefined') return null
-  try {
-    const value = JSON.parse(window.sessionStorage.getItem(SESSION_KEY) ?? 'null') as Partial<AgentDraft> | null
-    if (!value || typeof value.tripId !== 'string' || typeof value.title !== 'string') return null
-    return { tripId: value.tripId, title: value.title }
-  } catch {
-    return null
-  }
-}
-
-export function createEmptyAgentTripSnapshot(): TripSnapshot {
-  const now = new Date().toISOString()
-  const snapshot = cloneJson(DEMO_TRIP)
-  const tripId = crypto.randomUUID()
-  const entryPlaceId = crypto.randomUUID()
-  const exitPlaceId = crypto.randomUUID()
-
-  return TripSnapshotSchema.parse({
-    schemaVersion: 1,
-    tripId,
-    title: 'AI 协作路书',
-    timezone: 'Asia/Shanghai',
-    intent: {
-      days: 1,
-      entryAnchor: { placeId: entryPlaceId, label: '出发地待定' },
-      exitAnchor: { placeId: exitPlaceId, label: '目的地待定' },
-      partySize: 2,
-      vehicle: { type: 'fuel' },
-      pace: 'balanced',
-      maxDriveMinutesPerDay: 240,
-      dayEndLimit: '22:00',
-      mustPlaceIds: [],
-      avoidTags: [],
-    },
-    placeRefs: {
-      [entryPlaceId]: {
-        placeId: entryPlaceId,
-        name: '出发地待定',
-        type: 'placeholder',
-        wgs84: { lon: 0, lat: 0, crs: 'WGS84' },
-        gcj02: { lon: 0, lat: 0, crs: 'GCJ02' },
-        sourceIds: [],
-      },
-      [exitPlaceId]: {
-        placeId: exitPlaceId,
-        name: '目的地待定',
-        type: 'placeholder',
-        wgs84: { lon: 0, lat: 0, crs: 'WGS84' },
-        gcj02: { lon: 0, lat: 0, crs: 'GCJ02' },
-        sourceIds: [],
-      },
-    },
-    sourceRefs: {},
-    stayAreaRefs: {},
-    days: [{ id: crypto.randomUUID(), dayIndex: 1, startTime: '09:00', stops: [] }],
-    budgetAssumptions: {
-      ...snapshot.budgetAssumptions,
-      lodgingByArea: {},
-      ticketByPlaceId: {},
-      specialMealByStopId: {},
-      verifiedAt: now,
-    },
-    userNotes: '由 Agent 协作创建，等待补充旅行要求。',
-  })
+  const value = window.sessionStorage.getItem(SESSION_KEY)
+  return value && /^[0-9a-f-]{36}$/i.test(value) ? value : null
 }
 
 export function NewTripAgentPanel({ compact = false }: { compact?: boolean }) {
   const [kind, setKind] = useState<AgentClientKind>('codex')
-  const [draft, setDraft] = useState<AgentDraft | null>(() => readStoredDraft())
+  const [storedConnectionId, setStoredConnectionId] = useState<string | null>(() => readStoredConnectionId())
   const [connection, setConnection] = useState<McpConnection | null>(null)
   const [busy, setBusy] = useState<'create' | null>(null)
   const [copied, setCopied] = useState(false)
@@ -133,20 +61,34 @@ export function NewTripAgentPanel({ compact = false }: { compact?: boolean }) {
   )
 
   useEffect(() => {
-    if (!draft || !connection || connection.status === 'expired' || connection.status === 'revoked') return
+    if (!storedConnectionId || connection?.id === storedConnectionId) return
+    let cancelled = false
+    apiRequest<McpConnection>(`/api/v1/mcp-connections/${storedConnectionId}`)
+      .then((value) => {
+        if (!cancelled) setConnection(value)
+      })
+      .catch(() => {
+        if (cancelled) return
+        window.sessionStorage.removeItem(SESSION_KEY)
+        setStoredConnectionId(null)
+      })
+    return () => { cancelled = true }
+  }, [connection?.id, storedConnectionId])
+
+  useEffect(() => {
+    if (!connection || connection.status === 'expired' || connection.status === 'revoked') return
     let timer = 0
     let cancelled = false
 
     const check = async () => {
       try {
-        const [rows, revision] = await Promise.all([
-          apiRequest<McpConnection[]>(`/api/v1/trips/${draft.tripId}/mcp-connections`),
-          apiRequest<RevisionResult>(`/api/v1/trips/${draft.tripId}/revision`),
-        ])
-        const latest = rows.find((item) => item.id === connection.id)
+        const latest = await apiRequest<McpConnection>(`/api/v1/mcp-connections/${connection.id}`)
         if (!cancelled) {
-          if (latest) setConnection(latest)
-          if (revision.versionNo > 0) setReadyVersionNo(revision.versionNo)
+          setConnection(latest)
+          if (latest.tripId) {
+            const revision = await apiRequest<RevisionResult>(`/api/v1/trips/${latest.tripId}/revision`)
+            if (!cancelled && revision.versionNo > 0) setReadyVersionNo(revision.versionNo)
+          }
         }
       } catch {
         // Connection polling is opportunistic; creating and copying remain usable.
@@ -160,31 +102,20 @@ export function NewTripAgentPanel({ compact = false }: { compact?: boolean }) {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [connection?.id, connection?.status, draft])
+  }, [connection?.id, connection?.status])
 
   const createConnection = async () => {
     setBusy('create')
     setError(null)
     try {
-      let nextDraft = draft
-      if (!nextDraft) {
-        const snapshot = createEmptyAgentTripSnapshot()
-        await apiRequest('/api/v1/trips', {
-          method: 'POST',
-          headers: { 'idempotency-key': crypto.randomUUID() },
-          body: JSON.stringify({ title: snapshot.title, snapshot }),
-        })
-        nextDraft = { tripId: snapshot.tripId, title: snapshot.title }
-        setDraft(nextDraft)
-        window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextDraft))
-      }
-
-      const created = await apiRequest<McpConnection>(`/api/v1/trips/${nextDraft.tripId}/mcp-connections`, {
+      const created = await apiRequest<McpConnection>('/api/v1/mcp-connections', {
         method: 'POST',
         headers: { 'idempotency-key': crypto.randomUUID() },
         body: JSON.stringify({}),
       })
       setConnection(created)
+      setStoredConnectionId(created.id)
+      window.sessionStorage.setItem(SESSION_KEY, created.id)
       setCopied(false)
       setReadyVersionNo(0)
     } catch (cause) {
@@ -208,15 +139,15 @@ export function NewTripAgentPanel({ compact = false }: { compact?: boolean }) {
       <header>
         <div>
           <small>MCP 连接 · 创建新路书</small>
-          <h3 id="new-trip-agent-connect-title">{connectionUsable ? '复制命令到你的 Agent' : '创建一条安全连接'}</h3>
-          <p>{connectionUsable ? '运行命令后，浏览器会打开 Jovlo 登录授权。' : '先建立空白路书并绑定连接，再把攻略或口述要求发给 Agent。'}</p>
+          <h3 id="new-trip-agent-connect-title">{connectionUsable ? '复制命令到你的 Agent' : '创建 MCP 连接'}</h3>
+          <p>{connectionUsable ? '运行命令后，浏览器会打开 Jovlo 登录授权。' : '只建立安全通道；Agent 真正执行创建时才会生成路书。'}</p>
         </div>
         {connectionUsable ? <StatusBadge tone={connection.status === 'active' ? 'sea' : 'sun'}>{connection.status === 'active' ? '已连接' : '等待授权'}</StatusBadge> : null}
       </header>
 
       {!connectionUsable ? (
         <Button variant="primary" icon={busy === 'create' ? LoaderCircle : Link2} onClick={() => void createConnection()} disabled={Boolean(busy)}>
-          {busy === 'create' ? '正在创建…' : draft ? '重新创建 MCP 连接' : '创建 MCP 连接'}
+          {busy === 'create' ? '正在创建…' : '创建 MCP 连接'}
         </Button>
       ) : (
         <>
@@ -230,7 +161,7 @@ export function NewTripAgentPanel({ compact = false }: { compact?: boolean }) {
             <pre><code>{command}</code></pre>
             <Button variant="primary" icon={copied ? Check : Copy} onClick={() => void handleCopy()}>{copied ? '已复制' : '复制连接命令'}</Button>
           </div>
-          <p className="new-trip-agent__connection-note"><ShieldCheck aria-hidden="true" />连接只允许读写这本新路书，可在路书内随时撤销。</p>
+          <p className="new-trip-agent__connection-note"><ShieldCheck aria-hidden="true" />连接先绑定当前账号；Agent 创建成功后再固定绑定那本路书。</p>
         </>
       )}
 
@@ -238,7 +169,7 @@ export function NewTripAgentPanel({ compact = false }: { compact?: boolean }) {
     </section>
   )
 
-  const ready = draft && readyVersionNo > 0 ? (
+  const ready = connection?.tripId && readyVersionNo > 0 ? (
     <section className="new-trip-agent__ready" aria-live="polite">
       <span className="new-trip-agent__ready-icon"><Check aria-hidden="true" /></span>
       <div>
@@ -246,7 +177,7 @@ export function NewTripAgentPanel({ compact = false }: { compact?: boolean }) {
         <strong>新路书已生成 · v{readyVersionNo}</strong>
         <p>路线、时间和预算已经写入，可以继续查看或手动调整。</p>
       </div>
-      <a href={`/trips/${draft.tripId}/plan`}>打开路书 <ArrowRight aria-hidden="true" /></a>
+      <a href={`/trips/${connection.tripId}/plan`}>打开路书 <ArrowRight aria-hidden="true" /></a>
     </section>
   ) : null
 
@@ -268,9 +199,9 @@ export function NewTripAgentPanel({ compact = false }: { compact?: boolean }) {
       {connector}
 
       <ol className="new-trip-agent__flow">
-        <li><strong>1</strong><Link2 aria-hidden="true" /><div><b>建立连接</b><span>自动创建空白路书</span></div></li>
-        <li><strong>2</strong><ShieldCheck aria-hidden="true" /><div><b>登录授权</b><span>只绑定当前账号与路书</span></div></li>
-        <li><strong>3</strong><MessageSquareText aria-hidden="true" /><div><b>发送要求</b><span>路线、时间与预算联动</span></div></li>
+        <li><strong>1</strong><Link2 aria-hidden="true" /><div><b>建立连接</b><span>此时不会创建路书</span></div></li>
+        <li><strong>2</strong><ShieldCheck aria-hidden="true" /><div><b>登录授权</b><span>只绑定当前 Jovlo 账号</span></div></li>
+        <li><strong>3</strong><MessageSquareText aria-hidden="true" /><div><b>对话创建</b><span>Agent 执行后才生成路书</span></div></li>
       </ol>
 
       {ready}

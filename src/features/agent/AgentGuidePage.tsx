@@ -36,6 +36,7 @@ const manualTasks = [
 ]
 
 const mcpTools = [
+  { name: 'jovlo_create_trip', label: '创建新路书', icon: Sparkles },
   { name: 'jovlo_get_trip', label: '读取整本路书', icon: FileText },
   { name: 'jovlo_get_day', label: '读取指定日期', icon: Route },
   { name: 'jovlo_search_places', label: '搜索与核对地点', icon: Search },
@@ -84,7 +85,7 @@ export function AgentGuidePage() {
         title="AI 共创指南"
         description={tripId
           ? `当前连接将只修改「${title}」。`
-          : '在这里连接 MCP，把网上攻略或口述要求直接变成可编辑路书。'}
+          : '在这里连接 MCP，再让 Agent 把网上攻略或口述要求变成可编辑路书。'}
       />
 
       <section className="agent-guide-intro" aria-labelledby="agent-guide-intro-title">
@@ -92,7 +93,7 @@ export function AgentGuidePage() {
         <div>
           <span>{tripId ? '修改已有路书' : '创建新路书'}</span>
           <h2 id="agent-guide-intro-title">{tripId ? '告诉 Agent 改哪里，关联数据一起更新。' : '攻略发给 Agent，结果直接写回 Jovlo。'}</h2>
-          <p>{tripId ? '连接已在服务端绑定这本路书；其他路书不会被读取或修改。' : '无需先手填骨架，创建连接后直接发送链接、正文或一句话要求。'}</p>
+          <p>{tripId ? '连接已在服务端绑定这本路书；其他路书不会被读取或修改。' : '建立连接不会生成空路书；Agent 收到明确要求并执行创建后才会落库。'}</p>
         </div>
       </section>
 
@@ -101,7 +102,7 @@ export function AgentGuidePage() {
           <span>01</span>
           <div>
             <h2 id="agent-guide-connector-title">连接 MCP</h2>
-            <p>{tripId ? `连接目标：${title}` : '连接目标：一份新的空白路书'}</p>
+            <p>{tripId ? `连接目标：${title}` : '连接目标：当前账号的新路书入口'}</p>
             {tripId ? <code className="agent-guide-trip-id">路书 ID · {tripId}</code> : null}
           </div>
         </header>
@@ -120,7 +121,7 @@ export function AgentGuidePage() {
         <article data-current={!tripId}>
           <span>创建</span>
           <strong>从这页建立新连接</strong>
-          <p>Jovlo 先准备一份空白路书，Agent 再按你的攻略或口述要求补全。</p>
+          <p>连接时不创建路书；Agent 根据你的攻略或口述要求一次性生成。</p>
         </article>
         <article data-current={Boolean(tripId)}>
           <span>修改</span>
@@ -135,7 +136,7 @@ export function AgentGuidePage() {
           <div><h2 id="agent-guide-flow-title">三步完成</h2><p>连接决定写入目标；对话决定创建什么或修改哪里。</p></div>
         </header>
         <ol>
-          <li><strong>1</strong><FileText aria-hidden="true" /><div><b>确定目标</b><span>{tripId ? '当前路书已绑定' : '创建一份新路书'}</span></div></li>
+          <li><strong>1</strong><FileText aria-hidden="true" /><div><b>确定目标</b><span>{tripId ? '当前路书已绑定' : '准备创建新路书'}</span></div></li>
           <li><strong>2</strong><Link2 aria-hidden="true" /><div><b>复制连接命令</b><span>在 Agent 中运行并登录授权</span></div></li>
           <li><strong>3</strong><MessageSquareText aria-hidden="true" /><div><b>发送攻略或要求</b><span>修改立即保存，路线与预算联动</span></div></li>
         </ol>

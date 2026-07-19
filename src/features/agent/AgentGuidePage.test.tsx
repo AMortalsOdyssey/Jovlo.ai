@@ -32,13 +32,16 @@ describe('Agent guide', () => {
 
     expect(screen.getByRole('heading', { name: 'AI 共创指南' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '连接 MCP' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'MCP 工具列表' })).toHaveTextContent('jovlo_create_trip')
     expect(screen.getByRole('list', { name: 'MCP 工具列表' })).toHaveTextContent('jovlo_apply_trip_changes')
+    expect(screen.getByText(/建立连接不会生成空路书/)).toBeInTheDocument()
     expect(screen.getByText('从网上拿攻略')).toBeInTheDocument()
     expect(screen.getByText('直接口述行程')).toBeInTheDocument()
     expect(screen.getByText('修改指定路书')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '自己创建' })).toHaveAttribute('href', '/trips/new?mode=manual')
     expect(screen.queryByRole('link', { name: 'AI 协作创建' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '开始 AI 协作' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/重新创建 MCP 连接/)).not.toBeInTheDocument()
   })
 
   it('binds the integrated connector to the trip id supplied by a trip entry', async () => {

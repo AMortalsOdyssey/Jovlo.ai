@@ -36,6 +36,66 @@ describe('Worker API contract', () => {
     })
   })
 
+  it('lists the deferred trip creation tool over an authorized MCP transport', async () => {
+    const connectionId = 'a0000000-0000-4000-8000-000000000002'
+    const ownerId = 'd0000000-0000-4000-8000-000000000001'
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.endsWith('/auth/v1/user')) {
+        return new Response(JSON.stringify({ id: ownerId }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (url.includes('/rest/v1/mcp_connections?')) {
+        return new Response(JSON.stringify([{
+          id: connectionId,
+          trip_id: null,
+          owner_id: ownerId,
+          status: 'pending',
+          scopes: ['read', 'write'],
+          expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+          revoked_at: null,
+        }]), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      if (url.endsWith('/rest/v1/rpc/activate_mcp_connection')) {
+        return new Response(JSON.stringify({
+          id: connectionId,
+          tripId: null,
+          status: 'active',
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      return new Response('not found', { status: 404 })
+    })
+
+    try {
+      const response = await app.request(`/mcp/${connectionId}`, {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-mcp-access-token',
+          accept: 'application/json, text/event-stream',
+          'content-type': 'application/json',
+          'mcp-protocol-version': '2025-06-18',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      }, {
+        JOVLO_MODE: 'production',
+        SUPABASE_URL: 'https://project.supabase.co',
+        SUPABASE_PUBLISHABLE_KEY: 'test-publishable-key',
+      })
+      const body = (await response.json()) as {
+        result: { tools: Array<{ name: string; description: string }> }
+      }
+
+      expect(response.status).toBe(200)
+      expect(body.result.tools.map((tool) => tool.name)).toContain('jovlo_create_trip')
+      expect(body.result.tools.find((tool) => tool.name === 'jovlo_create_trip')?.description)
+        .toContain('建立 MCP 连接本身不会创建空路书')
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
   it('returns the standard envelope, request ID, and security headers', async () => {
     const response = await app.request('/api/health', undefined, { JOVLO_MODE: 'demo' })
     const body = (await response.json()) as Envelope
@@ -117,6 +177,37 @@ describe('Worker API contract', () => {
     const body = (await response.json()) as Envelope
     expect(response.status).toBe(404)
     expect(body.error?.code).toBe('VALIDATION_FAILED')
+  })
+
+  it('creates an unbound MCP connection without creating a blank trip', async () => {
+    const env = { JOVLO_MODE: 'demo' as const }
+    const beforeResponse = await app.request('/api/v1/trips', undefined, env)
+    const beforeBody = (await beforeResponse.json()) as Envelope & { data: unknown[] }
+
+    const connectionResponse = await app.request('/api/v1/mcp-connections', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': crypto.randomUUID(),
+      },
+      body: '{}',
+    }, env)
+    const connectionBody = (await connectionResponse.json()) as Envelope & {
+      data: { id: string; tripId: string | null; status: string }
+    }
+
+    const afterResponse = await app.request('/api/v1/trips', undefined, env)
+    const afterBody = (await afterResponse.json()) as Envelope & { data: unknown[] }
+    const detailResponse = await app.request(`/api/v1/mcp-connections/${connectionBody.data.id}`, undefined, env)
+    const detailBody = (await detailResponse.json()) as Envelope & {
+      data: { tripId: string | null; status: string }
+    }
+
+    expect(connectionResponse.status).toBe(201)
+    expect(connectionBody.data).toMatchObject({ tripId: null, status: 'pending' })
+    expect(afterBody.data).toHaveLength(beforeBody.data.length)
+    expect(detailResponse.status).toBe(200)
+    expect(detailBody.data.tripId).toBeNull()
   })
 
   it('returns an explicit reference provider when AMap secret is absent', async () => {

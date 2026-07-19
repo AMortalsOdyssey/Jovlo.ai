@@ -153,6 +153,17 @@ type DemoTripState = {
   versions: TripVersion[]
 }
 
+type DemoMcpConnection = {
+  id: string
+  ownerId: string
+  tripId: string | null
+  status: 'pending' | 'active' | 'revoked' | 'expired'
+  scopes: string[]
+  expiresAt: string
+  revokedAt: string | null
+  createdAt: string
+}
+
 const demoChangeSets = new Map<string, StoredDemoChangeSet>()
 const demoTrips = new Map<string, DemoTripState>([
   [
@@ -172,6 +183,7 @@ const demoReports = new Map<string, ReportGeneration>(
 )
 const demoIdempotency = new Map<string, { bodyHash: string; result: unknown }>()
 const demoAgentGrants = new Map<string, DemoAgentGrant>()
+const demoMcpConnections = new Map<string, DemoMcpConnection>()
 const demoPublications = new Map<string, DemoPublication>([
   [
     'jovlo-demo-trip',
@@ -1032,6 +1044,87 @@ app.get('/api/v1/trips/:tripId/revision', async (context) => {
   })
 })
 
+function serializeMcpConnection(row: Record<string, unknown>) {
+  const expiresAt = String(row.expires_at ?? row.expiresAt)
+  const revokedAt = row.revoked_at ?? row.revokedAt ?? null
+  return {
+    id: row.id,
+    tripId: row.trip_id ?? row.tripId ?? null,
+    status: row.status === 'revoked' || revokedAt
+      ? 'revoked'
+      : new Date(expiresAt).getTime() <= Date.now() ? 'expired' : row.status,
+    clientName: row.client_name ?? row.clientName ?? null,
+    clientId: row.client_id ?? row.clientId ?? null,
+    scopes: row.scopes,
+    authorizedAt: row.authorized_at ?? row.authorizedAt ?? null,
+    lastSeenAt: row.last_seen_at ?? row.lastSeenAt ?? null,
+    expiresAt,
+    revokedAt,
+    createdAt: row.created_at ?? row.createdAt,
+  }
+}
+
+app.post('/api/v1/mcp-connections', async (context) => {
+  const user = await requireAuthenticatedUser(context)
+  const idempotencyKey = requireIdempotencyKey(context)
+  if (context.get('mode') === 'demo') {
+    const result = await runDemoIdempotent(
+      user.id,
+      'create_unbound_mcp_connection',
+      idempotencyKey,
+      {},
+      () => {
+        const now = new Date()
+        for (const connection of demoMcpConnections.values()) {
+          if (connection.ownerId === user.id && connection.tripId === null && ['pending', 'active'].includes(connection.status)) {
+            connection.status = 'revoked'
+            connection.revokedAt = now.toISOString()
+          }
+        }
+        const connection: DemoMcpConnection = {
+          id: crypto.randomUUID(),
+          ownerId: user.id,
+          tripId: null,
+          status: 'pending',
+          scopes: ['read', 'write'],
+          expiresAt: new Date(now.getTime() + 10 * 60_000).toISOString(),
+          revokedAt: null,
+          createdAt: now.toISOString(),
+        }
+        demoMcpConnections.set(connection.id, connection)
+        return serializeMcpConnection(connection as unknown as Record<string, unknown>)
+      },
+    )
+    return success(context, result, 201)
+  }
+  const result = await callSupabaseRpc<Record<string, unknown>>(
+    context,
+    'create_unbound_mcp_connection',
+    { p_idempotency_key: idempotencyKey },
+    user.token,
+  )
+  return success(context, result, 201)
+})
+
+app.get('/api/v1/mcp-connections/:connectionId', async (context) => {
+  const user = await requireAuthenticatedUser(context)
+  const connectionId = validateUuid(context.req.param('connectionId'), 'connectionId')
+  if (context.get('mode') === 'demo') {
+    const connection = demoMcpConnections.get(connectionId)
+    if (!connection || connection.ownerId !== user.id) throw new AppError('FORBIDDEN', '连接不存在或无权访问', 403)
+    return success(context, serializeMcpConnection(connection as unknown as Record<string, unknown>))
+  }
+  const row = await readSupabaseRow<Record<string, unknown>>(
+    context,
+    'mcp_connections',
+    `id=eq.${connectionId}&select=id,trip_id,status,client_name,client_id,scopes,authorized_at,last_seen_at,expires_at,revoked_at,created_at`,
+    user.token as string,
+  )
+  if (!row) throw new AppError('FORBIDDEN', '连接不存在或无权访问', 403)
+  context.header('cache-control', 'no-store')
+  return success(context, serializeMcpConnection(row))
+})
+
 app.post('/api/v1/trips/:tripId/mcp-connections', async (context) => {
   const user = await requireAuthenticatedUser(context)
   const tripId = validateUuid(context.req.param('tripId'), 'tripId')
@@ -1039,14 +1132,18 @@ app.post('/api/v1/trips/:tripId/mcp-connections', async (context) => {
   if (context.get('mode') === 'demo') {
     if (!demoTrips.has(tripId)) throw new AppError('FORBIDDEN', '路书不存在或无权访问', 403)
     const now = new Date()
-    return success(context, {
+    const connection: DemoMcpConnection = {
       id: crypto.randomUUID(),
+      ownerId: user.id,
       tripId,
       status: 'pending',
       scopes: ['read', 'write'],
       expiresAt: new Date(now.getTime() + 10 * 60_000).toISOString(),
+      revokedAt: null,
       createdAt: now.toISOString(),
-    }, 201)
+    }
+    demoMcpConnections.set(connection.id, connection)
+    return success(context, serializeMcpConnection(connection as unknown as Record<string, unknown>), 201)
   }
   const result = await callSupabaseRpc<Record<string, unknown>>(
     context,
@@ -1060,7 +1157,14 @@ app.post('/api/v1/trips/:tripId/mcp-connections', async (context) => {
 app.get('/api/v1/trips/:tripId/mcp-connections', async (context) => {
   const user = await requireAuthenticatedUser(context)
   const tripId = validateUuid(context.req.param('tripId'), 'tripId')
-  if (context.get('mode') === 'demo') return success(context, [])
+  if (context.get('mode') === 'demo') {
+    if (!demoTrips.has(tripId)) throw new AppError('FORBIDDEN', '路书不存在或无权访问', 403)
+    return success(context, [...demoMcpConnections.values()]
+      .filter((connection) => connection.ownerId === user.id && connection.tripId === tripId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(0, 20)
+      .map((connection) => serializeMcpConnection(connection as unknown as Record<string, unknown>)))
+  }
   const trip = await readSupabaseRow<{ id: string }>(
     context,
     'trips',
@@ -1074,22 +1178,7 @@ app.get('/api/v1/trips/:tripId/mcp-connections', async (context) => {
     `trip_id=eq.${tripId}&select=id,trip_id,status,client_name,client_id,scopes,authorized_at,last_seen_at,expires_at,revoked_at,created_at&order=created_at.desc&limit=20`,
     user.token as string,
   )
-  const now = Date.now()
-  return success(context, rows.map((row) => ({
-    id: row.id,
-    tripId: row.trip_id,
-    status: row.status === 'revoked' || row.revoked_at
-      ? 'revoked'
-      : new Date(String(row.expires_at)).getTime() <= now ? 'expired' : row.status,
-    clientName: row.client_name,
-    clientId: row.client_id,
-    scopes: row.scopes,
-    authorizedAt: row.authorized_at,
-    lastSeenAt: row.last_seen_at,
-    expiresAt: row.expires_at,
-    revokedAt: row.revoked_at,
-    createdAt: row.created_at,
-  })))
+  return success(context, rows.map(serializeMcpConnection))
 })
 
 app.delete('/api/v1/mcp-connections/:connectionId', async (context) => {
@@ -1097,7 +1186,11 @@ app.delete('/api/v1/mcp-connections/:connectionId', async (context) => {
   const connectionId = validateUuid(context.req.param('connectionId'), 'connectionId')
   const idempotencyKey = requireIdempotencyKey(context)
   if (context.get('mode') === 'demo') {
-    return success(context, { id: connectionId, status: 'revoked', revokedAt: new Date().toISOString() })
+    const connection = demoMcpConnections.get(connectionId)
+    if (!connection || connection.ownerId !== user.id) throw new AppError('FORBIDDEN', '连接不存在或无权访问', 403)
+    connection.status = 'revoked'
+    connection.revokedAt = new Date().toISOString()
+    return success(context, { id: connectionId, status: 'revoked', revokedAt: connection.revokedAt })
   }
   const result = await callSupabaseRpc<Record<string, unknown>>(
     context,

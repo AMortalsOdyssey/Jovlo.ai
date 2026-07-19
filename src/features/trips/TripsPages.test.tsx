@@ -59,26 +59,26 @@ describe('trip entry pages', () => {
     expect(screen.queryByRole('link', { name: '先建立基础路书' })).not.toBeInTheDocument()
   })
 
-  it('creates a blank trip and exposes the MCP command on the same page', async () => {
+  it('creates only an unbound MCP connection and leaves trip creation to the Agent', async () => {
     const user = userEvent.setup()
-    apiMock
-      .mockResolvedValueOnce({ tripId: 'a0000000-0000-4000-8000-000000000010', revision: 0 })
-      .mockResolvedValueOnce({
-        id: 'a0000000-0000-4000-8000-000000000011',
-        tripId: 'a0000000-0000-4000-8000-000000000010',
-        status: 'pending',
-        scopes: ['read', 'write'],
-        expiresAt: '2026-07-19T10:10:00.000Z',
-        createdAt: '2026-07-19T10:00:00.000Z',
-      })
+    apiMock.mockResolvedValueOnce({
+      id: 'a0000000-0000-4000-8000-000000000011',
+      tripId: null,
+      status: 'pending',
+      scopes: ['read', 'write'],
+      expiresAt: '2026-07-19T10:10:00.000Z',
+      createdAt: '2026-07-19T10:00:00.000Z',
+    })
 
     render(<MemoryRouter initialEntries={['/trips/new']}><NewTripPage /></MemoryRouter>)
     await user.click(screen.getByRole('button', { name: '创建 MCP 连接' }))
 
-    await waitFor(() => expect(apiMock).toHaveBeenCalledTimes(2))
-    expect(apiMock).toHaveBeenNthCalledWith(1, '/api/v1/trips', expect.objectContaining({ method: 'POST' }))
-    expect(apiMock).toHaveBeenNthCalledWith(2, expect.stringMatching(/\/mcp-connections$/), expect.objectContaining({ method: 'POST' }))
+    await waitFor(() => expect(apiMock).toHaveBeenCalledTimes(1))
+    expect(apiMock).toHaveBeenCalledWith('/api/v1/mcp-connections', expect.objectContaining({ method: 'POST' }))
+    expect(apiMock).not.toHaveBeenCalledWith('/api/v1/trips', expect.anything())
     expect(await screen.findByText(/codex mcp add jovlo --url/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '复制连接命令' })).toBeEnabled()
+    expect(screen.getByText('连接先绑定当前账号；Agent 创建成功后再固定绑定那本路书。')).toBeInTheDocument()
+    expect(screen.queryByText(/空白路书/)).not.toBeInTheDocument()
   })
 })

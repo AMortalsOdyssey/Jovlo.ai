@@ -13,8 +13,11 @@ describe('MCP Agent guidance', () => {
     expect(JOVLO_MCP_INSTRUCTIONS).toContain('路线、耗时、预算、天气和地图')
     expect(JOVLO_MCP_INSTRUCTIONS).toContain('绝不删除历史')
     expect(JOVLO_MCP_INSTRUCTIONS).toContain('confirmMajorChange=true')
-    expect(JOVLO_MCP_INSTRUCTIONS).toContain('绝不能跨账号复用')
+    expect(JOVLO_MCP_INSTRUCTIONS).toContain('绝不能跨账号或跨路书复用')
     expect(JOVLO_MCP_INSTRUCTIONS).toContain('清除客户端本地 OAuth')
+    expect(JOVLO_MCP_INSTRUCTIONS).toContain('不会预先生成空路书')
+    expect(JOVLO_MCP_INSTRUCTIONS).toContain('jovlo_create_trip')
+    expect(JOVLO_MCP_INSTRUCTIONS).toContain('先判断是“创建新路书”还是“修改已有路书”')
   })
 
   it('returns only contextual and concise suggestions while planning', () => {
