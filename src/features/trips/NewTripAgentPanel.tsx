@@ -208,7 +208,7 @@ export function NewTripAgentPanel({ compact = false }: { compact?: boolean }) {
 
       <div className="new-trip-agent__example">
         <small>连接后，直接在 Agent 里说</small>
-        <p>“9 月 25 日从海口出发，10 月 1 日回到海口。先搭环岛骨架，中间我再细化。”</p>
+        <p>“10 月 1 日从海口出发，10 月 7 日回到海口。先搭环岛骨架，中间我再细化。”</p>
         <span><Route aria-hidden="true" />Agent 修改会自动保存，并生成可回看的版本。</span>
       </div>
     </section>
