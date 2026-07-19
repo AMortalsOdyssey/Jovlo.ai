@@ -1,9 +1,9 @@
 import {
   ArrowRight,
+  BookOpen,
   CalendarDays,
   CarFront,
   Check,
-  ChevronDown,
   CircleDollarSign,
   Clock3,
   Compass,
@@ -42,11 +42,17 @@ export function HomePage() {
             <img src="/jovlo-mark.svg" alt="" />
             <span>Jovlo</span>
           </a>
-          <HoverTooltip label={accountLabel} align="end">
-            <Link className="home-account" to={accountPath} aria-label={accountLabel}>
-              <UserRound aria-hidden="true" size={18} />
+          <div className="home-header__tools">
+            <Link className="home-guide-link" to="/guide/agent">
+              <Sparkles aria-hidden="true" size={16} />
+              <span>AI 共创</span>
             </Link>
-          </HoverTooltip>
+            <HoverTooltip label={accountLabel} align="end">
+              <Link className="home-account" to={accountPath} aria-label={accountLabel}>
+                <UserRound aria-hidden="true" size={18} />
+              </Link>
+            </HoverTooltip>
+          </div>
         </header>
 
         <div className="home-hero__content">
@@ -59,10 +65,11 @@ export function HomePage() {
               {hasWorkspace ? '打开我的路书' : '开始我的路书'}
               <ArrowRight aria-hidden="true" size={17} />
             </Link>
-            <a className="home-action home-action--quiet" href="#journey">
-              看看怎么用
-              <ChevronDown aria-hidden="true" size={17} />
-            </a>
+            <Link className="home-action home-action--quiet" to="/guide/agent">
+              <BookOpen aria-hidden="true" size={17} />
+              AI 共创怎么用
+              <ArrowRight aria-hidden="true" size={17} />
+            </Link>
           </div>
         </div>
 
@@ -84,6 +91,9 @@ export function HomePage() {
             <span>01 / 攻略</span>
             <h2 id="home-route-title">先把想法，做成每天能执行的路书。</h2>
             <p>路线、住宿和预算放在一起，改好就分享给同行人。</p>
+            <Link className="home-section__guide" to="/guide/agent">
+              <Sparkles aria-hidden="true" size={16} />Agent 帮我整理攻略<ArrowRight aria-hidden="true" size={15} />
+            </Link>
           </header>
 
           <ol className="home-route__list">
@@ -144,10 +154,13 @@ export function HomePage() {
           <span>一份路书，贯穿出发前和旅途中。</span>
           <h2 id="home-closing-title">先做好攻略，再从容出发。</h2>
         </div>
-        <Link className="home-action home-action--primary" to={workspacePath}>
-          {hasWorkspace ? '继续规划' : '开始规划'}
-          <ArrowRight aria-hidden="true" size={17} />
-        </Link>
+        <div className="home-closing__actions">
+          <Link className="home-closing__guide" to="/guide/agent"><BookOpen aria-hidden="true" size={17} />AI 共创指南</Link>
+          <Link className="home-action home-action--primary" to={workspacePath}>
+            {hasWorkspace ? '继续规划' : '开始规划'}
+            <ArrowRight aria-hidden="true" size={17} />
+          </Link>
+        </div>
       </section>
 
       <ProductCopyright className="home-copyright" />

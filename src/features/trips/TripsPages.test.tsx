@@ -22,7 +22,9 @@ describe('trip entry pages', () => {
       'href',
       `/trips/${useTripStore.getState().trip.tripId}/plan`,
     )
-    expect(screen.getByRole('link', { name: /新建路书/ })).toHaveAttribute('href', '/trips/new')
+    expect(screen.getByRole('link', { name: '手动创建' })).toHaveAttribute('href', '/trips/new?mode=manual')
+    expect(screen.getByRole('link', { name: 'AI 协作创建' })).toHaveAttribute('href', '/trips/new?mode=agent')
+    expect(screen.getByRole('link', { name: '使用教程' })).toHaveAttribute('href', '/guide/agent')
   })
 
   it('labels the third wizard step as template reference instead of AMap output', async () => {
@@ -35,5 +37,14 @@ describe('trip entry pages', () => {
     expect(screen.getByText('海南示例')).toBeInTheDocument()
     expect(screen.getByText(/不是高德道路算路结果/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '开始编辑' })).toBeEnabled()
+  })
+
+  it('keeps manual and Agent creation modes visible at the top', () => {
+    render(<MemoryRouter initialEntries={['/trips/new?mode=agent']}><NewTripPage /></MemoryRouter>)
+
+    expect(screen.getByRole('link', { name: /手动创建/ })).toHaveAttribute('href', '/trips/new?mode=manual')
+    expect(screen.getByRole('link', { name: /AI 协作创建/ })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('heading', { name: '先定边界，再让 Agent 补全。' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看完整教程' })).toHaveAttribute('href', '/guide/agent')
   })
 })

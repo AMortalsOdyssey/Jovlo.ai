@@ -14,6 +14,7 @@ const PlanPage = lazyRoute(() => import('@/features/planner/PlanPage').then((mod
 const BudgetPage = lazyRoute(() => import('@/features/budget/BudgetPage').then((module) => ({ default: module.BudgetPage })))
 const ChangeSetPage = lazyRoute(() => import('@/features/changesets/ChangeSetPage').then((module) => ({ default: module.ChangeSetPage })))
 const AgentConnectionPage = lazyRoute(() => import('@/features/agent/AgentConnectionPage').then((module) => ({ default: module.AgentConnectionPage })))
+const AgentGuidePage = lazyRoute(() => import('@/features/agent/AgentGuidePage').then((module) => ({ default: module.AgentGuidePage })))
 const ReportsPage = lazyRoute(() => import('@/features/reports/ReportsPage').then((module) => ({ default: module.ReportsPage })))
 const SettingsPage = lazyRoute(() => import('@/features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })))
 const SourcesPage = lazyRoute(() => import('@/features/sources/SourcesPage').then((module) => ({ default: module.SourcesPage })))
@@ -55,6 +56,7 @@ export function App() {
     <Suspense fallback={<div className="app-route-loading" role="status">正在打开路书…</div>}>
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/guide/agent" element={<AgentGuidePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />

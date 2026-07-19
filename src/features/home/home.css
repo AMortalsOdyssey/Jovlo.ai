@@ -33,6 +33,31 @@
   justify-content: space-between;
 }
 
+.home-header__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.home-guide-link {
+  display: inline-flex;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  align-items: center;
+  gap: var(--space-2);
+  color: inherit;
+  background: rgb(255 253 248 / 12%);
+  border: 1px solid rgb(255 255 255 / 34%);
+  border-radius: var(--radius-control);
+  font-size: 13px;
+  font-weight: 720;
+  text-decoration: none;
+  transition: background-color var(--motion-press) var(--ease-out), transform var(--motion-press) var(--ease-out);
+}
+
+.home-guide-link:hover { background: rgb(255 253 248 / 24%); }
+.home-guide-link:active { transform: scale(.98); }
+
 .home-brand {
   display: inline-flex;
   align-items: center;
@@ -143,7 +168,7 @@
   }
 
   .home-action--quiet:hover svg:last-child {
-    transform: translateY(3px);
+    transform: translateX(3px);
   }
 }
 
@@ -233,6 +258,23 @@
   color: var(--muted);
   font-size: 15px;
   line-height: 26px;
+}
+
+.home-section__guide {
+  display: inline-flex;
+  min-height: 40px;
+  margin-top: var(--space-4);
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--brand-text);
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.home-section__guide svg:last-child { transition: transform var(--motion-hover) var(--ease-magnetic); }
+@media (hover: hover) {
+  .home-section__guide:hover svg:last-child { transform: translateX(3px); }
 }
 
 .home-route {
@@ -525,6 +567,29 @@
   font: 700 32px / 44px var(--font-display);
 }
 
+.home-closing__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.home-closing__guide {
+  display: inline-flex;
+  min-height: 48px;
+  padding: 0 var(--space-4);
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--brand-text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.home-closing__guide:hover { border-color: var(--brand); background: var(--brand-tint); }
+
 .home-copyright {
   border-top: 1px solid var(--line);
   background: var(--surface);
@@ -561,6 +626,9 @@
     width: 32px;
     height: 32px;
   }
+
+  .home-guide-link span { display: none; }
+  .home-guide-link { width: 40px; padding: 0; justify-content: center; border-radius: 50%; }
 
   .home-hero__content {
     padding: 56px 0 48px;
@@ -650,6 +718,9 @@
     font-size: 28px;
     line-height: 40px;
   }
+
+  .home-closing__actions { align-items: stretch; flex-direction: column-reverse; }
+  .home-closing__guide { justify-content: center; }
 }
 
 @media (max-width: 359px) {

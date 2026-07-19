@@ -34,6 +34,7 @@ describe('Jovlo homepage', () => {
       'href',
       '/login?returnTo=%2Ftrips',
     )
+    expect(screen.getByRole('link', { name: 'AI 共创怎么用' })).toHaveAttribute('href', '/guide/agent')
     expect(screen.getAllByText('© 2026 jovlo.8xd.io')).toHaveLength(1)
   })
 

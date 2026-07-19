@@ -1,11 +1,26 @@
-import { ArrowLeft, ArrowRight, BedDouble, CarFront, Gauge, MapPinned, Route } from 'lucide-react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  BedDouble,
+  BookOpen,
+  Bot,
+  CarFront,
+  Gauge,
+  Link2,
+  MapPinned,
+  MessageSquareText,
+  PencilLine,
+  Route,
+  Sparkles,
+} from 'lucide-react'
 import { useMemo, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { useTripStore } from '@/store/useTripStore'
 
 import {
   Button,
+  ButtonLink,
   FormField,
   PageHeader,
   PageShell,
@@ -112,9 +127,11 @@ function buildReferenceRoute(days: number, entry: string, exit: string) {
 
 export function NewTripPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const state = useTripStore()
   const [step, setStep] = useState(1)
   const [form, setForm] = useState<WizardState>(initialWizard)
+  const creationMode = searchParams.get('mode') === 'agent' ? 'agent' : 'manual'
   const referenceRoute = useMemo(
     () => buildReferenceRoute(form.days, form.entry, form.exit),
     [form.days, form.entry, form.exit],
@@ -167,13 +184,29 @@ export function NewTripPage() {
     <PageShell width="reading">
       <PageHeader
         title="创建路书"
-        description="先用示例模板建立可编辑草案，地点细节进入编辑台后再继续调整。"
+        description={creationMode === 'agent'
+          ? '先建立基础骨架，再把资料和修改要求交给 Agent。'
+          : '自己确定日期、路线倾向和节奏，建立可编辑草案。'}
         trail={[{ label: '我的路书', to: '/trips' }]}
         backTo="/trips"
       />
-      <Stepper current={step} labels={['基础条件', '路线倾向', '草案预览']} />
 
-      {step === 1 ? (
+      <nav className="new-trip-mode-switch" aria-label="创建方式">
+        <Link className={creationMode === 'manual' ? 'is-active' : ''} to="/trips/new?mode=manual" aria-current={creationMode === 'manual' ? 'page' : undefined}>
+          <PencilLine aria-hidden="true" />
+          <span><strong>手动创建</strong><small>逐步填写基础条件</small></span>
+        </Link>
+        <Link className={creationMode === 'agent' ? 'is-active' : ''} to="/trips/new?mode=agent" aria-current={creationMode === 'agent' ? 'page' : undefined}>
+          <Sparkles aria-hidden="true" />
+          <span><strong>AI 协作创建</strong><small>先搭骨架，再交给 Agent</small></span>
+        </Link>
+      </nav>
+
+      {creationMode === 'manual' ? (
+        <>
+          <Stepper current={step} labels={['基础条件', '路线倾向', '草案预览']} />
+
+          {step === 1 ? (
         <form onSubmit={next}>
           <section className="feature-wizard-panel">
             <div className="feature-grid">
@@ -228,9 +261,9 @@ export function NewTripPage() {
           </section>
           <div className="feature-wizard-footer"><span /><Button type="submit" variant="primary" icon={ArrowRight}>下一步</Button></div>
         </form>
-      ) : null}
+          ) : null}
 
-      {step === 2 ? (
+          {step === 2 ? (
         <form onSubmit={next}>
           <section className="feature-wizard-panel">
             <div className="feature-grid">
@@ -267,9 +300,9 @@ export function NewTripPage() {
             <Button type="submit" variant="primary" icon={ArrowRight}>查看草案</Button>
           </div>
         </form>
-      ) : null}
+          ) : null}
 
-      {step === 3 ? (
+          {step === 3 ? (
         <>
           <section className="feature-wizard-panel new-trip-preview">
             <div className="new-trip-reference-note">
@@ -310,7 +343,36 @@ export function NewTripPage() {
             <Button variant="primary" icon={Route} onClick={createDraft}>开始编辑</Button>
           </div>
         </>
-      ) : null}
+          ) : null}
+        </>
+      ) : (
+        <section className="new-trip-agent" aria-labelledby="new-trip-agent-title">
+          <header>
+            <div className="new-trip-agent__icon"><Bot aria-hidden="true" /></div>
+            <div>
+              <span>AI 协作创建</span>
+              <h2 id="new-trip-agent-title">先定边界，再让 Agent 补全。</h2>
+              <p>Jovlo 的 H5 专注于路书编辑。基础骨架建好后，通过 MCP 把攻略、链接和自然语言修改交给 Agent。</p>
+            </div>
+          </header>
+
+          <ol className="new-trip-agent__flow">
+            <li><strong>1</strong><Route aria-hidden="true" /><div><b>建立骨架</b><span>日期、起终点、天数</span></div></li>
+            <li><strong>2</strong><Link2 aria-hidden="true" /><div><b>连接 Agent</b><span>当前路书单独授权</span></div></li>
+            <li><strong>3</strong><MessageSquareText aria-hidden="true" /><div><b>对话完善</b><span>路线、预算自动联动</span></div></li>
+          </ol>
+
+          <div className="new-trip-agent__example">
+            <small>可以直接这样开始</small>
+            <p>“9 月 25 日从海口出发，10 月 1 日回到海口。先搭环岛骨架，中间我再细化。”</p>
+          </div>
+
+          <footer>
+            <ButtonLink to="/guide/agent" icon={BookOpen}>查看完整教程</ButtonLink>
+            <ButtonLink to="/trips/new?mode=manual" variant="primary" icon={ArrowRight}>先建立基础路书</ButtonLink>
+          </footer>
+        </section>
+      )}
     </PageShell>
   )
 }

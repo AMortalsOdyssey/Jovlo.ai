@@ -1,4 +1,4 @@
-import { CalendarDays, CarFront, Map, Plus, Route, WalletCards } from 'lucide-react'
+import { BookOpen, CalendarDays, CarFront, Map, Plus, Route, Sparkles, WalletCards } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { useTripStore } from '@/store/useTripStore'
@@ -39,7 +39,13 @@ export function TripsPage() {
         trail={[]}
         title="我的路书"
         description="继续完善正在规划的路线，或从日期、目的地与旅行节奏开始一份新攻略。"
-        actions={<ButtonLink to="/trips/new" variant="primary" icon={Plus}>新建路书</ButtonLink>}
+        actions={
+          <div className="trips-create-actions" aria-label="创建与教程入口">
+            <ButtonLink to="/guide/agent" variant="quiet" icon={BookOpen}>使用教程</ButtonLink>
+            <ButtonLink to="/trips/new?mode=agent" icon={Sparkles}>AI 协作创建</ButtonLink>
+            <ButtonLink to="/trips/new?mode=manual" variant="primary" icon={Plus}>手动创建</ButtonLink>
+          </div>
+        }
       />
 
       {trips.length === 0 ? (
@@ -47,7 +53,12 @@ export function TripsPage() {
           icon={Route}
           title="还没有路书"
           description="先把日期、起终点和旅行节奏定下来，首份草案大约一分钟可编辑。"
-          action={<ButtonLink to="/trips/new" variant="primary" icon={Plus}>创建第一份路书</ButtonLink>}
+          action={
+            <div className="trips-empty-actions">
+              <ButtonLink to="/trips/new?mode=agent" icon={Sparkles}>AI 协作创建</ButtonLink>
+              <ButtonLink to="/trips/new?mode=manual" variant="primary" icon={Plus}>手动创建</ButtonLink>
+            </div>
+          }
         />
       ) : (
         <section className="feature-section" aria-label="路书列表">
