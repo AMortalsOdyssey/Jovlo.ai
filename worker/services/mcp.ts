@@ -158,7 +158,11 @@ function decodeJwtClaims(token: string): Record<string, unknown> {
 
 async function requestClientInfo(request: Request, token: string) {
   const claims = decodeJwtClaims(token)
-  let name = typeof claims.client_id === 'string' ? claims.client_id : 'MCP Agent'
+  const oauthClientId = typeof claims.client_id === 'string' ? claims.client_id : 'dynamic-mcp-client'
+  const sessionId = typeof claims.session_id === 'string' && claims.session_id.trim()
+    ? claims.session_id.trim()
+    : null
+  let name = oauthClientId === 'dynamic-mcp-client' ? 'MCP Agent' : oauthClientId
   if (request.method === 'POST') {
     try {
       const body = await request.clone().json() as { method?: string; params?: { clientInfo?: { name?: string; version?: string } } }
@@ -169,7 +173,8 @@ async function requestClientInfo(request: Request, token: string) {
     }
   }
   return {
-    clientId: typeof claims.client_id === 'string' ? claims.client_id : 'dynamic-mcp-client',
+    clientId: sessionId ? `${oauthClientId}:${sessionId}` : oauthClientId,
+    legacyClientId: oauthClientId,
     clientName: name,
     expiresAt: typeof claims.exp === 'number' ? claims.exp : undefined,
   }
@@ -447,8 +452,10 @@ export function oauthProtectedResourceMetadata(context: AppContext, connectionId
   }
 }
 
-export function mcpAuthenticationResponse(context: AppContext, connectionId: string) {
-  const metadataUrl = `${new URL(context.req.url).origin}/.well-known/oauth-protected-resource/mcp/${connectionId}`
+export function mcpAuthenticationResponse(context: AppContext, connectionId?: string) {
+  const metadataUrl = connectionId
+    ? `${new URL(context.req.url).origin}/.well-known/oauth-protected-resource/mcp/${connectionId}`
+    : `${new URL(context.req.url).origin}/.well-known/oauth-protected-resource/mcp`
   return new Response(JSON.stringify({
     jsonrpc: '2.0',
     error: { code: -32001, message: '需要通过 Jovlo 登录授权' },
@@ -461,6 +468,94 @@ export function mcpAuthenticationResponse(context: AppContext, connectionId: str
       'www-authenticate': `Bearer resource_metadata="${metadataUrl}"`,
     },
   })
+}
+
+type AccountConnectionRow = {
+  id: string
+  trip_id: string | null
+  client_id: string | null
+}
+
+async function readAccountConnection(
+  context: AppContext,
+  token: string,
+  clientId: string,
+  bound: boolean,
+): Promise<AccountConnectionRow | null> {
+  return readSupabaseRow<AccountConnectionRow>(
+    context,
+    'mcp_connections',
+    [
+      `client_id=eq.${encodeURIComponent(clientId)}`,
+      bound ? 'trip_id=not.is.null' : 'trip_id=is.null',
+      'status=in.(pending,active)',
+      'revoked_at=is.null',
+      `expires_at=gt.${new Date().toISOString()}`,
+      'select=id,trip_id,client_id',
+      'order=created_at.desc',
+    ].join('&'),
+    token,
+  )
+}
+
+async function ensureAccountConnection(context: AppContext): Promise<string> {
+  const user = await requireAuthenticatedUser(context)
+  if (!user.token) throw new AppError('AUTH_REQUIRED', '需要登录后继续', 401)
+
+  const client = await requestClientInfo(context.req.raw, user.token)
+  const clientIds = client.clientId === client.legacyClientId
+    ? [client.clientId]
+    : [client.clientId, client.legacyClientId]
+
+  for (const clientId of clientIds) {
+    const bound = await readAccountConnection(context, user.token, clientId, true)
+    if (bound) return bound.id
+    const unbound = await readAccountConnection(context, user.token, clientId, false)
+    if (unbound) return unbound.id
+  }
+
+  const pending = await readSupabaseRow<AccountConnectionRow>(
+    context,
+    'mcp_connections',
+    [
+      'trip_id=is.null',
+      'client_id=is.null',
+      'status=in.(pending,active)',
+      'revoked_at=is.null',
+      `expires_at=gt.${new Date().toISOString()}`,
+      'select=id,trip_id,client_id',
+      'order=created_at.desc',
+    ].join('&'),
+    user.token,
+  )
+  if (pending) return pending.id
+
+  const created = await callSupabaseRpc<Record<string, unknown>>(
+    context,
+    'create_unbound_mcp_connection',
+    { p_idempotency_key: `mcp-account-${crypto.randomUUID()}` },
+    user.token,
+  )
+  return UuidSchema.parse(created.id)
+}
+
+export async function handleAccountMcpRequest(context: AppContext): Promise<Response> {
+  let connectionId: string
+  try {
+    connectionId = await ensureAccountConnection(context)
+  } catch (error) {
+    if (error instanceof AppError && error.code === 'AUTH_REQUIRED') {
+      return mcpAuthenticationResponse(context)
+    }
+    if (error instanceof AppError) {
+      return new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32003, message: error.message }, id: null }), {
+        status: error.status,
+        headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+      })
+    }
+    throw error
+  }
+  return handleMcpRequest(context, connectionId)
 }
 
 export async function handleMcpRequest(context: AppContext, connectionId: string): Promise<Response> {

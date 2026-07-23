@@ -87,6 +87,7 @@ import { handleSupabaseSendEmailHook } from './services/tencent-email'
 import { getDailyWeather } from './services/weather'
 import { getTripStaticMap } from './services/static-map'
 import {
+  handleAccountMcpRequest,
   handleMcpRequest,
   oauthProtectedResourceMetadata,
 } from './services/mcp'
@@ -859,11 +860,18 @@ app.get('/.well-known/oauth-protected-resource', (context) => {
   return context.json(oauthProtectedResourceMetadata(context))
 })
 
+app.get('/.well-known/oauth-protected-resource/mcp', (context) => {
+  context.header('cache-control', 'public, max-age=300')
+  return context.json(oauthProtectedResourceMetadata(context))
+})
+
 app.get('/.well-known/oauth-protected-resource/mcp/:connectionId', (context) => {
   const connectionId = validateUuid(context.req.param('connectionId'), 'connectionId')
   context.header('cache-control', 'public, max-age=300')
   return context.json(oauthProtectedResourceMetadata(context, connectionId))
 })
+
+app.all('/mcp', (context) => handleAccountMcpRequest(context))
 
 app.all('/mcp/:connectionId', (context) => {
   const connectionId = validateUuid(context.req.param('connectionId'), 'connectionId')

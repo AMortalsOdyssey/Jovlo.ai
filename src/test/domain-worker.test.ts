@@ -34,6 +34,23 @@ describe('Worker API contract', () => {
       jsonrpc: '2.0',
       error: { code: -32001, message: '需要通过 Jovlo 登录授权' },
     })
+
+    const accountMetadata = await app.request('/.well-known/oauth-protected-resource/mcp', undefined, env)
+    expect(accountMetadata.status).toBe(200)
+    expect(await accountMetadata.json()).toMatchObject({
+      resource: 'http://localhost/mcp',
+      authorization_servers: ['https://project.supabase.co/auth/v1'],
+    })
+
+    const accountResponse = await app.request('/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'mcp-protocol-version': '2025-06-18' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
+    }, env)
+    expect(accountResponse.status).toBe(401)
+    expect(accountResponse.headers.get('www-authenticate')).toContain(
+      '/.well-known/oauth-protected-resource/mcp',
+    )
   })
 
   it('lists the deferred trip creation tool over an authorized MCP transport', async () => {
@@ -91,6 +108,110 @@ describe('Worker API contract', () => {
       expect(body.result.tools.map((tool) => tool.name)).toContain('jovlo_create_trip')
       expect(body.result.tools.find((tool) => tool.name === 'jovlo_create_trip')?.description)
         .toContain('建立 MCP 连接本身不会创建空路书')
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('reuses the bound account connection after trip creation', async () => {
+    const connectionId = 'a0000000-0000-4000-8000-000000000003'
+    const unboundConnectionId = 'a0000000-0000-4000-8000-000000000004'
+    const ownerId = 'd0000000-0000-4000-8000-000000000001'
+    const tokenPayload = btoa(JSON.stringify({
+      client_id: 'codex-client',
+      session_id: 'oauth-session-123',
+    })).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+    const accessToken = `header.${tokenPayload}.signature`
+    let createdConnection = false
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (url.endsWith('/auth/v1/user')) {
+        return new Response(JSON.stringify({ id: ownerId }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (url.includes('/rest/v1/mcp_connections?')) {
+        if (url.includes('id=eq.')) {
+          return new Response(JSON.stringify([{
+            id: connectionId,
+            trip_id: DEMO_IDS.trip,
+            owner_id: ownerId,
+            status: 'active',
+            scopes: ['read', 'write'],
+            expires_at: new Date(Date.now() + 8 * 60 * 60_000).toISOString(),
+            revoked_at: null,
+          }]), { status: 200, headers: { 'content-type': 'application/json' } })
+        }
+        if (
+          url.includes('client_id=eq.codex-client%3Aoauth-session-123')
+          && url.includes('trip_id=not.is.null')
+        ) {
+          return new Response(JSON.stringify([{
+            id: connectionId,
+            trip_id: DEMO_IDS.trip,
+            client_id: 'codex-client:oauth-session-123',
+          }]), { status: 200, headers: { 'content-type': 'application/json' } })
+        }
+        if (url.includes('trip_id=is.null')) {
+          return new Response(JSON.stringify([{
+            id: unboundConnectionId,
+            trip_id: null,
+            client_id: 'codex-client',
+          }]), { status: 200, headers: { 'content-type': 'application/json' } })
+        }
+        return new Response(JSON.stringify([{
+          id: unboundConnectionId,
+          trip_id: null,
+          client_id: 'codex-client',
+        }]), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      if (url.endsWith('/rest/v1/rpc/create_unbound_mcp_connection')) {
+        createdConnection = true
+        return new Response(JSON.stringify({
+          id: unboundConnectionId,
+          tripId: null,
+          status: 'pending',
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      if (url.endsWith('/rest/v1/rpc/activate_mcp_connection')) {
+        return new Response(JSON.stringify({
+          id: connectionId,
+          tripId: DEMO_IDS.trip,
+          status: 'active',
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      return new Response('not found', { status: 404 })
+    })
+
+    try {
+      const response = await app.request('/mcp', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          accept: 'application/json, text/event-stream',
+          'content-type': 'application/json',
+          'mcp-protocol-version': '2025-06-18',
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      }, {
+        JOVLO_MODE: 'production',
+        SUPABASE_URL: 'https://project.supabase.co',
+        SUPABASE_PUBLISHABLE_KEY: 'test-publishable-key',
+      })
+      const body = (await response.json()) as {
+        result: { tools: Array<{ name: string }> }
+      }
+
+      expect(response.status).toBe(200)
+      expect(body.result.tools.map((tool) => tool.name)).toContain('jovlo_create_trip')
+      expect(createdConnection).toBe(false)
+      expect(fetchMock.mock.calls.some(([input]) => (
+        String(input).includes(`id=eq.${connectionId}`)
+      ))).toBe(true)
+      expect(fetchMock.mock.calls.some(([input]) => (
+        String(input).includes(`id=eq.${unboundConnectionId}`)
+      ))).toBe(false)
     } finally {
       fetchMock.mockRestore()
     }
